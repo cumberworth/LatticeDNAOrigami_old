@@ -221,40 +221,40 @@ class OrigamiSystem:
         occupancies = {}
         orientations = []
 
-        for chain in input_file.chains(step):
+        for chain_index, chain in enumerate(input_file.chains(step)):
             indices.append(chain['index'])
             chain_identities.append(chain['identity'])
-            positions = []
+            chain_positions = []
             for position in chain['positions']:
                 position = PeriodicPosition(max_dimension, position)
-                positions.append(position)
+                chain_positions.append(position)
 
-            positions.append(positions)
-            for domain, position in enumerate(positions[-1]):
-                occupancies[tuple(position)] = UNBOUND
+            positions.append(chain_positions)
+            for domain_index, position in enumerate(chain_positions):
+                position = tuple(position)
+                self._add_occupancy(position, (chain_index, domain_index))
 
             orientations.append(chain['orientations'])
 
         # Calculate constants
         volume = (max_dimension * 2) ** 3
-        scaffold_length = len(positions[0])
+        chain_lengths = [len(positions[i]) for i in range(positions)]
 
         # Calculate and store hybridization energies
         sequences = input_file.sequences
-        e
         for sequence in sequences:
-            calc_hybridization_energy(sequence)
+            energy = calc_hybridization_energy(sequence)
+            hybridization_energies.append(energy)
 
         # Set instance variables
         self.identities = input_file.identities
         self.sequences = sequences
         self.max_dimension = max_dimension
         self.volume = volume
-        self.scaffold_length = scaffold_length
+        self.chain_lengths = chain_lengths
 
-        self._chain_identity = identity
+        self._chain_identities = chain_identities
         self._indices = indices
-        self._identities = identities
         self._positions = positions
         self._occupancies = occupancies
         self._orientations = orientations
@@ -266,7 +266,7 @@ class OrigamiSystem:
         for working_index, unique_index in enumerate(self._indices):
             chain = {}
             chain['index'] = unique_index
-            chain['identity'] = self._identities[working_index]
+            chain['identity'] = self.identities[working_index]
             positions = []
             for position in self._positions[working_index]:
                 position = list(position)
@@ -289,19 +289,11 @@ class OrigamiSystem:
     def set_domain_position(self, chain_index, domain_index, position):
         previous_domain_position = self._positions[chain_index][domain_index]
         previous_domain_position = tuple(previous_domain_position)
-        if self._occupancies[previous_domain_position] == BOUND:
-            self._occupancies[previous_domain_position] = UNBOUND
-        else:
-            del self._occupancies[tuple(previous_domain_position)]
+        self._remove_occupancy(previous_domain_position, (chain_index, domain_index))
 
         self._positions[chain_index][domain_index] = position
         position = tuple(position)
-        # assumes that the position is not already in a bound state
-        try:
-            self._occupancies[position] = BOUND
-
-        except KeyError:
-            self._occupancies[position] = UNBOUND
+        self._add_occupancy(position, (chain_index, domain_index))
 
     def get_domain_orientation(self, chain_index, domain_index):
         return self._orientations[chain_index, domain_index]
@@ -311,14 +303,11 @@ class OrigamiSystem:
 
     def add_chain(self, identity, positions, orientations):
         chain_index = len(self._positions)
-        self._identities.append(identity)
+        self.identities.append(identity)
         self._positions.append(positions)
         for domain_index, position in enumerate(positions):
-            try:
-                self._occupancies[position] = BOUND
-
-            except KeyError:
-                self._occupancies[position] = UNBOUND
+            position = tuple(position)
+            self._add_occupancy(position, (chain_index, domain_inde))
 
         self._positions.append(orientations)
         self._current_chain_index += 1
@@ -326,33 +315,34 @@ class OrigamiSystem:
 
     def delete_chain(self, chain_index):
         del self._indices[chain_index]
-        del self._identities[chain_index]
+        del self.identities[chain_index]
         positions = self._positions[chain_index]
-        for position in positions:
+        for domain_index, position in enumerate(positions):
             position = tuple(position)
-            if self._occupancies[position] == BOUND:
-                self._occupancies[position] == UNBOUND
-            else:
-                del self._occupancies[tuple(position)]
+            self._remove_occupancy(position, (chain_index, domain_index))
 
         del self._positions[chain_index]
         del self._orientations[chain_index]
 
     def position_occupied(self, position):
         overlap = False
-        if tuple(position) in self._domain_hash:
+        if tuple(position) in self._occupancies:
             overlap = True
         else:
             pass
         
         return overlap
 
+    def get_bound_domain(self, chain_index, domain_index):
+        position = tuple(self._positions[chain_index][domain_index])
+        return self._occupancies[position][(chain_index, domain_index)]
+
     def domains_match(chain_index_1, domain_index_1,
             chain_index_2, domain_index_2):
-        chain_identity_1 = self._identities[chain_index_1]
-        domain_identity_1 = self._identity_dict[chain_identity_1][domain_index_1]
-        chain_identity_2 = self._identities[chain_index_2]
-        domain_identity_2 = self._identity_dict[chain_identity_1][domain_index_2]
+        chain_identity_1 = self.chain_identities[chain_index_1]
+        domain_identity_1 = self.identities[chain_identity_1][domain_index_1]
+        chain_identity_2 = self.chain_identities[chain_index_2]
+        domain_identity_2 = self.identities[chain_identity_1][domain_index_2]
         complimentary = domain_identity_1 + domain_identity_2
         if complimentary == 0:
             orientation_1 = self._orientations[chain_index_1][domain_index_1]
@@ -367,6 +357,11 @@ class OrigamiSystem:
 
         return match
 
+    def get_hybridization_energy(self, identity):
+        # Because identites start at 1
+        energy_index = abs(identity) - 1
+        return = self._hybridization_energies[energy_inddex]
+
     def domains_part_of_same_helix(chain_index, domain_index_1,
             domain_index_2, new_position_1=(), new_position_2=(),
             new_orientation_1=()):
@@ -380,8 +375,8 @@ class OrigamiSystem:
         else:
             position_2 = new_position_2
         
-        if (self._occupancies[position_1] == BOUND and
-                self._occupancies[position_2] == BOUND):
+        if (self._occupancies[position_1]['state'] == BOUND and
+                self._occupancies[position_2]['state'] == BOUND):
             if new_orientation_1 == ():
                 five_prime_vector = self._orientations[chain_index][domain_index_1]
             else:
@@ -434,6 +429,28 @@ class OrigamiSystem:
             twist_obeyed = False
 
         return twist_obeyed
+
+    def _add_occupancy(self, position, index):
+        try:
+            self._occupancies[position]['state'] = BOUND
+            complimentary_index = self._occupancies[position]['identity']
+            del self._occupancies[position]['identity']
+            self._occupancies[position][complimentary_index] = index
+            self._occupancies[position][index] = complimentary_index
+
+        except KeyError:
+            self._occupancies[position]['state'] = UNBOUND
+            self._occupancies[position]['identity'] = complimentary_index
+
+    def _remove_occupancy(position, index):
+        if self._occupancies[position]['state'] == BOUND:
+            self._occupancies[position] == UNBOUND
+            complimentary_index = self._occupancies[position][index]
+            del self._occupancies[position][index]
+            del self._occupancies[position][complimentary_index]
+            self._occupancies[position]['identity'] = complimentary_index
+        else:
+            del self._occupancies[position]
 
 
 class OutputFile:
@@ -679,16 +696,16 @@ class GCMCFreeStaplesSimulation()
     def _regrow_chain_and_bound_staples(self):
 
         # Randomly select scaffold domain
-        scaffold_length = self_origami_system.scaffold_length
-        scaffold_index = random.randrange(scaffold_length)
+        scaffold_index = 0
+        chain_lengths = self._origami_system.chain_lengths
+        scaffold_length = chain_lengths[scaffold_index]
+        start_domain_index = random.randrange(scaffold_length)
 
         # Select shortest direction to end of scaffold
-        if scaffold_index <= (scaffold_length / 2 - 1):
-            scaffold_indices = range(scaffold_index - 1, -1, -1)
+        if start_domain_index <= (scaffold_length / 2 - 1):
+            scaffold_direction = -1
         else:
-            scaffold_indices = range(scaffold_index + 1, scaffold_length)
-
-        # Select starting domains for each staple
+            scaffold_direction = 1
 
         # Grow scaffold
         positions = []
@@ -707,8 +724,73 @@ class GCMCFreeStaplesSimulation()
             
             # Test if position occupied
             if self._origami_system.position_occupied(r_new):
-                accept = False
-                break
+                return
+                #accept = False
+                # Need to have a way to have the rest of the function skipped, hopefully without resorting to a return
+
+        # Find all staples bound to scaffold directly or indirectly
+        staple_index_list = []
+        bound_domain_stack = []
+        domain_index = start_domain_index
+        chain_index = scaffold_index
+        while domains_remaining:
+            bound_domain = get_bound_domain(scaffold_index, domain_index)
+            if bound_domain == () or bound_domain in bound_domain_stack:
+                # Attemp to go to next domain in the chain, if none, try
+                # previous chain in stack, try next domain again, continue
+                # until success or stack empty
+                while True:
+                    if (domain_index + 1) < len(chain_lengths[chain_index]):
+                        domain_index += 1
+                        break
+
+                    try:
+                        previous_bound_domain = bound_domain_stack.pop()
+                        chain_index = previous_bound_domain[0]
+                        domain_index = previous_bound_domain[1]
+                    except IndexError:
+                        domains_remaining = False
+
+            else:
+                staple_index_list.append(bound_domain[0])
+                bound_domain_stack.append(domain_index, chain_index)
+                chain_index = bound_domain[0]
+                # Could try and start from bound domain and grow both directions,
+                # but for now I am taking the simpler route
+                domain_index = 0
+
+        # Select start domains for each staple
+        staple_starting_domains = []
+        staple_bound_indices = []
+        for staple_index in staple_index_list:
+
+            # Select domain on staple
+            staple_domain_index = random.randint(chain_lengths[staple_index])
+            staple_starting_domains.append(staple_domain_index)
+
+            # Find all complimentary domains
+            complimentary_domains = []
+            for staple_index_inner in staple_index_list:
+                for domain_index in range(chain_lenghths[staple_index]):
+                    if staple_index_inner == staple_index:
+                        continue
+                    if self._origami_system.domains_match((staple_index, staple_domain_index),
+                            (staple_index_inner, staple_domain_index)):
+                        complimentary_domains.append((staple_index_inner, domain_index))
+                    else:
+                        pass
+
+            for domain_index in range(starting_scaffold_domain, scaffold_length):
+                if self._origami_system.domain_match((staple_index, staple_domain_index),
+                        (scaffold_index, domain_index)):
+                    complimentary_domains.append((scaffold_index, domain_index))
+
+            # Randomly select complimentary domain
+            bound_index = random.choice(complimentary_domain)
+            if bound_index in staple_bound_indices:
+                return
+            else:
+                staple_bound_indices.append(bound_index)
 
         # Grow staples
 
