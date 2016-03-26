@@ -33,6 +33,10 @@ class MOVETYPE(Enum):
     REGROW_SCAFFOLD_AND_BOUND_STAPLES = 5
 
 
+class MoveRejection(Exception):
+    pass
+
+
 def value_is_multiple(value, multiple):
     value_is_multiple = False
     try:
@@ -333,20 +337,40 @@ class OrigamiSystem:
         
         return overlap
 
+    def get_occupancy(self, position):
+        return self._occupancies[position]['state']
+
+    def get_domain_domain_at_position(self, position):
+        return self._occupancies[position]['identity']
+
     def get_bound_domain(self, chain_index, domain_index):
-        position = tuple(self._positions[chain_index][domain_index])
-        return self._occupancies[position][(chain_index, domain_index)]
+        try:
+            position = tuple(self._positions[chain_index][domain_index])
+            bound_index = self._occupancies[position][(chain_index, domain_index)]
+        except KeyError:
+            bound_index ()
+
+        return bound_index
 
     def domains_match(chain_index_1, domain_index_1,
-            chain_index_2, domain_index_2):
+            chain_index_2, domain_index_2, new_orientation_1=(),
+            new_orientation_2=()):
         chain_identity_1 = self.chain_identities[chain_index_1]
         domain_identity_1 = self.identities[chain_identity_1][domain_index_1]
         chain_identity_2 = self.chain_identities[chain_index_2]
         domain_identity_2 = self.identities[chain_identity_1][domain_index_2]
         complimentary = domain_identity_1 + domain_identity_2
         if complimentary == 0:
-            orientation_1 = self._orientations[chain_index_1][domain_index_1]
-            orientation_2 = self._orientations[chain_index_2][domain_index_2]
+            if new_orientation_1 == ():
+                orientation_1 = self._orientations[chain_index][domain_index]
+            else:
+                orientation_1 = new_orientation_1
+
+            if new_orientation_2 == ():
+                orientation_2 = self._orientations[chain_index][domain_index]
+            else:
+                orientation_2 = new_orientation_2
+        
             complimentary_orientations = orientation_1 + orientation_2
             if complimentary_orientations.sum() == 0:
                 match = True
@@ -357,14 +381,18 @@ class OrigamiSystem:
 
         return match
 
-    def get_hybridization_energy(self, identity):
+    def get_hybridization_energy(self, chain_index, domain_index):
         # Because identites start at 1
+        chain_identity = self._chain_identities
+        domain_identity = self.identities[chain_identity][domain_index]
         energy_index = abs(identity) - 1
-        return = self._hybridization_energies[energy_inddex]
+        return = self._hybridization_energies[energy_index]
 
     def domains_part_of_same_helix(chain_index, domain_index_1,
             domain_index_2, new_position_1=(), new_position_2=(),
-            new_orientation_1=()):
+            new_orientation_1=(), orientation_2):
+
+        # Update position and orientations if provided
         if new_position_1 == ():
             position_1 = self._positions[chain_index][domain_index]
         else:
@@ -375,18 +403,40 @@ class OrigamiSystem:
         else:
             position_2 = new_position_2
         
+        if new_orientation_1 == ():
+            orientation_1 = self._orientations[chain_index][domain_index_1]
+        else:
+            orientation_1 = new_orientation_1
+        
+        if new_orientation_2 == ():
+            orientation_2 = self._orientations[chain_index][domain_index_2]
+        else:
+            orientation_2 = new_orientation_2
+        
+        # Ensure domain 1 is 3'
+        if domain_index_2 < domain_index_1:
+            domain_index_three_prime = domain_index_2
+            domain_index_five_prime = domain_index_1
+            position_three_prime = position_2
+            position_five_prime = position_1
+            orientation_three_prime = orientation_2
+            orientation_five_prime = orientation_1
+            
+        else:
+            domain_index_three_prime = domain_index_1
+            domain_index_five_prime = domain_index_2
+            position_three_prime = position_1
+            position_five_prime = position_2
+            orientation_three_prime = orientation_1
+            orientation_five_prime = orientation_2
+            
         if (self._occupancies[position_1]['state'] == BOUND and
                 self._occupancies[position_2]['state'] == BOUND):
-            if new_orientation_1 == ():
-                five_prime_vector = self._orientations[chain_index][domain_index_1]
-            else:
-                five_prime_vector = new_orientation_1
-        
-            next_domain_vector = position_2 - position_1
+            next_domain_vector = position_five_prime - position_three_prime
             # this includes the possibility that the five prime vector is
             # opposite to the next domain vector, which I'm not sure is possible
             # given the other rules. for now this is safe
-            if all(next_domain_vector == np.abs(five_prime_vector)):
+            if all(next_domain_vector == np.abs(orientation_three_prime)):
                 same_helix = False
             else:
                 same_helix = True
@@ -400,6 +450,8 @@ class OrigamiSystem:
             domain_index_2, new_position_1=(), new_position_2=(),
             new_orientation_1=(), new_orientation_2=()):
         # this should only be applied to domains in the same helix
+
+        # Update position and orientations if provided
         if new_position_1 == ():
             position_1 = self._positions[chain_index][domain_index]
         else:
@@ -416,14 +468,31 @@ class OrigamiSystem:
             orientation_1 = new_orientation_1
 
         if new_orientation_2 == ():
-            position_2 = self._orientations[chain_index][domain_index]
+            orientation_2 = self._orientations[chain_index][domain_index]
         else:
-            position_2 = new_orientation_2
+            orientation_2 = new_orientation_2
         
-        next_domain_vector = position_2 - position_1
-	orientation_1_rotated = (
-		rotate_vector(orientation_1, next_domain_vector, -1))
-	if orientation_1_rotated == orientation_2:
+        # Ensure domain 1 is 3'
+        if domain_index_2 < domain_index_1:
+            domain_index_three_prime = domain_index_2
+            domain_index_five_prime = domain_index_1
+            position_three_prime = position_2
+            position_five_prime = position_1
+            orientation_three_prime = orientation_2
+            orientation_five_prime = orientation_1
+            
+        else:
+            domain_index_three_prime = domain_index_1
+            domain_index_five_prime = domain_index_2
+            position_three_prime = position_1
+            position_five_prime = position_2
+            orientation_three_prime = orientation_1
+            orientation_five_prime = orientation_2
+            
+        next_domain_vector = position_five_prime - position_three_prime
+	orientation_three_prime_rotated = (
+		rotate_vector(orientation_three_prime, next_domain_vector, -1))
+	if orientation_three_prime_rotated == orientation_five_prime:
             twist_obeyed = True
         else:
             twist_obeyed = False
@@ -691,112 +760,209 @@ class GCMCFreeStaplesSimulation()
 
     def _rotate_staple
 
+    def _attempt_binding(self, chain_index, domain_index, position,
+            orientation, previous_domain_index=-1):
+        """Attempt to bind domain in trial position to domain in accepted position"""
+        # Only setup for use by growth methods
+
+        # Test if complimentary (and has correct orientation for binding)
+        occupying_domain = self._origami_system.get_domain_at_position(position)
+        occupying_chain_index = occupying_domain[0]
+        occupying_domain_index = occupying_domain[1]
+        complimentary = self._origami_system.domains_match(chain_index,
+            domain_index, occupying_chain_index,
+            occupying_domain_index, new_orientation_1=orientation):
+        if not complimentary:
+            raise MoveRejection
+        else:
+            pass
+
+        # Create list of contiguous domains to both domains involved in binding
+        contiguous_domains = []
+
+        # Redundant list for binding domains; makes iterating over contiguous
+        # more convienient
+        binding_domains = []
+
+        # If previous domain exists on growing chain, add
+        # i need to know the direction to decide which side to check
+        if previous_domain_index != -1:
+            contiguous_domains.append((scaffold_index, previous_domain_index))
+            binding_domains.append((chain_index, previous_domain_index))
+
+        # If 3' domain exists on occupying chain, add
+        if occupying_domain_index != 0:
+            contiguous_domains.append((occupying_chain_index, 
+                    occupying_domain_index - 1))
+            binding_domains.append(occupying_domain)
+
+        # If 5' domain exists on occupying chain, add
+        if occupying_domain_index != lengths[occupying_chain_index]:
+            contiguous_domains.append((occupying_chain_index,
+                    occupying_domain_index + 1))
+            binding_domains.append(occupying_domain)
+
+        # For all contiguous domains, if they are part of the same helix, check
+        # if the twist constraints are obeyed
+        for domain in range(len(contiguous_domains)):
+            contiguous_chain_index = contiguous_domains[index][0]
+            contiguous_domain_index= contiguous_domains[index][1]
+            binding_domain_index = binding_domains[index][1]
+
+            if contiguous_chain_index == chain_index:
+                binding_domain_orientation = orientation
+            else:
+                binding_domain_orientation = -orientation
+
+            if self._origami_system.domains_part_of_same_helix(
+                    chain_index, binding_domain_index,
+                    contiguous_domain_index, new_position_1=position,
+                    new_orientation_1=binding_domain_orientation):
+                if self._origami_system.domains_have_correct_twist(
+                        chain_index, binding_domain_index,
+                        contiguous_domain_index, new_position_1=position,
+                        new_orientation_1=bindin_domain_orientation):
+                    binding_successful = True
+                else:
+                    raise MoveRejection
+            else:
+                raise MoveRejection
+
+        return binding_successful
+
+    def _regrow_chain(self, chain_index, domain_indices):
+        positions = []
+        orientations = []
+
+        # Iterate through given indices, growing next domain from current index
+        for domain_index in domain_indices[:-1]:
+
+            # Randomly select neighbour lattice site for new position
+            dimension = random.choice([XHAT, YHAT, ZHAT])
+            direction = random.randrange(-1, 2, 2)
+
+            # Position vector of previous domain
+            r_prev = self._origami_system.get_domain_position(chain_index, domain_index)
+
+            # Trial position vector
+            r_new = PeriodicVector(r_prev + direction * dimension,
+                    self._max_dimension)
+
+            # Randomly select neighbour lattice site for new orientation
+            dimension = random.choice([XHAT, YHAT, ZHAT])
+            direction = random.randrange(-1, 2, 2)
+
+            # Trial position orientation
+            o_new = dimension * direction
+            
+            # Reject if position occupied in bound state
+            occupancy = self._origami_system.get_occupancy(r_new)
+            if occupancy == BOUND:
+                raise MoveRejection
+
+            # Attempt binding if position occupied in unbound state
+            elif occupancy == UNBOUND:
+                current_domain_index = domain_index + 1
+                try:
+                    self._attempt_binding(current_domain_index, chain_index,
+                            r_new, o_new)
+                except MoveRejection:
+                    raise
+
+            # Continue if site unoccupied
+            else:
+                pass
+
+            # Store position and orientation
+            positions.append(r_new)
+            orientations.appened(o_new)
+
+        return positions, orientations
+
     def _regrow_staple
 
     def _regrow_chain_and_bound_staples(self):
 
-        # Randomly select scaffold domain
+        #Change in energy for move
+        delta_e = 0
+
+        # Randomly select starting scaffold domain
         scaffold_index = 0
         chain_lengths = self._origami_system.chain_lengths
         scaffold_length = chain_lengths[scaffold_index]
         start_domain_index = random.randrange(scaffold_length)
 
-        # Select shortest direction to end of scaffold
-        if start_domain_index <= (scaffold_length / 2 - 1):
-            scaffold_direction = -1
+        # Select direction to regrow and create index list
+        direction = random.randint(2)
+        if direction == 1:
+            scaffold_indices = range(start_domain_index, scaffold_length)
         else:
-            scaffold_direction = 1
+            scaffold_indices = range(scaffold_length, -1, -1)
 
-        # Grow scaffold
-        positions = []
-        for scaffold_index in scaffold_indices:
+        # Regrow scaffold
+        try:
+            positions, orientations = (
+                self._regrow_chain(scaffold_index, scaffold_indices))
+        except MoveRejection:
+            return
 
-            # Randomly select neighbour lattice site
-            dimension = random.choice([XHAT, YHAT, ZHAT])
-            direction = random.randrange(-1, 2, 2)
+        # Add new binding energies
+        # consider having delta_e as an instance variable so this can be
+        # done in the growth methods
+        energy = self._origami_system.get_hybridization_energy(
+            scaffold_index, scaffold_domain_index)
+        delta_e += energy
 
-            # Position vector of previous domain
-            r_prev = self._origami_system.get_domain_position(0, scaffold_index)
-
-            # Trial position vector
-            r_new = PeriodicVector(r_prev + direction * dimension,
-                    self._max_dimension)
-            
-            # Test if position occupied
-            if self._origami_system.position_occupied(r_new):
-                return
-                #accept = False
-                # Need to have a way to have the rest of the function skipped, hopefully without resorting to a return
-
-        # Find all staples bound to scaffold directly or indirectly
-        staple_index_list = []
-        bound_domain_stack = []
-        domain_index = start_domain_index
-        chain_index = scaffold_index
-        while domains_remaining:
+        # Find all staples bound to scaffold
+        staple_indices = []
+        for domain_index in scaffold_indices:
             bound_domain = get_bound_domain(scaffold_index, domain_index)
-            if bound_domain == () or bound_domain in bound_domain_stack:
-                # Attemp to go to next domain in the chain, if none, try
-                # previous chain in stack, try next domain again, continue
-                # until success or stack empty
-                while True:
-                    if (domain_index + 1) < len(chain_lengths[chain_index]):
-                        domain_index += 1
-                        break
-
-                    try:
-                        previous_bound_domain = bound_domain_stack.pop()
-                        chain_index = previous_bound_domain[0]
-                        domain_index = previous_bound_domain[1]
-                    except IndexError:
-                        domains_remaining = False
-
+            if bound_domain == ():
+                continue
             else:
-                staple_index_list.append(bound_domain[0])
-                bound_domain_stack.append(domain_index, chain_index)
-                chain_index = bound_domain[0]
-                # Could try and start from bound domain and grow both directions,
-                # but for now I am taking the simpler route
-                domain_index = 0
+                staple_indices.append(bound_domain[0])
 
-        # Select start domains for each staple
-        staple_starting_domains = []
-        staple_bound_indices = []
-        for staple_index in staple_index_list:
-
-            # Select domain on staple
-            staple_domain_index = random.randint(chain_lengths[staple_index])
-            staple_starting_domains.append(staple_domain_index)
-
-            # Find all complimentary domains
-            complimentary_domains = []
-            for staple_index_inner in staple_index_list:
-                for domain_index in range(chain_lenghths[staple_index]):
-                    if staple_index_inner == staple_index:
-                        continue
-                    if self._origami_system.domains_match((staple_index, staple_domain_index),
-                            (staple_index_inner, staple_domain_index)):
-                        complimentary_domains.append((staple_index_inner, domain_index))
-                    else:
-                        pass
-
-            for domain_index in range(starting_scaffold_domain, scaffold_length):
-                if self._origami_system.domain_match((staple_index, staple_domain_index),
-                        (scaffold_index, domain_index)):
-                    complimentary_domains.append((scaffold_index, domain_index))
-
-            # Randomly select complimentary domain
-            bound_index = random.choice(complimentary_domain)
-            if bound_index in staple_bound_indices:
-                return
+        # Subtract all binding energies
+        for staple_index in staple_indices:
+            for staple_domain_index in range(lengths[staple_index]):
+            if self._origami_system.get_bound_domain != ():
+                delta_e -= self._origami_system.get_hybridization_energy(
+                        staple_index, staple_domain_index)
             else:
-                staple_bound_indices.append(bound_index)
+                pass
 
         # Grow staples
+        for staple_index in staple_indices:
+
+            # Grow in five-prime direction
+
+            # Grow in three-prime direction
 
     def _rotate_orientation_vector
 
     def _center
+
+#    def swap_staples:
+#        # Select start domains for each staple
+#        staple_starting_domains = []
+#        staple_starting_scaffold_domains = []
+#        for staple_index in staple_indices:
+#
+#            # Select domain on staple
+#            staple_domain_index = random.randint(chain_lengths[staple_index])
+#            staple_starting_domains.append(staple_domain_index)
+#
+#            # Find all complimentary domains
+#            complimentary_domains = []
+#            for domain_index in scaffold_indices:
+#                if self._origami_system.domain_match((staple_index, staple_domain_index),
+#                        (scaffold_index, domain_index)):
+#                    complimentary_domains.append(domain_index)
+#
+#            # Randomly select complimentary domain
+#            complimentary_domain = random.choice(complimentary_domains)
+#            staple_starting_scaffold_domains.append(complimentary_domain)
+#
 
 class GCMCSimulation:
     pass
