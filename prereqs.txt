@@ -82,4 +82,32 @@ I just realized there is a fundamental flaw in my method: I am checking for occu
 
 Wait fuck. If I allow the scaffold to bind to a staple bound to another part of the scaffold not being regrown, I break detailed balance. Because then when it selects the same scaffold range, it will also regrow that staple. So only staples on the scaffold are allowed to bind.
 
-The former method for occupancy is going to end up making things very complicated. I think it will be easier to keep to copies of the system. When I select a range to regrow, one copy has all those occupancies deleted. Instead of storing positions and occupancies in lists, I can add them to this new object. That way I can run all the checks without akwardly passing new positins and orientations, and having to reorient them. If the move is rejected, the other one is copied to this one. If it is accepted, this one is copied to the other one.
+The former method for occupancy is going to end up making things very complicated. I think it will be easier to keep two copies of the system. When I select a range to regrow, one copy has all those occupancies deleted. Instead of storing positions and occupancies in lists, I can add them to this new object. That way I can run all the checks without akwardly passing new positins and orientations, and having to reorient them. If the move is rejected, the other one is copied to this one. If it is accepted, this one is copied to the other one.
+
+How should I have the deletion work in the trial system? I will open up the remove occupancy method and add checking in it so that it won't fail if position has already been deleted.
+
+The set position method should maybe not change the occupancy. But I don't like that if I was doing a different sort of move that I would have to remember to set both. Well maybe this is uncessary; I can just move setting the positions in the regrowth method after occupancy has been checked.
+
+I wonder if I might add the twist constraint checks in the set position method itself.
+
+Well wait. If the staple is bound to two places on the part of the scaffold being regrown, then starting point will need to be randomly selected.
+
+I could just shift the staple conformations to the new scaffold domain position selected to be the staple binding point. But that would be more work as I would have to write a seperate method that still checks energies and binding and occupancy and stuff.
+
+Is there an assymetry here? About binding. The thing that is grown first gets to bind, while the thing grown after doesn't. What are the implications of this? The scaffold being regrown could bind to some staple on the other part of the scaffold. This domain could also have a staple complimentary to it that is bound to another part of the part of the scaffold being regrown, and thus is being regrown itself. But the staple domain could never take the position where the other staple not being regrown is. So no, there is difference here then. What about the case where the growth domain of the scaffold is now bound to another staple?
+
+Well but wait, it's not like I could grow the staples first anyways. If the selected bound domain is blocked, then the move is rejected. The only thing where there is a choice is which side of the staple to grow first. They would need to both have the same domain for there to be any possible issue. I don't think that would ever happen. The only time there should be multiple domains is when blocking as defined in snodin2015 happens.
+
+Of course, if and when I include binding between not fully complimentary domains, I will have to rethink everything.
+
+Where should I store the number density of the staples? I guess it should probably be something in the input file rather than in the structur file. But I will start by assuming that all staples have equal concentrations.
+
+For adding a new chain, should I have the method not add the occupancies? Unless I want to delete the occupancies after I add it, this seems to be the only option.
+
+I am going to need to be able to access the occupancy by chain and domain index, not just position.
+
+Does it matter that when I insert the staple, I randomly select a domain on the scaffold, but when I delete the staple, I randomly select a staple rather than a domain on the scaffold and checking if it has a staple?
+
+In order to test these fucntions, I will need to create mock functions for the random functions that will give known outputs.
+
+Subtracting periodic vectors is a bit ambigous. As I first implemented it, it would give the difference between two position vectors in the same cell. But I might have the system at the boundary, wrapped to the other side. In that case I would like the difference vector to be pointing to the next vector as if the chain wasn't wrapped. If I am considering things on the same molecule, then I should always unwrap before taking the difference. What if the position vectors I am looking at are not on the same molecule? I could look at differences between molecules in the same cube, or I could look at differences between molecules in different cubes, I could look at the miminal distance. But I suppose in this model I will never care about such differences.
