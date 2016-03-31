@@ -110,6 +110,7 @@ def value_is_multiple(value, multiple):
 
 def rotate_vector_quarter(vector, rotation_axis, direction):
     """Rotate given vector pi/2 about given axis in given direction."""
+    vector = np.copy(vector)
     if all(np.abs(rotation_axis) == XHAT):
         y = vector[1]
         z = vector[2]
@@ -200,80 +201,38 @@ def sequence_is_palindromic(sequence):
     return palindromic
 
 
-# somehow use decorators to modify creation of positions so can select
-# periodic or nonperiodic boundary conditions
-class PeriodicPosition:
-    """Periodic position vectors."""
-
-    def __init__(self, max_dimension, position):
-        self._position = np.array(position)
-        self._max_dimension = max_dimension
-
-        for component_index, component in enumerate(self._position):
-            self._wrap_component(component_index, component)
-
-    def __getitem__(self, index):
-        return self._position[index]
-
-    def __setitem__(self, index, coordinate):
-        self._wrap_component(index, coordinate)
-
-    def __add__(self, other_position):
-
-        # This method does not unwrap the positions, which would be necessary
-        # if trying to add position vectors of the same molecule (as they could
-        # be split at the boundary.
-        #
-        # Also the other position must be a numpy array, which CURRENTLY
-        # (16-03-30) is the only use case. Making it more general would
-        # remove the speed advantage of using the numpy __add__ method.
-        absolute_sum = self._position + other_position
-        return PeriodicPosition(self._max_dimension, absolute_sum)
-
-    def __sub__(self, other_periodic_position):
-
-        # As with __add__, this method is dangerously flawed. The use case
-        # is always between two contiguous domains, so only one component
-        # should be non zero, and that component must then be +-1. Any use
-        # outside of this is unsupported.
-        same_cell_dif = self._position - other_periodic_position._position
-        a
-        return PeriodicPosition(self._max_dimension, absolute_dif)
-
-    def __eq__(self, other_periodic_position):
-        return all(self._position == other_periodic_position._position)
-
-    def __iter__(self):
-        return self._position.tolist().__iter__()
-
-    def _wrap_component(self, component_index, component):
-        if component > self._max_dimension:
-            self._position[component_index] = (-self._max_dimension +
-                    (component - self._max_dimension))
-        elif component < self._max_dimension:
-            self._position[component_index] = (self._max_dimension +
-                    (component - self._max_dimension))
-        else:
-            pass
-
-
 class OrigamiSystem:
+    """Simple cubic lattice model of DNA origami at domain level resolution.
 
-    def __init__(self, input_file, step, max_dimension, temp, staple_p):
+    The domains are 8 bp long. See reports/modelSpecs/domainResModelSpecs for
+    exposition on the model.
 
-        # Set configuration from specified inputfile and step
+    I've used get methods instead of properties as properties don't take
+    indices. I would have to index the internal structure directly, which
+    I don't want to do.
+
+    There are currently no sanity checks in __init__ or the set methods.
+    """
+
+    def __init__(self, input_file, step, temp, staple_p):
+
+        # Set configuration from specified input file and step
         indices = []
         chain_identities = []
         positions = []
-        occupancies = {}
+        self._occupancies = {}
         orientations = []
+        chain_lengths = []
+        self.identities = input_file.identities
 
         for chain_index, chain in enumerate(input_file.chains(step)):
             indices.append(chain['index'])
-            chain_identities.append(chain['identity'])
+            identity = chain['identity']
+            chain_identities.append(identity)
             chain_positions = []
+            chain_lengths.append(len(self.identities[identity]))
             for position in chain['positions']:
-                position = PeriodicPosition(max_dimension, position)
+                position = np.array(position)
                 chain_positions.append(position)
 
             positions.append(chain_positions)
@@ -281,11 +240,11 @@ class OrigamiSystem:
                 position_key = tuple(position)
                 self.add_occupancy(position_key, (chain_index, domain_index))
 
-            orientations.append(chain['orientations'])
+            chain_orientations = []
+            for orientation in chain['orientations']:
+                chain_orientations.append(np.array(orientation))
 
-        # Calculate constants
-        volume = (max_dimension * 2) ** 3
-        chain_lengths = [len(positions[i]) for i in range(positions)]
+            orientations.append(chain_orientations)
 
         # Calculate and store hybridization energies
         hybridization_energies = []
@@ -294,11 +253,8 @@ class OrigamiSystem:
             energy = calc_hybridization_energy(sequence, temp)
             hybridization_energies.append(energy)
 
-        # Set instance variables
-        self.identities = input_file.identities
+        # Set remaining instance variables
         self.sequences = sequences
-        self.max_dimension = max_dimension
-        self.volume = volume
         self.temp = temp
         self.chain_lengths = chain_lengths
         self.staple_p = staple_p
@@ -306,18 +262,18 @@ class OrigamiSystem:
         self._chain_identities = chain_identities
         self._indices = indices
         self._positions = positions
-        self._occupancies = occupancies
         self._orientations = orientations
         self._current_chain_index = max(indices)
         self._hybridization_energies = hybridization_energies
 
     @property
     def chains(self):
+        """Standard format for passing chain configuration."""
         chains = []
         for working_index, unique_index in enumerate(self._indices):
             chain = {}
             chain['index'] = unique_index
-            chain['identity'] = self.identities[working_index]
+            chain['identity'] = self._chain_identities[working_index]
             positions = []
             for position in self._positions[working_index]:
                 position = list(position)
@@ -334,10 +290,15 @@ class OrigamiSystem:
         return chains
 
     def get_domain_position(self, chain_index, domain_index):
-        # Properties don't allow arguments
+        """Return domain position as numpy array.
+
+        If internal representation of position changes, this docstring will
+        be out of date.
+        """
         return self._positions[chain_index][domain_index]
 
     def set_domain_position(self, chain_index, domain_index, position):
+        """Does not check if new positions obeys system constraints."""
         previous_domain_position = self._positions[chain_index][domain_index]
         previous_domain_position = tuple(previous_domain_position)
         self.remove_occupancy(previous_domain_position, (chain_index, domain_index))
@@ -347,17 +308,126 @@ class OrigamiSystem:
         self.add_occupancy(position, (chain_index, domain_index))
 
     def get_domain_orientation(self, chain_index, domain_index):
+        """Return domain orientation as numpy array.
+
+        If internal representation of orientation changes, this docstring will
+        be out of date.
+        """
         return self._orientations[chain_index][domain_index]
 
     def set_domain_orientation(self, chain_index, domain_index, orientation):
+        """Does not check if new positions obeys system constraints."""
         self._orientations[chain_index][domain_index] = orientation
 
-    def random_staple_identity(self):
-        staple_identity = random.randrange(1, len(self.identities))
-        domain_identities = self.identities[staple_identity]
-        return staple_identity, domain_identities
+    def position_occupied(self, position):
+        """Return True if position has one or more domains."""
+        overlap = False
+        position = tuple(position)
+        if position in self._occupancies:
+            overlap = True
+        else:
+            pass
+
+        return overlap
+
+    def get_position_occupancy(self, position):
+        """Return occupancy of given positin."""
+        try:
+            position = tuple(position)
+            occupancy = self._occupancies[position]['state']
+        except KeyError:
+            occupancy = UNASSIGNED
+        return occupancy
+
+    def get_domain_occupancy(self, chain_index, domain_index):
+        """Return occupancy of given domain."""
+
+        # Consider having another data structure for direct access.
+        # Position will fail if not assigned, but sometimes domains
+        # may be defined before being assigned a position. Want direct
+        # position access to fail but this to return unassigned.
+        try:
+            position = self.get_domain_position(chain_index, domain_index)
+            occupancy = self.get_position_occupancy(position)
+        except IndexError:
+            occupancy = UNASSIGNED
+        return occupancy
+
+    def add_occupancy(self, position, domain):
+        """Update occupancy state of given position for added domain.
+        
+        Note: this method should not be called on a position already in a bound
+        state (it will reassign the state as BOUND).
+
+        domain -- (chain_index, domain_index)
+
+        It would be nice if I could refactor the simulation class such that
+        this does not need to be public.
+        """
+        position = tuple(position)
+        try:
+            self._occupancies[position]['state'] = BOUND
+            complimentary_domain = self._occupancies[position]['identity']
+            del self._occupancies[position]['identity']
+            self._occupancies[position][complimentary_domain] = domain
+            self._occupancies[position][domain] = complimentary_domain
+
+        except KeyError:
+            self._occupancies[position] = {}
+            self._occupancies[position]['state'] = UNBOUND
+            self._occupancies[position]['identity'] = domain
+
+    def remove_occupancy(self, position, domain):
+        """Update occupancy state of given position for removal of domain.
+
+        Note: if the position is not also changed or deleted when removing
+        occupancy, the get_domain_occupancy method will return the result
+        for the previous position, even though this method has been called
+        on that domain.
+        
+        It would be nice if I could refactor the simulation class such that
+        this does not need to be public.
+        """
+        position = tuple(position)
+        try:
+            if self._occupancies[position]['state'] == BOUND:
+                self._occupancies[position]['state'] = UNBOUND
+                complimentary_domain = self._occupancies[position][domain]
+                del self._occupancies[position][domain]
+                del self._occupancies[position][complimentary_domain]
+                self._occupancies[position]['identity'] = complimentary_domain
+            else:
+                del self._occupancies[position]
+
+        except KeyError:
+            pass
+
+    def get_domain_at_position(self, position):
+        """Return domain at given position.
+        
+        Will fail if position is in BOUND or UNASSIGNED states.
+        """
+        position = tuple(position)
+        return self._occupancies[position]['identity']
+
+    def get_bound_domain(self, chain_index, domain_index):
+        """Return domain bound to given domain, otherwise return empty tuple."""
+        try:
+            position = tuple(self._positions[chain_index][domain_index])
+            bound_index = self._occupancies[position][(chain_index, domain_index)]
+        except KeyError:
+            bound_index = ()
+
+        return bound_index
 
     def add_chain(self, identity, positions, orientations):
+        """Add chain without adding occupancies.
+
+        Consider not requiring positions and orientations, as these are usually
+        fillers. Would require having set_domain_position check position index
+        and resize if necessary; hard to say whether they would cause a
+        significant decrease in performance.
+        """
         self.identities.append(identity)
         self._positions.append(positions)
         #chain_index = len(self._positions)
@@ -382,67 +452,10 @@ class OrigamiSystem:
         del self._orientations[chain_index]
         del self.chain_lengths[chain_index]
 
-    def position_occupied(self, position):
-        overlap = False
-        position = tuple(position)
-        if position in self._occupancies:
-            overlap = True
-        else:
-            pass
-
-        return overlap
-
-    def get_position_occupancy(self, position):
-        try:
-            occupancy = self._occupancies[position]['state']
-        except KeyError:
-            occupancy = UNASSIGNED
-        return occupancy
-
-    def get_domain_occupancy(self, chain_index, domain_index):
-
-        # Consider having another data structure for direct access
-        position = self.get_domain_position(chain_index, domain_index)
-        occupancy = self.get_position_occupancy(position)
-        return occupancy
-
-    def add_occupancy(self, position, index):
-        try:
-            self._occupancies[position]['state'] = BOUND
-            complimentary_index = self._occupancies[position]['identity']
-            del self._occupancies[position]['identity']
-            self._occupancies[position][complimentary_index] = index
-            self._occupancies[position][index] = complimentary_index
-
-        except KeyError:
-            self._occupancies[position]['state'] = UNBOUND
-            self._occupancies[position]['identity'] = complimentary_index
-
-    def remove_occupancy(self, position, index):
-        try:
-            if self._occupancies[position]['state'] == BOUND:
-                self._occupancies[position] = UNBOUND
-                complimentary_index = self._occupancies[position][index]
-                del self._occupancies[position][index]
-                del self._occupancies[position][complimentary_index]
-                self._occupancies[position]['identity'] = complimentary_index
-            else:
-                del self._occupancies[position]
-
-        except KeyError:
-            pass
-
-    def get_domain_domain_at_position(self, position):
-        return self._occupancies[position]['identity']
-
-    def get_bound_domain(self, chain_index, domain_index):
-        try:
-            position = tuple(self._positions[chain_index][domain_index])
-            bound_index = self._occupancies[position][(chain_index, domain_index)]
-        except KeyError:
-            bound_index = ()
-
-        return bound_index
+    def random_staple_identity(self):
+        staple_identity = random.randrange(1, len(self.identities))
+        domain_identities = self.identities[staple_identity]
+        return staple_identity, domain_identities
 
     def domains_match(self, chain_index_1, domain_index_1,
                 chain_index_2, domain_index_2):
@@ -473,6 +486,7 @@ class OrigamiSystem:
         return match
 
     def get_hybridization_energy(self, chain_index, domain_index):
+        """Return precalculated hybridization energy."""
 
         chain_identity = self._chain_identities[chain_index]
         domain_identity = self.identities[chain_identity][domain_index]
@@ -481,11 +495,17 @@ class OrigamiSystem:
         energy_index = abs(domain_identity) - 1
         return self._hybridization_energies[energy_index]
 
-    # probably merge these two as they will always be called together
     def domains_part_of_same_helix(self, chain_index, domain_index_1,
             domain_index_2):
+        """Return True if domains are part of the same helix.
+        
+        Does not ensure given domains are contiguous, so could erroneously
+        return True if chain has two parallel helices.
+        """
 
         # Ensure domain 1 is 3'
+        # But domain_indices will go in opposite directions between staples
+        # and scaffold...
         if domain_index_2 < domain_index_1:
             domain_i_three_prime = domain_index_2
             domain_i_five_prime = domain_index_1
@@ -504,8 +524,8 @@ class OrigamiSystem:
         #orientation_five_prime = (
         #        self._orientations[chain_index][domain_i_five_prime])
 
-        if (self._occupancies[position_three_prime]['state'] == BOUND and
-                self._occupancies[position_five_prime]['state'] == BOUND):
+        if (self._occupancies[tuple(position_three_prime)]['state'] == BOUND and
+                self._occupancies[tuple(position_five_prime)]['state'] == BOUND):
             next_domain_vector = position_five_prime - position_three_prime
             # this includes the possibility that the five prime vector is
             # opposite to the next domain vector, which I'm not sure is possible
@@ -522,7 +542,10 @@ class OrigamiSystem:
 
     def domains_have_correct_twist(self, chain_index, domain_index_1,
             domain_index_2):
-        # this should only be applied to domains in the same helix
+        """Check if twist between two domains is correct.
+
+        This should only be applied to domains in the same helix.
+        """
 
         # Ensure domain 1 is 3'
         if domain_index_2 < domain_index_1:
@@ -543,12 +566,11 @@ class OrigamiSystem:
         orientation_five_prime = (
                 self._orientations[chain_index][domain_i_five_prime])
 
-        # The PeriodicPosition object doesn't work with np.abs yet
-        next_domain_vector = list(position_five_prime - position_three_prime)
+        next_domain_vector = position_five_prime - position_three_prime
         orientation_three_prime_rotated = (
                 rotate_vector_quarter(orientation_three_prime,
                         next_domain_vector, -1))
-        if orientation_three_prime_rotated == orientation_five_prime:
+        if all(orientation_three_prime_rotated == orientation_five_prime):
             twist_obeyed = True
         else:
             twist_obeyed = False
@@ -559,6 +581,7 @@ class OrigamiSystem:
 class OutputFile:
 
     def check_and_write(self, origami_system, step):
+        """Check property write frequencies and write accordingly."""
         if value_is_multiple(step, self._config_write_freq):
             self._write_configuration(self, origami_system, step)
         else:
@@ -665,6 +688,7 @@ class HDF5OutputFile(OutputFile):
 
 
 class JSONInputFile:
+    """Input file taking json formatted origami system files in constructor."""
 
     def __init__(self, filename):
         json_origami = json.load(open(filename))
@@ -674,21 +698,27 @@ class JSONInputFile:
 
     @property
     def identities(self):
+        """Standard format for passing origami domain identities."""
         return self._json_origami['origami']['identities']
 
     @property
     def sequences(self):
+        """Standard format for passing origami domain sequences.
+        
+        Only includes sequences of scaffold or strand, as energy calculation
+        only requires one each of the complimentary strands for input.
+
+        Is this 5' or 3'? For scaffold or staple?
+        """
         return self._json_origami['origami']['sequences']
 
     def chains(self, step):
-        chains = []
-        for chain in self._json_origami['origami']['configurations'][step]:
-            chain.append(chain)
-
-        return chains
+        """Standard format for passing chain configuration."""
+        return self._json_origami['origami']['configurations'][step]['chains']
 
 
 class HDF5InputFile:
+    """Input file taking hdf5 formatted origami system files in constructor."""
 
     def __init__(self, filename):
         hdf5_origami = h5py.File(filename, 'r')
@@ -698,13 +728,22 @@ class HDF5InputFile:
 
     @property
     def identities(self):
+        """Standard format for passing origami domain identities."""
         return self._hdf5_origami['origami'].attrs['identities'].tolist()
 
     @property
     def sequences(self):
+        """Standard format for passing origami system sequences.
+        
+        Only includes sequences of scaffold or strand, as energy calculation
+        only requires one each of the complimentary strands for input.
+
+        Is this 5' or 3'? For scaffold or staple?
+        """
         return self._hdf5_origami['origami'].attrs['sequences'].tolist()
 
     def chains(self, step):
+        """Standard format for passing chain configuration."""
         chains = []
         for chain_database in self._hdf5_origami['origami/configurations']:
             if step in chain_database['steps']:
@@ -742,7 +781,6 @@ class GCMCBoundStaplesSimulation:
 
         self._accepted_system = origami_system
         self._trial_system = origami_system
-        self._max_dimension = origami_system.max_dimension
         self._output_file = output_file
         self._movetypes = movetypes
         self._movetype_probabilities = movetype_probabilities
@@ -831,13 +869,14 @@ class GCMCBoundStaplesSimulation:
     def _insert_staple(self):
 
         # Randomly select staple identity
-        staple_identity, domain_identities = self._accepted_system.random_staple_identity()
+        staple_identity, domain_identities = (
+                self._accepted_system.random_staple_identity())
         staple_length = len(domain_identities)
 
         # Create filler positions and orientations and add chain
         positions = []
         for i in range(staple_length):
-            positions.append(PeriodicPosition(self._max_dimension, [0, 0, 0]))
+            positions.append(np.array([0, 0, 0]))
 
         orientations = [[0, 0, 0]] * staple_length
         self._trial_system.add_chain(staple_identity, positions, orientations)
@@ -981,7 +1020,8 @@ class GCMCBoundStaplesSimulation:
             binding_domains.append(occupying_domain)
 
         # If 5' domain exists on occupying chain, add
-        if occupying_domain_index != self._trial_system.chain_lengths[occupying_chain_index]:
+        if occupying_domain_index != self._trial_system.chain_lengths[
+                    occupying_chain_index]:
             contiguous_domains.append((occupying_chain_index,
                     occupying_domain_index + 1))
             binding_domains.append(occupying_domain)
@@ -1026,8 +1066,7 @@ class GCMCBoundStaplesSimulation:
             r_prev = self._trial_system.get_domain_position(chain_index, domain_index)
 
             # Trial position vector
-            r_new = PeriodicPosition(r_prev + direction * dimension,
-                    self._max_dimension)
+            r_new = np.array(r_prev + direction * dimension)
 
             # Randomly select new orientation
             dimension = random.choice([XHAT, YHAT, ZHAT])
@@ -1092,7 +1131,8 @@ class GCMCBoundStaplesSimulation:
         staples = []
         unique_staple_indices = set()
         for domain_index in scaffold_indices:
-            bound_domain = self._trial_system.get_bound_domain(scaffold_index, domain_index)
+            bound_domain = self._trial_system.get_bound_domain(scaffold_index,
+                    domain_index)
             if bound_domain == ():
                 continue
             else:
@@ -1123,7 +1163,8 @@ class GCMCBoundStaplesSimulation:
 
         # Subtract all staple binding energies to other parts of the scaffold
         for staple_index in unique_staple_indices:
-            for staple_domain_index in range(self._trial_system.chain_lengths[staple_index]):
+            for staple_domain_index in range(self._trial_system.chain_lengths[
+                    staple_index]):
                 occupancy = self._accepted_system.get_domain_occupancy(
                         staple_index, staple_domain_index)
                 staple = (staple_index, staple_domain_index)
@@ -1173,61 +1214,3 @@ class GCMCBoundStaplesSimulation:
         o_new = dimension * direction
         self._accepted_system.set_domain_orientation(chain_index, domain_index,
                 o_new)
-
-#    def _rotate_contiguous_helix_orientation_vectors(self):
-#        pass
-
-        # Select random chain and domain
-
-        #
-
-#    def _center(self):
-
-#    def swap_staples:
-#        # Select start domains for each staple
-#        staple_starting_domains = []
-#        staple_starting_scaffold_domains = []
-#        for staple_index in staple_indices:
-#
-#            # Select domain on staple
-#            staple_domain_index = random.randrange(chain_lengths[staple_index])
-#            staple_starting_domains.append(staple_domain_index)
-#
-#            # Find all complimentary domains
-#            complimentary_domains = []
-#            for domain_index in scaffold_indices:
-#                if self._origami_system.domain_match((staple_index, staple_domain_index),
-#                        (scaffold_index, domain_index)):
-#                    complimentary_domains.append(domain_index)
-#
-#            # Randomly select complimentary domain
-#            complimentary_domain = random.choice(complimentary_domains)
-#            staple_starting_scaffold_domains.append(complimentary_domain)
-#
-
-class GCMCSimulation:
-    pass
-
-
-#class GCMCBoundStaplesSimulation:
-#    pass
-    #def _insert_bound_staple(self, chain_index, domain_index, identity):
-    #    check if domains match and have correct orientations
-    #    build staple orientation with randomly chosen positions and orientations
-    #    check for overlaps
-    #    check if overlaps matching and in correct orientation
-    #    if so, check if prexisiting helix, if so check constraints
-    #    if overlap or twist constraints violated, reject
-    #    check if adding to prexisting helix, if so check twist constraints
-    #    reject if twist constraints violated
-    #    test acceptance
-    #    if accepted, add chain
-#
-    #def _delete_bound_staple
-
-class GCMCFreeStaplesSimulation:
-    def _translate_staple(self):
-        pass
-
-    def _rotate_staple(self):
-        pass

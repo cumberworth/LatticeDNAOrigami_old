@@ -111,3 +111,29 @@ Does it matter that when I insert the staple, I randomly select a domain on the 
 In order to test these fucntions, I will need to create mock functions for the random functions that will give known outputs.
 
 Subtracting periodic vectors is a bit ambigous. As I first implemented it, it would give the difference between two position vectors in the same cell. But I might have the system at the boundary, wrapped to the other side. In that case I would like the difference vector to be pointing to the next vector as if the chain wasn't wrapped. If I am considering things on the same molecule, then I should always unwrap before taking the difference. What if the position vectors I am looking at are not on the same molecule? I could look at differences between molecules in the same cube, or I could look at differences between molecules in different cubes, I could look at the miminal distance. But I suppose in this model I will never care about such differences.
+
+I should still use something else then a direct numpy array for the positions, so that they can be changed more easily later. I can just inherit from np.array for now.
+
+Turns out that inheriting from numpy.ndarray would be a fair bit of work. I will just stick with the bare array for now.
+
+I should document the internal datastructure of OrigamiSystem in the code somehow. And that it maybe isn't the best that I've opened up the add/remove occupancy methods for public use.
+
+It might be good to add some basic sanity checks to OrigamiSystem's init method. Could also add periodic checks for sanity in the simulation.
+
+You need to be clear about the polarity of the sequences you input, as it makes a difference to the hybridization energy.
+
+Things to fix in OrigamiSystem
+
+- make polarity concrete
+- fix domain ordering in constraint check methods
+- check length of positions, orientations, sequences, etc. consistent
+- behaviour of add/delete chain and occupancy
+- check that all contiguous domains on neighbouring lattice sites
+- behaviour of get_domain_occupancy
+- custom exception(s) for sanity check failures
+
+Fuck. I've been thinking 3' to 5', but apparently the convention is 5' to 3'.
+
+If you pass pass a function a vector and operate on it's elements, and return the result to assign to another vector, they will actually be pointing to the same array. The function will change the original array.
+
+The main issue with decoupling the simulation and the origami objects is how to deal with removing occupancies when a section of the chain is being regrown. The simplest interface would probably be to include an ignore list when setting the position of a new domain, but that would complicate the internals of the origami object, and would be much more expensive. I could have the ignore list delete the occupancies, and then only update those that are not in the next call's list. But is that any cleaner then just deleting them directly?
