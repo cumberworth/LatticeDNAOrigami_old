@@ -136,4 +136,50 @@ Fuck. I've been thinking 3' to 5', but apparently the convention is 5' to 3'.
 
 If you pass pass a function a vector and operate on it's elements, and return the result to assign to another vector, they will actually be pointing to the same array. The function will change the original array.
 
-The main issue with decoupling the simulation and the origami objects is how to deal with removing occupancies when a section of the chain is being regrown. The simplest interface would probably be to include an ignore list when setting the position of a new domain, but that would complicate the internals of the origami object, and would be much more expensive. I could have the ignore list delete the occupancies, and then only update those that are not in the next call's list. But is that any cleaner then just deleting them directly?
+The main issue with decoupling the simulation and the origami objects is how to deal with removing occupancies when a section of the chain is being regrown. The simplest interface would probably be to include an ignore list when setting the position of a new domain, but that would complicate the internals of the origami object, and would be much more expensive. I could have the ignore list delete the occupancies, and then only update those that are not in the next call's list. But is that any cleaner then just deleting them directly? No. But I could have a remove position function that deals with it. What about when I am just looking for all bound domains to subtract energies?
+
+I will transfer all constraint checks to the origami object. The new chain method will no longer require positions or orientations. Well but shit maybe it's not a good idea. Say I want to do a rotate vector move. How do I do early rejection if I don't know the state? I would have to generate the vector first, then pass it to set_orientation, which would then check the state. If I open up the state thing, then I will still be double checking state in orientation. But maybe I should start with the more general method, then replace it with a faster method that cuts directly into origami, with the safer way still included in comments. The other option would be to have a method on origami for selecting a random orientation or position. But I don't really want to do that either.
+
+So maybe I'm not sure now.
+
+I can make the twist test only operate on the scaffold chains. Now wait I can't. Because the staple will sometimes be in a contigouos helix with two non contiguous scaffold domains.
+
+So unless I want to store the old positions in a temporary variable or revert back to the constraint check methods taking positions and orientations as arguments, the set_domain_configuration will update it's positions and orientations before checking those constaints, which if violated, cause it to raise an exception. So if I handle the exception and continue outside the method, the object will now have a configuration that violates the constrants. Is that bad practice, even though I will always throw a MoveRejection exception when catching a ConstraintViolation? I think it's fine, because it's making clear that what you just did is fucked. You would have to conviously decide you are okay with a constraint violation. Except that there is an inconsistency in that if the position it is trying to occupy is in a BOUND state, it will exit before updating the state. Maybe they raise different exceptions?
+
+I will be allowing the system to have unassigned positions, but then should I also have a global state that says whether all domains are assigned, or a list of unassigned domains? Probably a good idea.
+
+How would I do a seperate data structure for domain occupancy? A dictionary whose keys are the chain and domain indices, and whose value is another dictionary with the state and identity of the bound domain. Or, I could have a third dictionary that has key value entries only for those domains in a bound state. My issue with the current setup was that if the state is requested by domain for something that has had it's occupancy removed but not it's position it will give an erroneous state. Would it change the efficiency? In the current case, each time I want the occupancy of a domain, I have to access it's position first. In the second, I can cut that step out, but everytime I undergo a binding or unbinding event, I have to modify these two extra dictionaries. But the the modification of the position state dictionary becomes quicker. I think having seperate dictionaries is more clear. Although I suppose I will actually need to make two mods for every binding/unbinding event on the bound_domains dict.
+
+But what about when I want to get the domain occupying a position? I suppose I would only want to do this if it was in an unbound state. Does this call for another dictionary? I suppose when I delete an occupancy it will always be by domain, not by position.
+
+Do I still need explicit state storate with these dictionaries? If the position is a key in unbound_domains, then it is unbound. But then it isn't a key for any of the dictionaries if it is in bound state. There is also no dictionary where the domain is a key if it is in an unbound state.
+
+When I am making the list of existing domains contiguous to both the neighbour and occupying domains, is it faster to check as I go if the domains are part of the same helix, or make the list first and the check if contiguous and immediately then check if twist constraints are obeyed. The first will always require sale helix to be called on all neighbours, while the second would only do so in the worst case. But why don't I just have both checks happen as I iterate through possible neighbours? I had split up the loop because I can check the occupying domain more quickly simply by bhecking if the chain lenghts are not the start or the end (while the growing chain can have one side be in an unassigned state), but for now I will favour readability over a slight increase in speed.
+
+So do I need two ways to remove occupancies? I will always give a domain, but in one case I want to delete the domain entirely, while in the other I just want to unassign it. When adding, I am either skipping from unassigned to bound or going from unbound to bound, but there shouldnt' be ambiguity about what needs to be done given the state. So I just need one add occupancy method.
+
+But it might be more efficient to have specific methods for each possibility.
+
+Should I assume that set configuration will only be called on unassigned domains?
+
+FFFUUU. I've been assuming that I can just say that the states are unassigned for the regrowing chain. But sometimes that isn't true. If I am doing a constant topology sim... but I can still do that with unassigned stuff. But it would be less efficient. So would I just not unassign the domains that are in bound states? Should I not be using unassigned as a state for the domains, but rather only unbound or bound? Well but I think it's fine. Because when I'm doing constant topology sampling, I wouldn't even allow binding at all. So I would just have to save the growth start points for the staples and when I set those domain configurations, it will change the state back to bound.
+
+I don't see any reason to explicity set any state to unassigned. For now just delete the domain_occupancies.
+
+Need to make clear the methods that are top level movetypes and those that are helper methods.
+
+Maybe I should move the unbinding energy stuff to origami object.
+
+When inserting staples I randomly select a scaffold domain to attempt binding to, given a staple domain. But when I regrow a staple, I select a binding point only from the set of scaffold domains it was previously bound to.
+
+For deleting a domain it doesn't really matter where I find the bound domains and subtract the energies. But in the case of regrowing the staples, I already need to loop through and find all the bound domains so that I create the subset for selecting a growth point. So looping through again would seem like a waste. With my new data structures, there is an easier way to find all bound domains: I can direcetly quiry the bound_domains dictionary. For now let's put in the origami object. My driving organizational philosopy is start by making it safe and modular and loosely coupled, and then later maybe break these rules while optimizing, if need be.
+
+Write input file stucture checker for origami __init__ and add safety checks to set_orientation. Lint. Then fix and extend OrigamiSystem tests, write tests for hdf5 input and both output classes (hopefully can copy from saw), and then move to simulation method tests.
+
+I guess I don't really need to write a whole validate method. I can use the set_domain_configuration method as I iterate through the domains in the first place. The only check I have to add in, which can just be in the read in loop, is whether the domains are on adjacent lattice sites. To ensure that all defined domains are assigned positions and orientations, the iteration over domains in a chain should come from the identities list.
+
+What test input structures do I need? Should I just have one that I can manipulate?
+
+HOLY SHIT. I've been thinking about the orientation vectors all wrong. First, since sequences are read 5 to 3', I am actually talking about the 3', not the 5' prime vector. Second, the staple strands are going in the opposite direction, but I am interested in the direction at the start of the strand, as I say they are in the correct oreintation to bind when they orientations of the scaffold and staple strand are opposite. Do I want to instead look at the 3' prime vectors in both cases, and have the binding oreintation be seperated by (-?)pi rather than 2pi? I think I might need to, as otherwise the helical pair constraints for the staples are going to become confusing. Well not necessarily.
+
+I am going to go with setting the orientatoin vector to be the 3' end on the scaffold and the 5' end on the staple, as that is the way I was thinking about it originally.

@@ -1,11 +1,16 @@
 #!/usr/env python
 
+"""Unit tests for the lattice_origami_domains module.
+
+Run tests with py.test.
+"""
+
 import json
+import sys
+import pdb
 import pytest
 import scipy.constants
 from lattice_origami_domains import *
-
-"""Tests for python implementation of lattice domain-res origami model."""
 
 
 class random():
@@ -52,7 +57,7 @@ def test_rotate_vector_quarter(vector, rotation_axis, direction, expected):
     ('TTATAACT', 300, -1424.1117624983883),
 # (0.2 - 300 * -0.0057 + -7.6 - 300 * -0.0213 + -7.2 - 300 * -0.0204 + -7.6 - 300 * -0.0213 + -7.8 - 300 * -0.021 + 2 * (2.2 - 300 * 0.0069)) * 4.184 * 1000 / scipy.constants.gas_constant
 
-    # Complimentary to previous
+    # Complimentary to previous (and reversed to be 5' to 3')
     ('AGTTATAA', 300, -1424.1117624983883),
 
     # Palindrome
@@ -105,24 +110,23 @@ class TestJSONInputFile:
         expected = ['TCCCTAGA', 'GGGTGGGA', 'CTCAAAGG', 'TTGTTGAA', 'GGAATAAG', 'GCTAGCGG']
         assert expected == example_origami_json.sequences
 
-
     def test_chains(self, example_origami_json):
         expected = [
             {
                 'index': 0,
                 'identity': 0,
-                'positions': [[0, 0, 0], [1, 0, 0], [2, 0, 0], [3, 0, 0], [4, 0, 0]],
-                'orientations': [[0, 1, 0], [0, 0, -1], [0, 1, 0], [0, 0, 1], [0, 0, -1]]
+                'positions': [[0, 0, 0], [1, 0, 0], [2, 0, 0], [3, 0, 0], [4, 0, 0], [5, 0, 0]],
+                'orientations': [[0, 1, 0], [0, 0, 1], [0, 1, 0], [0, 0, -1], [0, 0, -1], [0, 0, 1]]
             }, {
                 'index': 1,
                 'identity': 1,
-                'positions': [[0, 0, 0], [1, 0, 0]],
+                'positions': [[1, 0, -1], [1, 0, 0]],
                 'orientations': [[0, -1, 0], [0, 0, -1]]
             }, {
                 'index': 2,
                 'identity': 2,
                 'positions': [[2, 0, 0], [3, 0, 0]],
-                'orientations': [[0, 1, 0], [0, 0, 1]]
+                'orientations': [[0, -1, 0], [0, 0, 1]]
             }
         ]
         chains = example_origami_json.chains(0)
@@ -149,43 +153,49 @@ class TestOrigamiSystem:
         assert all(position == expected)
 
     @pytest.mark.parametrize('chain_index, domain_index, expected', [
-
-        # Change scaffold strand domain
-        (0, 0, np.array([1, 1, 0])),
-
-        # Change staple strand domain
-        (2, 1, np.array([3, 0, 0])),
-
-        # Change to something that break all rules
-        (2, 1, np.array([99, 99, 99]))])
-    def test_set_domain_position(self, chain_index, domain_index, expected,
-            example_origami_system):
-        example_origami_system.set_domain_position(chain_index, domain_index,
-                expected)
-        test_position = example_origami_system.get_domain_position(chain_index,
-                domain_index)
-        assert all(test_position == expected)
-
-    @pytest.mark.parametrize('chain_index, domain_index, expected', [
         (0, 0, np.array([0, 1, 0])),
-        (2, 1, np.array([0, 0, 1]))])
+        (2, 1, np.array([0, 0, -1]))])
     def test_get_domain_orientation(self, chain_index, domain_index, expected,
             example_origami_system):
         orientation = example_origami_system.get_domain_orientation(chain_index,
                 domain_index)
         assert all(orientation == expected)
 
+    @pytest.mark.parametrize('position, expected', [
+        (np.array([0, 0, 0]), UNBOUND),
+        (np.array([0, 1, 0]), BOUND),
+        (np.array([4, 0, 0]), UNBOUND)])
+    def test_get_position_occupancy(self, position, expected,
+            example_origami_system):
+        test_occupancy = example_origami_system.get_position_occupancy(position)
+        assert test_occupancy == expected
+
+    @pytest.mark.parametrize('chain_index, domain_index, expected', [
+        (0, 0, UNBOUND),
+        (1, 0, UNBOUND),
+        (1, 1, BOUND),
+        (0, 1, BOUND)])
+    def test_get_domain_occupancy(self, chain_index, domain_index, expected,
+            example_origami_system):
+        test_occupancy = example_origami_system.get_domain_occupancy(chain_index,
+                domain_index)
+        assert test_occupancy == expected
+
+    @pytest.mark.parametrize('domain, expected', [
+        ((0, 1), (1, 1)),
+        ((0, 4), ())])
+    def test_get_bound_domain(self, domain, expected, example_origami_system):
+        test_domain = example_origami_system.get_bound_domain(*domain)
+        assert test_domain == expected
+
     @pytest.mark.parametrize('chain_index, domain_index, expected', [
 
-        # Change scaffold strand domain
+        # Change unbound scaffold strand domain
         (0, 0, np.array([1, 0, 0])),
 
         # Change staple strand domain
-        (2, 1, np.array([0, 1, 0])),
-
-        # Change to something that break all rules
-        (2, 1, np.array([99, 99, 99]))])
-    def test_set_domain_orientation(self, chain_index, domain_index, expected,
+        (1, 0, np.array([0, 1, 0]))])
+    def test_set_domain_orientation_correct(self, chain_index, domain_index, expected,
             example_origami_system):
         example_origami_system.set_domain_orientation(chain_index, domain_index,
                 expected)
@@ -193,32 +203,18 @@ class TestOrigamiSystem:
                 domain_index)
         assert all(test_orientation == expected)
 
-    @pytest.mark.parametrize('position, expected', [
-        (np.array([0, 0, 0]), True),
-        (np.array([5, 5, 5]), False)])
-    def test_position_occupied(self, position, expected,
-            example_origami_system):
-        test_occupied = example_origami_system.position_occupied(position)
-        assert test_occupied == expected
-
-    @pytest.mark.parametrize('position, expected', [
-        (np.array([0, 0, 0]), BOUND),
-        (np.array([5, 5, 5]), UNASSIGNED),
-        (np.array([4, 0, 0]), UNBOUND),
-        (np.array([5, 0, 0]), UNASSIGNED)])
-    def test_get_position_occupancy(self, position, expected,
-            example_origami_system):
-        test_occupancy = example_origami_system.get_position_occupancy(position)
-        assert test_occupancy == expected
-
     @pytest.mark.parametrize('chain_index, domain_index, expected', [
-        (0, 0, BOUND),
-        (0, 4, UNBOUND)])
-    def test_get_domain_occupancy(self, chain_index, domain_index, expected,
+
+        # Change bound scaffold strand domain
+        (0, 1, np.array([1, 0, 0])),
+
+        # Multiply by scalar
+        (0, 1, np.array([0, 0, 99]))])
+    def test_set_domain_orientation_wrong(self, chain_index, domain_index, expected,
             example_origami_system):
-        test_occupancy = example_origami_system.get_domain_occupancy(chain_index,
-                domain_index)
-        assert test_occupancy == expected
+        with pytest.raises(ConstraintViolation):
+            example_origami_system.set_domain_orientation(chain_index,
+                    domain_index, expected)
 
     @pytest.mark.parametrize('position, domain, expected', [
         (np.array([4, 0, 0]), (0, 0), BOUND),
@@ -239,20 +235,6 @@ class TestOrigamiSystem:
         assert test_occupancy == expected
         domain_occupancy = example_origami_system.get_domain_occupancy(*domain)
         #assert domain_occupancy == UNASSIGNED
-
-    @pytest.mark.parametrize('position, expected', [
-        (np.array([4, 0, 0]), (0, 4))])
-    def test_get_domain_at_position(self, position, expected,
-            example_origami_system):
-        test_domain = example_origami_system.get_domain_at_position(position)
-        assert test_domain == expected
-
-    @pytest.mark.parametrize('domain, expected', [
-        ((0, 0), (1, 0)),
-        ((0, 4), ())])
-    def test_get_bound_domain(self, domain, expected, example_origami_system):
-        test_domain = example_origami_system.get_bound_domain(*domain)
-        assert test_domain == expected
 
     def test_add_chain(self, example_origami_system):
         identity = 2
@@ -360,6 +342,9 @@ class TestOrigamiSystem:
         same_helix = example_origami_system.domains_part_of_same_helix(
                 chain_index, domain_index_1, domain_index_2)
         assert same_helix == False
+
+        # Bound staple domains
+
 
     def test_domains_have_correct_twist(self, example_origami_system):
 

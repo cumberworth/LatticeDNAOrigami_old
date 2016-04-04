@@ -1,19 +1,12 @@
 #!/usr/env python
 
-"""Run MC simulations of the lattice domain-resolution DNA origami model.
-
-Data:
-
-Functions:
-
-Classes:
-
-"""
+"""Run MC simulations of the lattice domain-resolution DNA origami model."""
 
 import json
 import math
 import sys
 import random
+import pdb
 from enum import Enum
 
 import h5py
@@ -93,6 +86,11 @@ class MoveRejection(Exception):
     pass
 
 
+class ConstraintViolation(Exception):
+    """Used for constraint violations in OrigamiSystem."""
+    pass
+
+
 def value_is_multiple(value, multiple):
     """Test if given value is a multiple of second value."""
     is_multiple = False
@@ -134,8 +132,9 @@ def rotate_vector_quarter(vector, rotation_axis, direction):
 
 def calc_hybridization_energy(sequence, T):
     """Calculate hybridization energy of domains with NN model.
-    
+
     OUtputs energies in K (avoid multiplying by KB when calculating acceptances.
+    Sequences are assumed to be 5' to 3'.
     """
     complimentary_sequence = calc_complimentary_sequence(sequence)
 
@@ -210,61 +209,66 @@ class OrigamiSystem:
     I've used get methods instead of properties as properties don't take
     indices. I would have to index the internal structure directly, which
     I don't want to do.
-
-    There are currently no sanity checks in __init__ or the set methods.
     """
 
     def __init__(self, input_file, step, temp, staple_p):
-
-        # Set configuration from specified input file and step
-        indices = []
-        chain_identities = []
-        positions = []
-        self._occupancies = {}
-        orientations = []
-        chain_lengths = []
-        self.identities = input_file.identities
-
-        for chain_index, chain in enumerate(input_file.chains(step)):
-            indices.append(chain['index'])
-            identity = chain['identity']
-            chain_identities.append(identity)
-            chain_positions = []
-            chain_lengths.append(len(self.identities[identity]))
-            for position in chain['positions']:
-                position = np.array(position)
-                chain_positions.append(position)
-
-            positions.append(chain_positions)
-            for domain_index, position in enumerate(chain_positions):
-                position_key = tuple(position)
-                self.add_occupancy(position_key, (chain_index, domain_index))
-
-            chain_orientations = []
-            for orientation in chain['orientations']:
-                chain_orientations.append(np.array(orientation))
-
-            orientations.append(chain_orientations)
-
-        # Calculate and store hybridization energies
-        hybridization_energies = []
-        sequences = input_file.sequences
-        for sequence in sequences:
-            energy = calc_hybridization_energy(sequence, temp)
-            hybridization_energies.append(energy)
-
-        # Set remaining instance variables
-        self.sequences = sequences
         self.temp = temp
-        self.chain_lengths = chain_lengths
         self.staple_p = staple_p
 
-        self._chain_identities = chain_identities
-        self._indices = indices
-        self._positions = positions
-        self._orientations = orientations
-        self._current_chain_index = max(indices)
-        self._hybridization_energies = hybridization_energies
+        # Unique indices; important for writing trajectories to file
+        self._indices = []
+
+        # Indices to identities list for current chains
+        self._chain_identities = []
+        self._positions = []
+        self._orientations = []
+        self.chain_lengths = []
+
+        # Dictionary with position keys and state values
+        self._position_occupancies = {}
+
+        # Dictionary with domain keys and state values
+        self._domain_occupancies = {}
+
+        # Dictionary with bound domain keys and values
+        self._bound_domains = {}
+
+        # Dictionary with position keys and unbound domain values
+        self._unbound_domains = {}
+        self.identities = input_file.identities
+        self.sequences = input_file.sequences
+
+        # Calculate and store hybridization energies
+        self._hybridization_energies = []
+        for sequence in self.sequences:
+            energy = calc_hybridization_energy(sequence, temp)
+            self._hybridization_energies.append(energy)
+
+        # Set configuration to specified input file step
+        for chain_index, chain in enumerate(input_file.chains(step)):
+            self._indices.append(chain['index'])
+            identity = chain['identity']
+            self._chain_identities.append(identity)
+            num_domains = len(self.identities[identity])
+            self._positions.append([[]] * num_domains)
+            self._orientations.append([[]] * num_domains)
+            self.chain_lengths.append(num_domains)
+            previous_position = np.array(chain['positions'][0])
+            for domain_index in range(num_domains):
+                position = np.array(chain['positions'][domain_index])
+                orientation = np.array(chain['orientations'][domain_index])
+
+                # Check domains are within one
+                if (position - previous_position).sum() > 1:
+                    raise ConstraintViolation
+
+                self.set_domain_configuration(chain_index, domain_index,
+                        position, orientation)
+            
+                previous_position = np.array(chain['positions'][domain_index])
+
+        # Keep track of unique chain index
+        self._current_chain_index = max(self._indices)
 
     @property
     def chains(self):
@@ -290,51 +294,18 @@ class OrigamiSystem:
         return chains
 
     def get_domain_position(self, chain_index, domain_index):
-        """Return domain position as numpy array.
-
-        If internal representation of position changes, this docstring will
-        be out of date.
-        """
+        """Return domain position as numpy array."""
         return self._positions[chain_index][domain_index]
 
-    def set_domain_position(self, chain_index, domain_index, position):
-        """Does not check if new positions obeys system constraints."""
-        previous_domain_position = self._positions[chain_index][domain_index]
-        previous_domain_position = tuple(previous_domain_position)
-        self.remove_occupancy(previous_domain_position, (chain_index, domain_index))
-
-        self._positions[chain_index][domain_index] = position
-        position = tuple(position)
-        self.add_occupancy(position, (chain_index, domain_index))
-
     def get_domain_orientation(self, chain_index, domain_index):
-        """Return domain orientation as numpy array.
-
-        If internal representation of orientation changes, this docstring will
-        be out of date.
-        """
+        """Return domain orientation as numpy array."""
         return self._orientations[chain_index][domain_index]
 
-    def set_domain_orientation(self, chain_index, domain_index, orientation):
-        """Does not check if new positions obeys system constraints."""
-        self._orientations[chain_index][domain_index] = orientation
-
-    def position_occupied(self, position):
-        """Return True if position has one or more domains."""
-        overlap = False
-        position = tuple(position)
-        if position in self._occupancies:
-            overlap = True
-        else:
-            pass
-
-        return overlap
-
     def get_position_occupancy(self, position):
-        """Return occupancy of given positin."""
+        """Return occupancy of given position."""
         try:
             position = tuple(position)
-            occupancy = self._occupancies[position]['state']
+            occupancy = self._position_occupancies[position]
         except KeyError:
             occupancy = UNASSIGNED
         return occupancy
@@ -342,123 +313,247 @@ class OrigamiSystem:
     def get_domain_occupancy(self, chain_index, domain_index):
         """Return occupancy of given domain."""
 
-        # Consider having another data structure for direct access.
-        # Position will fail if not assigned, but sometimes domains
-        # may be defined before being assigned a position. Want direct
-        # position access to fail but this to return unassigned.
         try:
-            position = self.get_domain_position(chain_index, domain_index)
-            occupancy = self.get_position_occupancy(position)
-        except IndexError:
+            occupancy = self._domain_occupancies[(chain_index, domain_index)]
+        except KeyError:
             occupancy = UNASSIGNED
+
         return occupancy
 
-    def add_occupancy(self, position, domain):
-        """Update occupancy state of given position for added domain.
-        
-        Note: this method should not be called on a position already in a bound
-        state (it will reassign the state as BOUND).
+    def get_bound_domain(self, chain_index, domain_index):
+        """Return domain bound to given domain, otherwise return empty tuple.
 
-        domain -- (chain_index, domain_index)
-
-        It would be nice if I could refactor the simulation class such that
-        this does not need to be public.
+        Consider failing instead to be consistent with get_unbound_domain.
         """
-        position = tuple(position)
         try:
-            self._occupancies[position]['state'] = BOUND
-            complimentary_domain = self._occupancies[position]['identity']
-            del self._occupancies[position]['identity']
-            self._occupancies[position][complimentary_domain] = domain
-            self._occupancies[position][domain] = complimentary_domain
-
+            domain = self._bound_domains[(chain_index, domain_index)]
         except KeyError:
-            self._occupancies[position] = {}
-            self._occupancies[position]['state'] = UNBOUND
-            self._occupancies[position]['identity'] = domain
+            domain = ()
 
-    def remove_occupancy(self, position, domain):
-        """Update occupancy state of given position for removal of domain.
+        return domain
 
-        Note: if the position is not also changed or deleted when removing
-        occupancy, the get_domain_occupancy method will return the result
-        for the previous position, even though this method has been called
-        on that domain.
-        
-        It would be nice if I could refactor the simulation class such that
-        this does not need to be public.
+    def get_random_staple_identity(self):
+        """Return random staple identity."""
+        staple_identity = random.randrange(1, len(self.identities))
+        domain_identities = self.identities[staple_identity]
+        return staple_identity, domain_identities
+
+    def get_hybridization_energy(self, chain_index, domain_index):
+        """Return precalculated hybridization energy."""
+
+        chain_identity = self._chain_identities[chain_index]
+        domain_identity = self.identities[chain_identity][domain_index]
+
+        # Because identites start at 1
+        energy_index = abs(domain_identity) - 1
+        return self._hybridization_energies[energy_index]
+
+    def set_domain_configuration(self, chain_index, domain_index, position,
+            orientation):
+        """Set domain configuration and return change in energy.
+
+        Assumes that given domain has already been unassigned. Consider adding a
+        check.
+
+        Will raise exception ConstraintViolation if constraints violated.
         """
-        position = tuple(position)
-        try:
-            if self._occupancies[position]['state'] == BOUND:
-                self._occupancies[position]['state'] = UNBOUND
-                complimentary_domain = self._occupancies[position][domain]
-                del self._occupancies[position][domain]
-                del self._occupancies[position][complimentary_domain]
-                self._occupancies[position]['identity'] = complimentary_domain
-            else:
-                del self._occupancies[position]
+        domain = (chain_index, domain_index)
+        delta_e = 0
 
-        except KeyError:
+        # Constraint violation if position in bound state
+        occupancy = self.get_position_occupancy(position)
+        if occupancy == BOUND:
+
+            # Note that exception raised before setting position. If the
+            # exceptions are to be handled, either set positions here or
+            # save and return previous positions for later exceptions
+            raise ConstraintViolation
+        else:
             pass
 
-    def get_domain_at_position(self, position):
-        """Return domain at given position.
-        
-        Will fail if position is in BOUND or UNASSIGNED states.
-        """
-        position = tuple(position)
-        return self._occupancies[position]['identity']
+        # Update position now for ease of access (considering allowing reversion
+        # if position rejected).
+        self._positions[chain_index][domain_index] = position
+        self._orientations[chain_index][domain_index] = orientation
 
-    def get_bound_domain(self, chain_index, domain_index):
-        """Return domain bound to given domain, otherwise return empty tuple."""
-        try:
+        # Attempt binding if position occupied in unbound state
+        if occupancy == UNBOUND:
+            try:
+                delta_e = self._bind_domain(*domain)
+            except ConstraintViolation:
+                raise
+            else:
+
+                # Update occupancies
+                position = tuple(position)
+                occupying_domain = self._unbound_domains[position]
+                del self._unbound_domains[position]
+                self._domain_occupancies[domain] = BOUND
+                self._domain_occupancies[occupying_domain] = BOUND
+                self._position_occupancies[position] = BOUND
+                self._bound_domains[occupying_domain] = domain
+                self._bound_domains[domain] = domain
+
+        # Move to empty site and update occupancies
+        else:
+            position = tuple(position)
+            self._domain_occupancies[domain] = UNBOUND
+            self._position_occupancies[position] = UNBOUND
+            self._unbound_domains[position] = domain
+
+        return delta_e
+
+    def set_domain_orientation(self, chain_index, domain_index, orientation):
+        """Set domain orientation.
+
+        There is a orientation setter and not an indepenent public position
+        setter because a new orientation is always generated when a new position
+        is generated (easier than somehow trying to keep the same relative
+        orientation), while the orientation is set indepentnly, so not all the
+        checks of set_domain_configuration are necessary anymore.
+        """
+        if self._domain_occupancies[(chain_index, domain_index)] == BOUND:
+            raise ConstraintViolation
+        else:
+            self._orientations[chain_index][domain_index] = orientation
+
+    def unassign_domain(self, chain_index, domain_index):
+        """Deletes positions, orientations, and removes/unassigns occupancies.
+
+        Intended for use when regrowing parts of the system to allow correct
+        testing of constraints (actually MUST be used).
+
+        Consider adding a global check that all defined domains are not in
+        unassigned states.
+        """
+        domain = (chain_index, domain_index)
+        occupancy = self._domain_occupancies
+        if occupancy == BOUND:
+
+            # Collect energy
+            delta_e = -self.get_hybridization_energy(*domain)
+            bound_domain = self._bound_domains[domain]
             position = tuple(self._positions[chain_index][domain_index])
-            bound_index = self._occupancies[position][(chain_index, domain_index)]
-        except KeyError:
-            bound_index = ()
+            self._positions[chain_index][domain_index] = []
+            del self._bound_domains[domain]
+            del self._bound_domains[bound_domain]
+            del self._domain_occupancies[domain]
+            self._unbound_domains[position] = bound_domain
+            self._position_occupancies[position] = UNBOUND
+            self._domain_occupancies[bound_domain] = UNBOUND
+        elif occupancy == UNBOUND:
+            position = tuple(self._positions[chain_index][domain_index])
+            self._positions[chain_index][domain_index] = []
+            del self._unbound_domains[position]
+            del self._position_occupancies[position]
+            del self._domain_occupancies[domain]
+        else:
+            pass
 
-        return bound_index
+        return delta_e
 
-    def add_chain(self, identity, positions, orientations):
-        """Add chain without adding occupancies.
-
-        Consider not requiring positions and orientations, as these are usually
-        fillers. Would require having set_domain_position check position index
-        and resize if necessary; hard to say whether they would cause a
-        significant decrease in performance.
-        """
-        self.identities.append(identity)
-        self._positions.append(positions)
-        #chain_index = len(self._positions)
-        #for domain_index, position in enumerate(positions):
-        #    position = tuple(position)
-        #    self._add_occupancy(position, (chain_index, domain_inde))
-
-        self._orientations.append(orientations)
+    def add_chain(self, identity):
+        """Add chain with domains in unassigned state and return chain index."""
         self._current_chain_index += 1
         self._indices.append(self._current_chain_index)
-        self.chain_lengths.append(len(positions))
+        self._chain_identities.append(identity)
+        chain_length = len(self.identities[identity])
+        self._positions.append([[]] * chain_length)
+        self._orientations.append([[]] * chain_length)
+        self.chain_lengths.append(chain_length)
+        chain_index = len(self.chain_lengths) - 1
+        return chain_index
 
     def delete_chain(self, chain_index):
+        """Delete chain."""
+
+        # Change in energy
+        delta_e = 0
         del self._indices[chain_index]
-        del self.identities[chain_index]
-        positions = self._positions[chain_index]
-        for domain_index, position in enumerate(positions):
-            position = tuple(position)
-            self.remove_occupancy(position, (chain_index, domain_index))
+        del self._chain_identities[chain_index]
+
+        for domain_index in range(self.chain_lengths[chain_index]):
+            delta_e += self.unassign_domain(chain_index, domain_index)
 
         del self._positions[chain_index]
         del self._orientations[chain_index]
         del self.chain_lengths[chain_index]
 
-    def random_staple_identity(self):
-        staple_identity = random.randrange(1, len(self.identities))
-        domain_identities = self.identities[staple_identity]
-        return staple_identity, domain_identities
+        return delta_e
 
-    def domains_match(self, chain_index_1, domain_index_1,
+    def center(self):
+        """Translates system such that first domain of scaffold on origin."""
+
+        # Translation vector
+        r_t = self._positions[0][0]
+        for chain_index, chain_positions in enumerate(self._positions):
+            for domain_index, chain_positions in enumerate(chain_positions):
+                r_o = self._positions[chain_index][domain_index]
+                r_n = r_o - r_t
+                self._positions[chain_index][domain_index] = r_n
+
+                # Update occupancies
+                domain = (chain_index, domain_index)
+                r_o = tuple(r_o)
+                r_n = tuple(r_n)
+                occupancy = self._domain_occupancies[domain]
+                del self._position_occupancies[r_o]
+                if occupancy == BOUND:
+                    self._position_occupancies[r_n] = BOUND
+                elif occupancy == UNBOUND:
+                    self._position_occupancies[r_n] = UNBOUND
+                    del self._unbound_domains[r_o]
+                    self._unbound_domains[r_n] = domain
+
+    def _bind_domain(self, trial_chain_index, trial_domain_index):
+        """Bind given domain in preset trial config and return change in energy.
+        """
+        position = tuple(self._positions[trial_chain_index][trial_domain_index])
+
+        # Test if complimentary (and has correct orientation for binding)
+        try:
+            occupying_domain = self._unbound_domains[position]
+        except KeyError:
+
+            # This would only happen if the caller didn't check the state of
+            # position first.
+            raise
+
+        # Convenience variable
+        trial_domain = (trial_chain_index, trial_domain_index)
+
+        complimentary = self._domains_match(*trial_domain, *occupying_domain)
+        if not complimentary:
+            raise ConstraintViolation
+        else:
+            pass
+
+        # Check constraints between domains and neighbours
+        for chain_index, domain_index in [trial_domain, occupying_domain]:
+            for direction in [-1, 1]:
+                neighbour_domain = (chain_index, domain_index + direction)
+                try:
+                    occupancy = self._domain_occupancies[neighbour_domain]
+                except KeyError:
+                    continue
+
+                if occupancy == BOUND:
+                    if self._helical_pair_constraints_obeyed(*neighbour_domain,
+                            domain_index):
+                        pass
+                    else:
+                        raise ConstraintViolation
+                else:
+                    pass
+
+        # Add new binding energies
+        delta_e = self.get_hybridization_energy(*neighbour_domain)
+
+        return delta_e
+
+    def _domains_match(self, chain_index_1, domain_index_1,
                 chain_index_2, domain_index_2):
+        """Return True if domains have correct orientation and sequence."""
 
         # Determine domain identities
         chain_identity_1 = self._chain_identities[chain_index_1]
@@ -471,8 +566,8 @@ class OrigamiSystem:
 
         # Check if orientations are correct
         if complimentary == 0:
-            orientation_1 = self._orientations[chain_index_1][domain_index_2]
-            orientation_2 = self._orientations[chain_index_1][domain_index_2]
+            orientation_1 = self._orientations[chain_index_1][domain_index_1]
+            orientation_2 = self._orientations[chain_index_2][domain_index_2]
 
             # They should be opposite vectors, thus correct if sum to 0
             complimentary_orientations = orientation_1 + orientation_2
@@ -483,102 +578,54 @@ class OrigamiSystem:
         else:
             match = False
 
+        #pdb.set_trace()
         return match
 
-    def get_hybridization_energy(self, chain_index, domain_index):
-        """Return precalculated hybridization energy."""
-
-        chain_identity = self._chain_identities[chain_index]
-        domain_identity = self.identities[chain_identity][domain_index]
-
-        # Because identites start at 1
-        energy_index = abs(domain_identity) - 1
-        return self._hybridization_energies[energy_index]
-
-    def domains_part_of_same_helix(self, chain_index, domain_index_1,
+    def _helical_pair_constraints_obeyed(self, chain_index, domain_index_1,
             domain_index_2):
-        """Return True if domains are part of the same helix.
-        
-        Does not ensure given domains are contiguous, so could erroneously
-        return True if chain has two parallel helices.
+        """Return True if domains not in same helix or twist constraints obeyed.
+
+        Does not check if they are in bound states.
         """
 
-        # Ensure domain 1 is 3'
-        # But domain_indices will go in opposite directions between staples
-        # and scaffold...
-        if domain_index_2 < domain_index_1:
-            domain_i_three_prime = domain_index_2
-            domain_i_five_prime = domain_index_1
+        # Ensure domain 1 is 5'
+        if ((chain_index == 0 and domain_index_2 < domain_index_1) or
+                (chain_index > 0 and domain_index_2 > domain_index_1)):
+            five_p_index = domain_index_2
+            three_p_index = domain_index_1
 
         else:
-            domain_i_three_prime = domain_index_1
-            domain_i_five_prime = domain_index_2
+            five_p_index = domain_index_1
+            three_p_index = domain_index_2
 
-        position_three_prime = (
-                self._positions[chain_index][domain_i_three_prime])
-        position_five_prime = (
-                self._positions[chain_index][domain_i_five_prime])
+        position_five_p = (self._positions[chain_index][five_p_index])
+        position_three_p = (self._positions[chain_index][three_p_index])
 
-        orientation_three_prime = (
-                self._orientations[chain_index][domain_i_three_prime])
-        #orientation_five_prime = (
-        #        self._orientations[chain_index][domain_i_five_prime])
+        orientation_five_p = (self._orientations[chain_index][five_p_index])
+        orientation_three_p = (self._orientations[chain_index][three_p_index])
 
-        if (self._occupancies[tuple(position_three_prime)]['state'] == BOUND and
-                self._occupancies[tuple(position_five_prime)]['state'] == BOUND):
-            next_domain_vector = position_five_prime - position_three_prime
-            # this includes the possibility that the five prime vector is
-            # opposite to the next domain vector, which I'm not sure is possible
-            # given the other rules. for now this is safe
-            if all(next_domain_vector == np.abs(orientation_three_prime)):
-                same_helix = False
+        next_domain_vector = position_three_p - position_five_p
+
+        # Only one allowed configuration not in the same helix
+        if all(next_domain_vector == np.abs(orientation_five_p)):
+            constraints_obeyed = True
+
+        # Check twist constraint if same helix
+        else:
+            orientation_five_p_r = (rotate_vector_quarter(orientation_five_p,
+                    next_domain_vector, -1))
+            if all(orientation_five_p_r == orientation_three_p):
+                constraints_obeyed = True
             else:
-                same_helix = True
+                constraints_obeyed = False
 
-        else:
-            same_helix = False
-
-        return same_helix
-
-    def domains_have_correct_twist(self, chain_index, domain_index_1,
-            domain_index_2):
-        """Check if twist between two domains is correct.
-
-        This should only be applied to domains in the same helix.
-        """
-
-        # Ensure domain 1 is 3'
-        if domain_index_2 < domain_index_1:
-            domain_i_three_prime = domain_index_2
-            domain_i_five_prime = domain_index_1
-
-        else:
-            domain_i_three_prime = domain_index_1
-            domain_i_five_prime = domain_index_2
-
-        position_three_prime = (
-                self._positions[chain_index][domain_i_three_prime])
-        position_five_prime = (
-                self._positions[chain_index][domain_i_five_prime])
-
-        orientation_three_prime = (
-                self._orientations[chain_index][domain_i_three_prime])
-        orientation_five_prime = (
-                self._orientations[chain_index][domain_i_five_prime])
-
-        next_domain_vector = position_five_prime - position_three_prime
-        orientation_three_prime_rotated = (
-                rotate_vector_quarter(orientation_three_prime,
-                        next_domain_vector, -1))
-        if all(orientation_three_prime_rotated == orientation_five_prime):
-            twist_obeyed = True
-        else:
-            twist_obeyed = False
-
-        return twist_obeyed
+        if (chain_index, domain_index_1) == (2, 0):
+            pdb.set_trace()
+        return constraints_obeyed
 
 
 class OutputFile:
+    """Base output file class to allow check_and_write to be shared."""
 
     def check_and_write(self, origami_system, step):
         """Check property write frequencies and write accordingly."""
@@ -589,6 +636,7 @@ class OutputFile:
 
 
 class JSONOutputFile(OutputFile):
+    """JSON output file class."""
 
     def __init__(self, filename, origami_system, config_write_freq):
         json_origami = {'origami':{'identities':{}, 'configurations':[]}}
@@ -618,10 +666,15 @@ class JSONOutputFile(OutputFile):
                     seperators=(',', ': '))
 
     def close(self):
+        """Perform cleanup."""
         pass
 
 
 class HDF5OutputFile(OutputFile):
+    """HDF5 output file class.
+
+    Custom format; not compatable with VMD (not H5MD).
+    """
 
     def __init__(self, filename, origami_system, config_write_freq):
         self.hdf5_origami = h5py.File(filename, 'w')
@@ -684,6 +737,7 @@ class HDF5OutputFile(OutputFile):
                 dtype='i')
 
     def close(self):
+        """Perform any cleanup."""
         pass
 
 
@@ -704,11 +758,8 @@ class JSONInputFile:
     @property
     def sequences(self):
         """Standard format for passing origami domain sequences.
-        
-        Only includes sequences of scaffold or strand, as energy calculation
-        only requires one each of the complimentary strands for input.
 
-        Is this 5' or 3'? For scaffold or staple?
+        Only includes sequences of scaffold in 5' to 3' orientation.
         """
         return self._json_origami['origami']['sequences']
 
@@ -734,7 +785,7 @@ class HDF5InputFile:
     @property
     def sequences(self):
         """Standard format for passing origami system sequences.
-        
+
         Only includes sequences of scaffold or strand, as energy calculation
         only requires one each of the complimentary strands for input.
 
@@ -760,18 +811,41 @@ class HDF5InputFile:
 
 
 class GCMCBoundStaplesSimulation:
+    """GCMC sim for domain-res origami model with bound staples only.
+
+    Grand cannonical Monte Carlo simulations on a simple cubic lattice of the
+    origami model defined by the origami class and associated documentation. The
+    simulations run with this class do not include any moves that can lead to
+    free staples.
+
+    No safety checks to ensure starting config has no free staples.
+    """
 
     def __init__(self, origami_system, move_settings, output_file):
+        self._output_file = output_file
 
         # Create cumalative probability distribution for movetypes
-        # List to associate movetype with index in distrubution
-        movetypes = []
-        movetype_probabilities = []
+        # List to associate movetype method with index in distribution
+        self._movetype_methods = []
+        self._movetype_probabilities = []
         cumulative_probability = 0
         for movetype, probability in move_settings.items():
-            movetypes.append(movetype)
+
+            # I still wonder if there is a way to avoid all the if statements
+            if movetype == MOVETYPE.INSERT_STAPLE:
+                movetype_method = self._insert_staple
+            elif movetype == MOVETYPE.DELETE_STAPLE:
+                movetype_method = self._delete_staple
+            elif movetype == MOVETYPE.REGROW_STAPLE:
+                movetype_method = self._regrow_staple
+            elif movetype == MOVETYPE.REGROW_SCAFFOLD_AND_BOUND_STAPLES:
+                movetype_method = self._regrow_scaffold_and_bound_staples
+            elif movetype == MOVETYPE.ROTATE_ORIENTATION_VECTOR:
+                movetype_method = self._rotate_orientation_vector
+
             cumulative_probability += probability
-            movetype_probabilities.append(cumulative_probability)
+            self._movetype_methods.append(movetype_method)
+            self._movetype_probabilities.append(cumulative_probability)
 
         # Check movetype probabilities are normalized
         # This could break from rounding errors
@@ -779,49 +853,44 @@ class GCMCBoundStaplesSimulation:
             print('Movetype probabilities not normalized')
             sys.exit()
 
+        # Two copies of the system allows easy reversion upon rejection
         self._accepted_system = origami_system
         self._trial_system = origami_system
-        self._output_file = output_file
-        self._movetypes = movetypes
-        self._movetype_probabilities = movetype_probabilities
+
+        # Change in energy for a proposed trial move
         self._delta_e = 0
+
+        # Frequency for translating system back to origin
+        self.center_freq = 1000
 
     def run(self, num_steps):
+        """Run simulation for given number of steps."""
         self._delta_e = 0
         self._trial_system = self._accepted_system
-        for step in range(num_steps):
-            movetype = self._select_movetype()
-            if movetype == MOVETYPE.INSERT_STAPLE:
-                self._insert_staple()
-            elif movetype == MOVETYPE.DELETE_STAPLE:
-                self._delete_staple()
-            #elif movetype == MOVETYPE.TRANSLATE_STAPLE:
-            #    self._translate_staple()
-            #elif movetype == MOVETYPE.ROTATE_STAPLE:
-            #    self._rotate_staple()
-            elif movetype == MOVETYPE.REGROW_STAPLE:
-                self._regrow_staple()
-            elif movetype == MOVETYPE.REGROW_SCAFFOLD_AND_BOUND_STAPLES:
-                self._regrow_scaffold_and_bound_staples()
-            elif movetype == MOVETYPE.ROTATE_ORIENTATION_VECTOR:
-                self._rotate_orientation_vector()
 
+        for step in range(num_steps):
+            movetype_method = self._select_movetype()
+            movetype_method()
             self._output_file.check_and_write(self._accepted_system, step)
+            if step == self.center_freq:
+                self._accepted_system.center()
 
     def _select_movetype(self):
+        """Return movetype method according to distribution."""
         random_number = random.random()
         lower_boundary = 0
         for movetype_index, upper_boundary in enumerate(
                 self._movetype_probabilities):
             if lower_boundary <= random_number < upper_boundary:
-                movetype = self._movetypes[movetype_index]
+                movetype_method = self._movetype_methods[movetype_index]
                 break
             else:
                 lower_boundary = upper_boundary
 
-        return movetype
+        return movetype_method
 
     def _test_acceptance(self, ratio):
+        """Metropolis acceptance test for given ratio."""
         p_accept = min(1, ratio)
         if p_accept == 1:
             accept = True
@@ -834,226 +903,30 @@ class GCMCBoundStaplesSimulation:
         return accept
 
     def _configuration_accepted(self):
+        """Metropolis acceptance test for configuration change."""
         T = self._accepted_system.temp
         boltz_factor = math.exp(self._delta_e / T)
         return self._test_acceptance(boltz_factor)
 
     def _staple_insertion_accepted(self):
+        """Metropolis acceptance test for particle insertion."""
         T = self._accepted_system.temp
         boltz_factor = math.exp(self._delta_e / T)
         number_density = self._accepted_system.staple_p
         return self._test_acceptance(number_density * boltz_factor)
 
     def _staple_deletion_accepted(self):
+        """Metropolis acceptance test for particle deletion."""
         T = self._accepted_system.temp
         boltz_factor = math.exp(self._delta_e / T)
         inverse_number_density = 1 / self._accepted_system.staple_p
         return self._test_acceptance(inverse_number_density * boltz_factor)
 
-    def _grow_staple(self, staple_length, staple_index, domain_index):
+    # Following are helper methods to the top level moves
+    def _grow_chain(self, chain_index, domain_indices):
+        """Randomly grow out chain from given domain indices.
 
-        # Grow in five-prime direction
-        staple_indices = range(domain_index, staple_length)
-        try:
-            self._regrow_chain(staple_index, staple_indices)
-        except MoveRejection:
-            raise
-
-        # Grow in three-prime direction
-        staple_indices = range(domain_index, -1, -1)
-        try:
-            self._regrow_chain(staple_index, staple_indices)
-        except MoveRejection:
-            raise
-
-    def _insert_staple(self):
-
-        # Randomly select staple identity
-        staple_identity, domain_identities = (
-                self._accepted_system.random_staple_identity())
-        staple_length = len(domain_identities)
-
-        # Create filler positions and orientations and add chain
-        positions = []
-        for i in range(staple_length):
-            positions.append(np.array([0, 0, 0]))
-
-        orientations = [[0, 0, 0]] * staple_length
-        self._trial_system.add_chain(staple_identity, positions, orientations)
-        staple_index = len(self._trial_system.chain_lengths) - 1
-
-        # Randomly select staple and scaffold domains to bind
-        scaffold_index = 0
-        scaffold_length = self._accepted_system.chain_lengths[scaffold_index]
-        staple_domain = random.randrange(staple_length)
-        scaffold_domain = random.randrange(scaffold_length)
-        scaffold_domain_occupancy = self._trial_system.get_domain_occupancy(
-                scaffold_index, scaffold_domain)
-
-        # Reject if scaffold domain already bound
-        if scaffold_domain_occupancy == BOUND:
-            return
-
-        # Attempt binding
-        try:
-            self._attempt_binding(staple_index, staple_domain)
-        except MoveRejection:
-            return
-
-        # Grow staple
-        try:
-            self._grow_staple(staple_length, staple_index, staple_domain)
-        except MoveRejection:
-            return
-
-        # Test acceptance
-        if self._staple_insertion_accepted():
-            self._accepted_system = self._trial_system
-        else:
-            pass
-
-    def _delete_staple(self):
-
-        # Randomly select staple
-        staple_index = random.randrange(len(self._accepted_system.indices))
-        staple_length = self._accepted_system.chain_lengths[staple_index]
-
-        # Find all bound domains and subtract energies
-        for domain_index in range(staple_length):
-            occupancy_state = self._accepted_system.get_domain_occupancy(
-                    staple_index, domain_index)
-            if occupancy_state == BOUND:
-                energy = self._accepted_system.get_hybridization_energy(
-                        staple_index, domain_index)
-                self._delta_e -= energy
-            else:
-                pass
-
-        # Test acceptance
-        if self._staple_deletion_accepted():
-            self._trial_system.delete_chain(staple_index)
-            self._accepted_system = self._trial_system
-        else:
-            pass
-
-    def _regrow_staple(self):
-
-        # Randomly select staple
-        staple_index = random.randrange(1, len(self._accepted_system.indices))
-        staple_length = self._accepted_system.chain_lengths[staple_index]
-
-        # Find all bound domains and randomly select growth point
-        bound_staple_domains = []
-        for staple_domain_index in range(staple_length):
-            occupancy_state = self._accepted_system.get_domain_occupancy(
-                    staple_index, staple_domain_index)
-            if occupancy_state == BOUND:
-                bound_staple_domains.append(staple_domain_index)
-            else:
-                pass
-
-        random_index = random.randrange(len(bound_staple_domains))
-        starting_domain_index = bound_staple_domains[random_index]
-
-        # Subtract unbound domain energies
-        del bound_staple_domains[random_index]
-        for staple_domain_index in bound_staple_domains:
-            energy = self._accepted_system.get_hybridization_energy(
-                staple_index, starting_domain_index)
-            self._delta_e -= energy
-
-        # Grow staple
-        try:
-            self._grow_staple(staple_length, staple_index, staple_domain_index)
-        except MoveRejection:
-            return
-
-        # Test acceptance
-        if self._configuration_accepted():
-            self._accepted_system = self._trial_system
-        else:
-            self._trial_system = self._accepted_system
-
-    def _attempt_binding(self, chain_index, domain_index):
-        """Attempt to bind domain in trial position to domain in accepted position"""
-        # Consider making an origami method called by set_position
-
-        # Test if complimentary (and has correct orientation for binding)
-        position = self._trial_system.get_domain_position(chain_index, domain_index)
-        occupying_domain = self._trial_system.get_domain_at_position(position)
-        occupying_chain_index = occupying_domain[0]
-        occupying_domain_index = occupying_domain[1]
-        complimentary = self._trial_system.domains_match(chain_index,
-                domain_index, occupying_chain_index, occupying_domain_index)
-        if not complimentary:
-            raise MoveRejection
-        else:
-            pass
-
-        # Create list of contiguous domains to both domains involved in binding
-        contiguous_domains = []
-
-        # Redundant list for binding domains; makes iterating over contiguous
-        # more convienient
-        binding_domains = []
-
-        # If 3' domain exists on trial chain, add
-        three_prime_occupancy = self._trial_system.get_domain_occupancy(
-                chain_index, domain_index - 1)
-
-        if three_prime_occupancy == UNASSIGNED:
-            contiguous_domains.append((chain_index, domain_index - 1))
-            binding_domains.append((chain_index, domain_index))
-
-        # If 5' domain exists on trial chain, add
-        five_prime_occupancy = self._trial_system.get_domain_occupancy(
-                chain_index, domain_index + 1)
-
-        if five_prime_occupancy == UNASSIGNED:
-            contiguous_domains.append((chain_index, domain_index + 1))
-            binding_domains.append((chain_index, domain_index))
-
-        # If 3' domain exists on occupying chain, add
-        if occupying_domain_index != 0:
-            contiguous_domains.append((occupying_chain_index,
-                    occupying_domain_index - 1))
-            binding_domains.append(occupying_domain)
-
-        # If 5' domain exists on occupying chain, add
-        if occupying_domain_index != self._trial_system.chain_lengths[
-                    occupying_chain_index]:
-            contiguous_domains.append((occupying_chain_index,
-                    occupying_domain_index + 1))
-            binding_domains.append(occupying_domain)
-
-        # For all contiguous domains, if they are part of the same helix, check
-        # if the twist constraints are obeyed
-        for i in enumerate(contiguous_domains):
-            contiguous_chain_index = contiguous_domains[i][0]
-            contiguous_domain_index = contiguous_domains[i][1]
-            binding_domain_index = binding_domains[i][1]
-
-            if self._trial_system.domains_part_of_same_helix(
-                    contiguous_chain_index, binding_domain_index,
-                    contiguous_domain_index):
-                if self._trial_system.domains_have_correct_twist(
-                        contiguous_chain_index, binding_domain_index,
-                        contiguous_domain_index):
-                    binding_successful = True
-
-                    # Add new binding energies
-                    energy = self._trial_system.get_hybridization_energy(
-                        contiguous_chain_index, binding_domain_index)
-                    self._delta_e += energy
-
-                else:
-                    raise MoveRejection
-            else:
-                raise MoveRejection
-
-        return binding_successful
-
-    def _regrow_chain(self, chain_index, domain_indices, binding_allowed=False):
+        Updates changes in energy as binding events occur."""
 
         # Iterate through given indices, growing next domain from current index
         for domain_index in domain_indices[:-1]:
@@ -1075,34 +948,127 @@ class GCMCBoundStaplesSimulation:
             # Trial position orientation
             o_new = dimension * direction
 
-            # Reject if position in bound state or binding not allowed
-            occupancy = self._trial_system.get_position_occupancy(r_new)
-            if occupancy == BOUND or not binding_allowed:
+            # Attempt to set position
+            try:
+                self._delta_e += self._trial_system.set_configuration(
+                        chain_index, domain_index, r_new, o_new)
+            except ConstraintViolation:
                 raise MoveRejection
-            else:
-                pass
-
-            # Store positions and orientations
-            self._trial_system.set_domain_position(chain_index, domain_index,
-                    r_new)
-            self._trial_system.set_domain_orientation(chain_index,
-                    domain_index, o_new)
-
-            # Attempt binding if position occupied in unbound state
-            if occupancy == UNBOUND:
-                current_domain_index = domain_index + 1
-                try:
-                    self._attempt_binding(current_domain_index, chain_index)
-                except MoveRejection:
-                    raise
-
-            # Continue if site unoccupied
-            else:
-                pass
 
         return
 
+    def _grow_staple(self, staple_length, staple_index, domain_index):
+        """Randomly grow staple out from given domain in both directions."""
+
+        # Grow in five-prime direction
+        staple_indices = range(domain_index, staple_length)
+        try:
+            self._grow_chain(staple_index, staple_indices)
+        except MoveRejection:
+            raise
+
+        # Grow in three-prime direction
+        staple_indices = range(domain_index, -1, -1)
+        try:
+            self._grow_chain(staple_index, staple_indices)
+        except MoveRejection:
+            raise
+
+    # Following are top level moves
+    def _insert_staple(self):
+        """Insert staple at random scaffold domain and grow."""
+
+        # Randomly select staple identity
+        staple_identity, domain_identities = (
+                self._accepted_system.random_staple_identity())
+
+        staple_index = self._trial_system.add_chain(staple_identity)
+        staple_length = self._accepted_system.chain_length[staple_index]
+
+        # Randomly select staple and scaffold domains to bind
+        staple_domain = random.randrange(staple_length)
+
+        scaffold_index = 0
+        scaffold_length = self._accepted_system.chain_lengths[scaffold_index]
+        scaffold_domain = random.randrange(scaffold_length)
+        position = self._trial_system.get_domain_position(scaffold_index,
+                scaffold_domain)
+
+        # Attempt to set position
+        try:
+            self._delta_e += self._trial_system.set_domain_configuration(
+                    staple_index, staple_domain, position)
+        except ConstraintViolation:
+            return
+
+        # Grow staple
+        try:
+            self._grow_staple(staple_length, staple_index, staple_domain)
+        except MoveRejection:
+            return
+
+        # Test acceptance
+        if self._staple_insertion_accepted():
+            self._accepted_system = self._trial_system
+        else:
+            pass
+
+    def _delete_staple(self):
+        """Delete random staple."""
+
+        # Randomly select staple
+        staple_index = random.randrange(1, len(self._accepted_system.indices))
+
+        self._delta_e += self._trial_system.delete_chain(staple_index)
+
+        # Test acceptance
+        if self._staple_deletion_accepted():
+            self._accepted_system = self._trial_system
+        else:
+            pass
+
+    def _regrow_staple(self):
+        """Regrow random staple."""
+
+        # Randomly select staple
+        staple_index = random.randrange(1, len(self._accepted_system.indices))
+        staple_length = self._accepted_system.chain_lengths[staple_index]
+
+        # Find all bound domains and randomly select growth point
+        bound_staple_domains = []
+        for domain_index in range(staple_length):
+            bound_domain = self._accepted_system.get_bound_domain(staple_index,
+                    domain_index)
+            if bound_domain != ():
+                bound_staple_domains.append(domain_index)
+
+        bound_domain_index = random.choice(bound_staple_domains)
+
+        # Unassign domains
+        for domain_index in range(staple_length):
+            if domain_index == bound_domain_index:
+                continue
+            self._delta_e += self._trial_system.unassign_domain(staple_index,
+                    domain_index)
+
+        # Grow staple
+        try:
+            self._grow_staple(staple_length, staple_index, bound_domain_index)
+        except MoveRejection:
+            return
+
+        # Test acceptance
+        if self._configuration_accepted():
+            self._accepted_system = self._trial_system
+        else:
+            self._trial_system = self._accepted_system
+
     def _regrow_scaffold_and_bound_staples(self):
+        """Randomly regrow terminal section of scaffold and bound staples.
+
+        From a randomly selected scaffold domain in a random direction to the
+        end.
+        """
 
         # Randomly select starting scaffold domain
         scaffold_index = 0
@@ -1116,71 +1082,61 @@ class GCMCBoundStaplesSimulation:
         else:
             scaffold_indices = range(scaffold_length, -1, -1)
 
-        # Update trial system occupancies
-        for scaffold_domain_index in scaffold_indices:
-            self._trial_system.remove_occupancy(scaffold_index,
-                    scaffold_domain_index)
+        # Find all staples bound to scaffold (includes repeats)
+        staples = {}
+        for domain_index in scaffold_indices:
+            staple_domain = self._accepted_system.get_bound_domain(
+                    scaffold_index, domain_index)
+            if staple_domain == ():
+                continue
+            else:
+                staple_index = staple_domain[0]
+                staple_domain_i = staple_domain[1]
+                try:
+                    staples[staple_index].append(domain_index, staple_domain_i)
+                except KeyError:
+                    staples[staple_index] = [(domain_index, staple_domain_i)]
+
+        # Unassign scaffold domains
+        for domain_index in scaffold_indices[1:]:
+            self._delta_e += self._trial_system.unassign_domain(scaffold_index,
+                    domain_index)
+
+        # Unassign staples
+        for staple_index in staples.keys():
+            for domain_index in self._trial_system.chain_lengths[staple_index]:
+                self._delta_e += self._trial_system.unassign_domain(staple_index,
+                    domain_index)
 
         # Regrow scaffold
         try:
-            self._regrow_chain(scaffold_index, scaffold_indices)
+            self._grow_chain(scaffold_index, scaffold_indices)
         except MoveRejection:
             return
 
-        # Find all staples bound to scaffold (includes repeats)
-        staples = []
-        unique_staple_indices = set()
-        for domain_index in scaffold_indices:
-            bound_domain = self._trial_system.get_bound_domain(scaffold_index,
-                    domain_index)
-            if bound_domain == ():
-                continue
-            else:
-                staples.append(bound_domain)
-                unique_staple_indices.add(bound_domain[0])
+        # Regrow staples
+        for staple_index, bound_domains in staples.values():
 
-        # Find all repeated staples and pick domain on scaffold to grow from
-        for staple_index in unique_staple_indices:
-            repeated_staple_indices = []
-            for staple, i in enumerate(staples):
-                if staple[0] == staple_index:
-                    repeated_staple_indices.append(i)
-                else:
-                    pass
+            # Pick domain on scaffold and staple to grow from
+            scaffold_domain_index, staple_domain_index = random.choice(
+                    bound_domains)
+            position = self._trial_system.get_domain_position(scaffold_index,
+                    scaffold_domain_index)
 
-            selected_staple_i = random.choice(repeated_staple_indices)
+            # Randomly select first orientation
+            dimension = random.choice([XHAT, YHAT, ZHAT])
+            direction = random.randrange(-1, 2, 2)
+            o_new = dimension * direction
 
-            # Test if selected scaffold domain blocked
-            staple = staples[selected_staple_i]
-            occupancy = self._trial_system.get_domain_occupancy(*staple)
-            if occupancy == BOUND:
+            # Attempt to set growth domain
+            try:
+                self._delta_e += self._trial_system.set_configuration(
+                        staple_index, staple_domain_index, position, o_new)
+            except ConstraintViolation:
                 return
-            else:
-                pass
 
-            for repeated_staple_index in repeated_staple_indices:
-                del staples[repeated_staple_index]
-
-        # Subtract all staple binding energies to other parts of the scaffold
-        for staple_index in unique_staple_indices:
-            for staple_domain_index in range(self._trial_system.chain_lengths[
-                    staple_index]):
-                occupancy = self._accepted_system.get_domain_occupancy(
-                        staple_index, staple_domain_index)
-                staple = (staple_index, staple_domain_index)
-                if occupancy == BOUND and staple not in staples:
-                    energy = self._accepted_system.get_hybridization_energy(
-                        staple_index, staple_domain_index)
-                    self._delta_e -= energy
-                else:
-                    pass
-
-        # Grow staples
-        for staple_index in unique_staple_indices:
-            staple_chain_index = staple[0]
-            staple_domain_index = staple[1]
-            staple_length = self._trial_system.chain_lengths[staple_chain_index]
-
+            # Grow remainder of staple
+            staple_length = self._trial_system.chain_lengths[staple_index]
             try:
                 self._grow_staple(staple_length, staple_index,
                         staple_domain_index)
@@ -1194,6 +1150,7 @@ class GCMCBoundStaplesSimulation:
             pass
 
     def _rotate_orientation_vector(self):
+        """Randomly rotate random domain."""
 
         # Select random chain and domain
         chain_lengths = self._accepted_system
