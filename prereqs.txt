@@ -182,4 +182,18 @@ What test input structures do I need? Should I just have one that I can manipula
 
 HOLY SHIT. I've been thinking about the orientation vectors all wrong. First, since sequences are read 5 to 3', I am actually talking about the 3', not the 5' prime vector. Second, the staple strands are going in the opposite direction, but I am interested in the direction at the start of the strand, as I say they are in the correct oreintation to bind when they orientations of the scaffold and staple strand are opposite. Do I want to instead look at the 3' prime vectors in both cases, and have the binding oreintation be seperated by (-?)pi rather than 2pi? I think I might need to, as otherwise the helical pair constraints for the staples are going to become confusing. Well not necessarily.
 
-I am going to go with setting the orientatoin vector to be the 3' end on the scaffold and the 5' end on the staple, as that is the way I was thinking about it originally.
+I am going to go with setting the orientation vector to be the 3' end on the scaffold and the 5' end on the staple, as that is the way I was thinking about it originally.
+
+Wow, big problem with the dictionaries and deleting chains. I have a bunch of chain indices stored that point to lists that will change when deleting a chain, meaning that they will give incorrect information when used. Perhaps the most straightforward fix is to store the unique indices in these dictionaries, rather than the working indices, and have the get methods use the unique indices to find the working indices. I will then have to use the get methods for all access internally.
+
+So should I just have a dictionary that has a mapping from the unique chain indices to the working indices, and vice versa? I should use the indices list as the working to unique becuase deleting the entry automaticaly updates the list. Then I will just have to update the unique to working dictionary every time a chain is deleted.
+
+It's not so great that I have to remember to unassign the domain before setting the configuration. I should probably add a check for that. But I won't.
+
+So in order for the origami class instance to be copied properly, I need to use copy.deepcopy. I should probably implement a method that will allow the copying to be done more efficiently.
+
+I can have a new helix stick out from an old helix in any direction at the 5' end. That doesn't seem very realistic. What could I introduce to only allow an orientation that is consistent with the twist of old helix? I can cut down to two from four by forcing the angle between the orientational domains to be pi, but there is not way of going to 1 unless you consider the next domain vector. So perhaps I should start keeping track of this as well. It's not that much extra.
+
+For now I'm going to stick with what I have and focus on testing the simulation remaining file objects.
+
+I suppose I could memoization to store the boltzman factors, as I would expect a fair amount of repitition.

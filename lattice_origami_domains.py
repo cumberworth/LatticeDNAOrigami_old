@@ -7,6 +7,7 @@ import math
 import sys
 import random
 import pdb
+import copy
 from enum import Enum
 
 import h5py
@@ -109,23 +110,41 @@ def value_is_multiple(value, multiple):
 def rotate_vector_quarter(vector, rotation_axis, direction):
     """Rotate given vector pi/2 about given axis in given direction."""
     vector = np.copy(vector)
-    if all(np.abs(rotation_axis) == XHAT):
+    if all(rotation_axis == XHAT):
         y = vector[1]
         z = vector[2]
         vector[1] = direction * -z
         vector[2] = direction * y
 
-    elif all(np.abs(rotation_axis) == YHAT):
+    if all(rotation_axis == -XHAT):
+        y = vector[1]
+        z = vector[2]
+        vector[1] = direction * z
+        vector[2] = direction * -y
+
+    elif all(rotation_axis == YHAT):
         x = vector[0]
         z = vector[2]
         vector[2] = direction * -x
         vector[0] = direction * z
 
-    elif all(np.abs(rotation_axis) == ZHAT):
+    elif all(rotation_axis == -YHAT):
+        x = vector[0]
+        z = vector[2]
+        vector[2] = direction * x
+        vector[0] = direction * -z
+
+    elif all(rotation_axis == ZHAT):
         x = vector[0]
         y = vector[1]
         vector[0] = direction * -y
         vector[1] = direction * x
+
+    elif all(rotation_axis == -ZHAT):
+        x = vector[0]
+        y = vector[1]
+        vector[0] = direction * y
+        vector[1] = direction * -x
 
     return vector
 
@@ -215,13 +234,17 @@ class OrigamiSystem:
         self.temp = temp
         self.staple_p = staple_p
 
-        # Unique indices; important for writing trajectories to file
-        self._indices = []
+        # Unique indices and mapping dictionaries
+        self._unique_to_working = {}
+        self._working_to_unique = []
 
         # Indices to identities list for current chains
         self._chain_identities = []
         self._positions = []
         self._orientations = []
+
+        # Next domain vectors
+        self._next_domain_vectors = []
         self.chain_lengths = []
 
         # Dictionary with position keys and state values
@@ -246,7 +269,10 @@ class OrigamiSystem:
 
         # Set configuration to specified input file step
         for chain_index, chain in enumerate(input_file.chains(step)):
-            self._indices.append(chain['index'])
+            unique_index = chain['index']
+            self._unique_to_working[unique_index] = chain_index
+            self._working_to_unique.append(unique_index)
+
             identity = chain['identity']
             self._chain_identities.append(identity)
             num_domains = len(self.identities[identity])
@@ -259,7 +285,7 @@ class OrigamiSystem:
                 orientation = np.array(chain['orientations'][domain_index])
 
                 # Check domains are within one
-                if (position - previous_position).sum() > 1:
+                if ((position - previous_position)**2).sum() > 1:
                     raise ConstraintViolation
 
                 self.set_domain_configuration(chain_index, domain_index,
@@ -268,19 +294,19 @@ class OrigamiSystem:
                 previous_position = np.array(chain['positions'][domain_index])
 
         # Keep track of unique chain index
-        self._current_chain_index = max(self._indices)
+        self._current_chain_index = max(self._working_to_unique)
 
     @property
     def chains(self):
         """Standard format for passing chain configuration."""
         chains = []
-        for working_index, unique_index in enumerate(self._indices):
+        for working_index, unique_index in enumerate(self._working_to_unique):
             chain = {}
             chain['index'] = unique_index
             chain['identity'] = self._chain_identities[working_index]
             positions = []
             for position in self._positions[working_index]:
-                position = list(position)
+                position = position.tolist()
                 positions.append(position)
 
             chain['positions'] = positions
@@ -313,10 +339,14 @@ class OrigamiSystem:
     def get_domain_occupancy(self, chain_index, domain_index):
         """Return occupancy of given domain."""
 
+        unique_index = self._working_to_unique[chain_index]
         try:
-            occupancy = self._domain_occupancies[(chain_index, domain_index)]
+            occupancy = self._domain_occupancies[(unique_index, domain_index)]
         except KeyError:
-            occupancy = UNASSIGNED
+            if chain_index < len(self._working_to_unique):
+                occupancy = UNASSIGNED
+            else:
+                raise
 
         return occupancy
 
@@ -325,12 +355,22 @@ class OrigamiSystem:
 
         Consider failing instead to be consistent with get_unbound_domain.
         """
+        unique_index = self._working_to_unique[chain_index]
         try:
-            domain = self._bound_domains[(chain_index, domain_index)]
+            unique_index, domain_index = self._bound_domains[(unique_index,
+                domain_index)]
+            chain_index = self._unique_to_working[unique_index]
+            domain = (chain_index, domain_index)
         except KeyError:
             domain = ()
 
         return domain
+
+    def get_unbound_domain(self, position):
+        """Return domain at position with unbound state."""
+        unique_index, domain_index = self._unbound_domains[position]
+        chain_index = self._unique_to_working[unique_index]
+        return chain_index, domain_index
 
     def get_random_staple_identity(self):
         """Return random staple identity."""
@@ -358,6 +398,8 @@ class OrigamiSystem:
         Will raise exception ConstraintViolation if constraints violated.
         """
         domain = (chain_index, domain_index)
+        unique_index = self._working_to_unique[chain_index]
+        domain_key = (unique_index, domain_index)
         delta_e = 0
 
         # Constraint violation if position in bound state
@@ -388,18 +430,18 @@ class OrigamiSystem:
                 position = tuple(position)
                 occupying_domain = self._unbound_domains[position]
                 del self._unbound_domains[position]
-                self._domain_occupancies[domain] = BOUND
+                self._domain_occupancies[domain_key] = BOUND
                 self._domain_occupancies[occupying_domain] = BOUND
                 self._position_occupancies[position] = BOUND
-                self._bound_domains[occupying_domain] = domain
-                self._bound_domains[domain] = domain
+                self._bound_domains[occupying_domain] = domain_key
+                self._bound_domains[domain_key] = occupying_domain
 
         # Move to empty site and update occupancies
         else:
             position = tuple(position)
-            self._domain_occupancies[domain] = UNBOUND
+            self._domain_occupancies[domain_key] = UNBOUND
             self._position_occupancies[position] = UNBOUND
-            self._unbound_domains[position] = domain
+            self._unbound_domains[position] = domain_key
 
         return delta_e
 
@@ -412,7 +454,7 @@ class OrigamiSystem:
         orientation), while the orientation is set indepentnly, so not all the
         checks of set_domain_configuration are necessary anymore.
         """
-        if self._domain_occupancies[(chain_index, domain_index)] == BOUND:
+        if self.get_domain_occupancy(chain_index, domain_index) == BOUND:
             raise ConstraintViolation
         else:
             self._orientations[chain_index][domain_index] = orientation
@@ -426,18 +468,21 @@ class OrigamiSystem:
         Consider adding a global check that all defined domains are not in
         unassigned states.
         """
+        unique_index = self._working_to_unique[chain_index]
         domain = (chain_index, domain_index)
-        occupancy = self._domain_occupancies
+        domain_key = (unique_index, domain_index)
+        occupancy = self._domain_occupancies[domain_key]
+        delta_e = 0
         if occupancy == BOUND:
 
             # Collect energy
             delta_e = -self.get_hybridization_energy(*domain)
-            bound_domain = self._bound_domains[domain]
+            bound_domain = self._bound_domains[domain_key]
             position = tuple(self._positions[chain_index][domain_index])
             self._positions[chain_index][domain_index] = []
-            del self._bound_domains[domain]
+            del self._bound_domains[domain_key]
             del self._bound_domains[bound_domain]
-            del self._domain_occupancies[domain]
+            del self._domain_occupancies[domain_key]
             self._unbound_domains[position] = bound_domain
             self._position_occupancies[position] = UNBOUND
             self._domain_occupancies[bound_domain] = UNBOUND
@@ -446,7 +491,7 @@ class OrigamiSystem:
             self._positions[chain_index][domain_index] = []
             del self._unbound_domains[position]
             del self._position_occupancies[position]
-            del self._domain_occupancies[domain]
+            del self._domain_occupancies[domain_key]
         else:
             pass
 
@@ -455,13 +500,14 @@ class OrigamiSystem:
     def add_chain(self, identity):
         """Add chain with domains in unassigned state and return chain index."""
         self._current_chain_index += 1
-        self._indices.append(self._current_chain_index)
+        chain_index = len(self.chain_lengths)
+        self._working_to_unique.append(self._current_chain_index)
+        self._unique_to_working[self._current_chain_index] = chain_index
         self._chain_identities.append(identity)
         chain_length = len(self.identities[identity])
         self._positions.append([[]] * chain_length)
         self._orientations.append([[]] * chain_length)
         self.chain_lengths.append(chain_length)
-        chain_index = len(self.chain_lengths) - 1
         return chain_index
 
     def delete_chain(self, chain_index):
@@ -469,12 +515,21 @@ class OrigamiSystem:
 
         # Change in energy
         delta_e = 0
-        del self._indices[chain_index]
-        del self._chain_identities[chain_index]
-
         for domain_index in range(self.chain_lengths[chain_index]):
             delta_e += self.unassign_domain(chain_index, domain_index)
 
+        unique_index = self._working_to_unique[chain_index]
+        del self._working_to_unique[chain_index]
+        del self._unique_to_working[unique_index]
+
+        # Update map from unique to working indices
+        for unique_index, working_index in self._unique_to_working.items():
+            if working_index > chain_index:
+                self._unique_to_working[unique_index] = working_index - 1
+            else:
+                pass
+
+        del self._chain_identities[chain_index]
         del self._positions[chain_index]
         del self._orientations[chain_index]
         del self.chain_lengths[chain_index]
@@ -487,13 +542,14 @@ class OrigamiSystem:
         # Translation vector
         r_t = self._positions[0][0]
         for chain_index, chain_positions in enumerate(self._positions):
+            unique_index = self._working_to_unique[chain_index]
             for domain_index, chain_positions in enumerate(chain_positions):
                 r_o = self._positions[chain_index][domain_index]
                 r_n = r_o - r_t
                 self._positions[chain_index][domain_index] = r_n
 
                 # Update occupancies
-                domain = (chain_index, domain_index)
+                domain = (unique_index, domain_index)
                 r_o = tuple(r_o)
                 r_n = tuple(r_n)
                 occupancy = self._domain_occupancies[domain]
@@ -512,7 +568,7 @@ class OrigamiSystem:
 
         # Test if complimentary (and has correct orientation for binding)
         try:
-            occupying_domain = self._unbound_domains[position]
+            occupying_domain = self.get_unbound_domain(position)
         except KeyError:
 
             # This would only happen if the caller didn't check the state of
@@ -533,7 +589,7 @@ class OrigamiSystem:
             for direction in [-1, 1]:
                 neighbour_domain = (chain_index, domain_index + direction)
                 try:
-                    occupancy = self._domain_occupancies[neighbour_domain]
+                    occupancy = self.get_domain_occupancy(*neighbour_domain)
                 except KeyError:
                     continue
 
@@ -547,7 +603,7 @@ class OrigamiSystem:
                     pass
 
         # Add new binding energies
-        delta_e = self.get_hybridization_energy(*neighbour_domain)
+        delta_e = self.get_hybridization_energy(*trial_domain)
 
         return delta_e
 
@@ -571,14 +627,13 @@ class OrigamiSystem:
 
             # They should be opposite vectors, thus correct if sum to 0
             complimentary_orientations = orientation_1 + orientation_2
-            if complimentary_orientations.sum() == 0:
+            if all(complimentary_orientations == np.zeros(3)):
                 match = True
             else:
                 match = False
         else:
             match = False
 
-        #pdb.set_trace()
         return match
 
     def _helical_pair_constraints_obeyed(self, chain_index, domain_index_1,
@@ -588,39 +643,33 @@ class OrigamiSystem:
         Does not check if they are in bound states.
         """
 
-        # Ensure domain 1 is 5'
-        if ((chain_index == 0 and domain_index_2 < domain_index_1) or
-                (chain_index > 0 and domain_index_2 > domain_index_1)):
-            five_p_index = domain_index_2
-            three_p_index = domain_index_1
-
+        # Set domain_index_1 to be 5' domain if scaffold and 3' domain if staple
+        if domain_index_2 > domain_index_1:
+            pass
         else:
-            five_p_index = domain_index_1
-            three_p_index = domain_index_2
+            domain_index_1, domain_index_2 = domain_index_2, domain_index_1
 
-        position_five_p = (self._positions[chain_index][five_p_index])
-        position_three_p = (self._positions[chain_index][three_p_index])
+        position_1 = (self._positions[chain_index][domain_index_1])
+        position_2 = (self._positions[chain_index][domain_index_2])
 
-        orientation_five_p = (self._orientations[chain_index][five_p_index])
-        orientation_three_p = (self._orientations[chain_index][three_p_index])
+        orientation_1 = (self._orientations[chain_index][domain_index_1])
+        orientation_2 = (self._orientations[chain_index][domain_index_2])
 
-        next_domain_vector = position_three_p - position_five_p
+        next_domain_vector = position_2 - position_1
 
         # Only one allowed configuration not in the same helix
-        if all(next_domain_vector == np.abs(orientation_five_p)):
+        if all(next_domain_vector == orientation_1):
             constraints_obeyed = True
 
         # Check twist constraint if same helix
         else:
-            orientation_five_p_r = (rotate_vector_quarter(orientation_five_p,
+            orientation_1_r = (rotate_vector_quarter(orientation_1,
                     next_domain_vector, -1))
-            if all(orientation_five_p_r == orientation_three_p):
+            if all(orientation_1_r == orientation_2):
                 constraints_obeyed = True
             else:
                 constraints_obeyed = False
 
-        if (chain_index, domain_index_1) == (2, 0):
-            pdb.set_trace()
         return constraints_obeyed
 
 
@@ -630,7 +679,7 @@ class OutputFile:
     def check_and_write(self, origami_system, step):
         """Check property write frequencies and write accordingly."""
         if value_is_multiple(step, self._config_write_freq):
-            self._write_configuration(self, origami_system, step)
+            self._write_configuration(origami_system, step)
         else:
             pass
 
@@ -638,10 +687,10 @@ class OutputFile:
 class JSONOutputFile(OutputFile):
     """JSON output file class."""
 
-    def __init__(self, filename, origami_system, config_write_freq):
+    def __init__(self, filename, origami_system, config_write_freq=1):
         json_origami = {'origami':{'identities':{}, 'configurations':[]}}
         json_origami['origami']['identities'] = origami_system.identities
-        json_origami['origami']['sequences'] = origami_system.identities
+        json_origami['origami']['sequences'] = origami_system.sequences
 
         self._filename = filename
         self._config_write_freq = config_write_freq
@@ -649,95 +698,23 @@ class JSONOutputFile(OutputFile):
 
     def _write_configuration(self, origami_system, step):
         self.json_origami['origami']['configurations'].append({})
-        self.json_origami['origami']['configurations'][-1]['step'] = step
+        current_config = self.json_origami['origami']['configurations'][-1]
+        current_config['step'] = step
+        current_config['chains'] = []
+        chain_index = -1
         for chain in origami_system.chains:
-            self.json_origami['origami']['configurations'][-1]['chains'] = (
-                    [])
-            self.json_origami['origami']['configurations'][-1]['chains'][-1]['identity'] = (
-                    chain['identity'])
-            self.json_origami['origami']['configurations'][-1]['chains'][-1]['index'] = (
-                    chain['index'])
-            self.json_origami['origami']['configurations'][-1]['chains'][-1]['positions'] = (
-                    chain['positions'])
-            self.json_origami['origami']['configurations'][-1]['chains'][-1]['orientations'] = (
-                    chain['orientations'])
+            current_config['chains'].append({})
+            json_chain = current_config['chains'][-1]
+            json_chain['identity'] = chain['identity']
+            json_chain['index'] = chain['index']
+            json_chain['positions'] = chain['positions']
+            json_chain['orientations'] = chain['orientations']
 
-            json.dump(self.json_origami, open(self._filename, 'w'), indent=4,
-                    seperators=(',', ': '))
+        json.dump(self.json_origami, open(self._filename, 'w'), indent=4,
+                    separators=(',', ': '))
 
     def close(self):
         """Perform cleanup."""
-        pass
-
-
-class HDF5OutputFile(OutputFile):
-    """HDF5 output file class.
-
-    Custom format; not compatable with VMD (not H5MD).
-    """
-
-    def __init__(self, filename, origami_system, config_write_freq):
-        self.hdf5_origami = h5py.File(filename, 'w')
-        self.hdf5_origami.create_group('origami')
-        self.hdf5_origami.attrs['identities'] = origami_system.identities
-        self.hdf5_origami.attrs['sequences'] = origami_system.sequences
-
-        self.hdf5_origami.create_group('origami/configurations')
-        for chain in origami_system.chains:
-            self._create_chain(chain)
-
-        self.filename = filename
-        self._config_write_freq = config_write_freq
-        self._writes = 0
-
-    def _write_config(self, origami_system, step):
-        write_index = self._writes
-        self._writes += 1
-        for chain in origami_system.chains:
-            chain_index = chain['index']
-            database_key = 'origami/configurations/{}'.format(chain_index)
-            try:
-                self.hdf5_origami[database_key]
-            except KeyError:
-                self._create_chain(chain)
-
-            self.hdf5_origami[database_key + '/step'].resize(self._writes, axis=0)
-            self.hdf5_origami[database_key + '/step'][write_index] = step
-            self.hdf5_origami[database_key + '/positions'].resize(self._writes, axis=0)
-            self.hdf5_origami[database_key + '/positions'][write_index] = chain['positions']
-            self.hdf5_origami[database_key + '/orientations'].resize(self._writes, axis=0)
-            self.hdf5_origami[database_key + '/orientations'][write_index] = chain['orientations']
-
-    def _create_chain(self, chain):
-        chain_length = len(chain['positions'])
-        chain_index = chain['index']
-        database_key = 'origami/configurations/{}'.format(chain_index)
-        self.hdf5_origami.create_group(database_key)
-        self.hdf5_origami[database_key].attrs['index'] = (
-                chain_index)
-        self.hdf5_origami[database_key].attrs['identity'] = (
-                chain['identity'])
-        self.hdf5_origami.create_dataset(database_key + '/step',
-                (1, 1),
-                chunks=(1, 1),
-                maxshape=(None, 1),
-                dtype='i')
-        self.hdf5_origami.create_dataset(database_key + '/positions',
-                (1, chain_length, 3),
-                chunks=(1, chain_length, 3),
-                maxshape=(None, chain_length, 1),
-                compresion='gzip',
-                dtype='i')
-        self.hdf5_origami.create_dataset(database_key + '/orientations',
-                chain_length=len(chain['positions'])
-                (1, chain_length, 3),
-                chunks=(1, chain_length, 3),
-                maxshape=(None, chain_length, 1),
-                compresion='gzip',
-                dtype='i')
-
-    def close(self):
-        """Perform any cleanup."""
         pass
 
 
@@ -768,6 +745,99 @@ class JSONInputFile:
         return self._json_origami['origami']['configurations'][step]['chains']
 
 
+class HDF5OutputFile(OutputFile):
+    """HDF5 output file class.
+
+    Custom format; not compatable with VMD (not H5MD).
+    """
+
+    def __init__(self, filename, origami_system, config_write_freq=1):
+        self.hdf5_origami = h5py.File(filename, 'w')
+        self.hdf5_origami.create_group('origami')
+
+        # HDF5 does not allow variable length lists; fill with 0
+        max_domains = 0
+        for domain_identities in origami_system.identities:
+            domains = len(domain_identities)
+            if domains > max_domains:
+                max_domains = domains
+
+        filled_identities = []
+        for domain_identities in origami_system.identities:
+            remainder = max_domains - len(domain_identities)
+            filled_identities.append(domain_identities[:])
+            for i in range(remainder):
+                filled_identities[-1].append(0)
+
+        self.hdf5_origami.attrs['identities'] = filled_identities
+
+        # HDF5 does not allow lists of strings
+        sequences = np.array(origami_system.sequences, dtype='a')
+        self.hdf5_origami.attrs['sequences'] = sequences
+
+        self.hdf5_origami.create_group('origami/configurations')
+        for chain in origami_system.chains:
+            self._create_chain(chain)
+
+        self.filename = filename
+        self._config_write_freq = config_write_freq
+        self._writes = 0
+
+    def _write_configuration(self, origami_system, step):
+        write_index = self._writes
+        self._writes += 1
+        for chain in origami_system.chains:
+            chain_index = chain['index']
+            base_key = 'origami/configurations/{}'.format(chain_index)
+            try:
+                self.hdf5_origami[base_key]
+            except KeyError:
+                self._create_chain(chain)
+
+            step_key = base_key + '/step'
+            pos_key = base_key + '/positions'
+            orient_key = base_key + '/orientations'
+            self.hdf5_origami[step_key].resize(self._writes, axis=0)
+            self.hdf5_origami[step_key][write_index] = step
+            self.hdf5_origami[pos_key].resize(self._writes, axis=0)
+            self.hdf5_origami[pos_key][write_index] = chain['positions']
+            self.hdf5_origami[orient_key].resize(self._writes, axis=0)
+            self.hdf5_origami[orient_key][write_index] = chain['orientations']
+
+    def _create_chain(self, chain):
+        chain_length = len(chain['positions'])
+        chain_index = chain['index']
+        base_key = 'origami/configurations/{}'.format(chain_index)
+        step_key = base_key + '/step'
+        pos_key = base_key + '/positions'
+        orient_key = base_key + '/orientations'
+
+        self.hdf5_origami.create_group(base_key)
+        self.hdf5_origami[base_key].attrs['index'] = (chain_index)
+        self.hdf5_origami[base_key].attrs['identity'] = (chain['identity'])
+        self.hdf5_origami.create_dataset(step_key,
+                (1, 1),
+                chunks=(1, 1),
+                maxshape=(None, 1),
+                dtype='i')
+        self.hdf5_origami.create_dataset(pos_key,
+                (1, chain_length, 3),
+                chunks=(1, chain_length, 3),
+                maxshape=(None, chain_length, 3),
+                compression='gzip',
+                dtype='i')
+        self.hdf5_origami.create_dataset(orient_key,
+                (1, chain_length, 3),
+                chunks=(1, chain_length, 3),
+                maxshape=(None, chain_length, 3),
+                compression='gzip',
+                dtype='i')
+
+    def close(self):
+        """Perform any cleanup."""
+        self.hdf5_origami.close()
+
+
 class HDF5InputFile:
     """Input file taking hdf5 formatted origami system files in constructor."""
 
@@ -780,29 +850,39 @@ class HDF5InputFile:
     @property
     def identities(self):
         """Standard format for passing origami domain identities."""
-        return self._hdf5_origami['origami'].attrs['identities'].tolist()
+
+        # HDF5 does not allow variable length lists; fill with 0
+        raw =  self._hdf5_origami.attrs['identities'].tolist()
+        identities = []
+        for raw_domain_identities in raw:
+            identities.append([i for i in raw_domain_identities if i !=0])
+
+        return identities
 
     @property
     def sequences(self):
         """Standard format for passing origami system sequences.
 
-        Only includes sequences of scaffold or strand, as energy calculation
-        only requires one each of the complimentary strands for input.
-
-        Is this 5' or 3'? For scaffold or staple?
+        Only includes sequences of scaffold in 5' to 3' orientation.
         """
-        return self._hdf5_origami['origami'].attrs['sequences'].tolist()
+
+        # H5py outputs as type 'S', need type 'U'
+        return self._hdf5_origami.attrs['sequences'].astype('U').tolist()
 
     def chains(self, step):
         """Standard format for passing chain configuration."""
         chains = []
-        for chain_database in self._hdf5_origami['origami/configurations']:
-            if step in chain_database['steps']:
+        base_key = 'origami/configurations'
+        for chain in self._hdf5_origami['origami/configurations']:
+            chain_key = base_key + '/' + chain
+            step_key = chain_key + '/step'
+            if step in self._hdf5_origami[step_key]:
+                chain_group = self._hdf5_origami[chain_key]
                 chain = {}
-                chain['index'] = chain_database.attrs['index']
-                chain['identity'] = chain_database.attrs['identity']
-                chain['positions'] = chain_database['positions'].tolist()
-                chain['orientations'] = chain_database['orientations'].tolist()
+                chain['index'] = chain_group.attrs['index']
+                chain['identity'] = chain_group.attrs['identity']
+                chain['positions'] = chain_group['positions'][step].tolist()
+                chain['orientations'] = chain_group['orientations'][step].tolist()
                 chains.append(chain)
             else:
                 pass
@@ -849,13 +929,14 @@ class GCMCBoundStaplesSimulation:
 
         # Check movetype probabilities are normalized
         # This could break from rounding errors
+        # Might be better to normalize whatever numbers given
         if cumulative_probability != 1:
             print('Movetype probabilities not normalized')
             sys.exit()
 
         # Two copies of the system allows easy reversion upon rejection
         self._accepted_system = origami_system
-        self._trial_system = origami_system
+        self._trial_system = copy.deepcopy(origami_system)
 
         # Change in energy for a proposed trial move
         self._delta_e = 0
@@ -866,9 +947,9 @@ class GCMCBoundStaplesSimulation:
     def run(self, num_steps):
         """Run simulation for given number of steps."""
         self._delta_e = 0
-        self._trial_system = self._accepted_system
 
         for step in range(num_steps):
+            self._trial_system = copy.deepcopy(self._accepted_system)
             movetype_method = self._select_movetype()
             movetype_method()
             self._output_file.check_and_write(self._accepted_system, step)
@@ -895,7 +976,7 @@ class GCMCBoundStaplesSimulation:
         if p_accept == 1:
             accept = True
         else:
-            if p_accept >= random.random():
+            if p_accept > random.random():
                 accept = True
             else:
                 accept = False
@@ -929,7 +1010,8 @@ class GCMCBoundStaplesSimulation:
         Updates changes in energy as binding events occur."""
 
         # Iterate through given indices, growing next domain from current index
-        for domain_index in domain_indices[:-1]:
+        for i, domain_index in enumerate(domain_indices[:-1]):
+            new_domain_index = domain_indices[i + 1]
 
             # Randomly select neighbour lattice site for new position
             dimension = random.choice([XHAT, YHAT, ZHAT])
@@ -950,8 +1032,8 @@ class GCMCBoundStaplesSimulation:
 
             # Attempt to set position
             try:
-                self._delta_e += self._trial_system.set_configuration(
-                        chain_index, domain_index, r_new, o_new)
+                self._delta_e += self._trial_system.set_domain_configuration(
+                        chain_index, new_domain_index, r_new, o_new)
             except ConstraintViolation:
                 raise MoveRejection
 
@@ -960,14 +1042,14 @@ class GCMCBoundStaplesSimulation:
     def _grow_staple(self, staple_length, staple_index, domain_index):
         """Randomly grow staple out from given domain in both directions."""
 
-        # Grow in five-prime direction
+        # Grow in three-prime direction
         staple_indices = range(domain_index, staple_length)
         try:
             self._grow_chain(staple_index, staple_indices)
         except MoveRejection:
             raise
 
-        # Grow in three-prime direction
+        # Grow in five-prime direction
         staple_indices = range(domain_index, -1, -1)
         try:
             self._grow_chain(staple_index, staple_indices)
@@ -978,12 +1060,12 @@ class GCMCBoundStaplesSimulation:
     def _insert_staple(self):
         """Insert staple at random scaffold domain and grow."""
 
-        # Randomly select staple identity
+        # Randomly select staple identity and add chain
         staple_identity, domain_identities = (
-                self._accepted_system.random_staple_identity())
+                self._accepted_system.get_random_staple_identity())
 
         staple_index = self._trial_system.add_chain(staple_identity)
-        staple_length = self._accepted_system.chain_length[staple_index]
+        staple_length = self._trial_system.chain_lengths[staple_index]
 
         # Randomly select staple and scaffold domains to bind
         staple_domain = random.randrange(staple_length)
@@ -991,13 +1073,17 @@ class GCMCBoundStaplesSimulation:
         scaffold_index = 0
         scaffold_length = self._accepted_system.chain_lengths[scaffold_index]
         scaffold_domain = random.randrange(scaffold_length)
+        
+        # Should I be using the correct orientation, or assigning randomly?
         position = self._trial_system.get_domain_position(scaffold_index,
+                scaffold_domain)
+        orientation = -self._trial_system.get_domain_orientation(scaffold_index,
                 scaffold_domain)
 
         # Attempt to set position
         try:
             self._delta_e += self._trial_system.set_domain_configuration(
-                    staple_index, staple_domain, position)
+                    staple_index, staple_domain, position, orientation)
         except ConstraintViolation:
             return
 
@@ -1017,7 +1103,13 @@ class GCMCBoundStaplesSimulation:
         """Delete random staple."""
 
         # Randomly select staple
-        staple_index = random.randrange(1, len(self._accepted_system.indices))
+        try:
+            staple_index = random.randrange(1,
+                    len(self._trial_system.chain_lengths))
+
+        # No staples in system
+        except ValueError:
+            return
 
         self._delta_e += self._trial_system.delete_chain(staple_index)
 
@@ -1031,7 +1123,14 @@ class GCMCBoundStaplesSimulation:
         """Regrow random staple."""
 
         # Randomly select staple
-        staple_index = random.randrange(1, len(self._accepted_system.indices))
+        try:
+            staple_index = random.randrange(1,
+                    len(self._trial_system.chain_lengths))
+
+        # No staples in system
+        except ValueError:
+            return
+
         staple_length = self._accepted_system.chain_lengths[staple_index]
 
         # Find all bound domains and randomly select growth point
@@ -1061,7 +1160,7 @@ class GCMCBoundStaplesSimulation:
         if self._configuration_accepted():
             self._accepted_system = self._trial_system
         else:
-            self._trial_system = self._accepted_system
+            pass
 
     def _regrow_scaffold_and_bound_staples(self):
         """Randomly regrow terminal section of scaffold and bound staples.
@@ -1074,13 +1173,15 @@ class GCMCBoundStaplesSimulation:
         scaffold_index = 0
         scaffold_length = self._accepted_system.chain_lengths[scaffold_index]
         start_domain_index = random.randrange(scaffold_length)
+        #start_domain_index = 1
 
         # Select direction to regrow, create index list
         direction = random.randrange(2)
+        #direction = 0
         if direction == 1:
             scaffold_indices = range(start_domain_index, scaffold_length)
         else:
-            scaffold_indices = range(scaffold_length, -1, -1)
+            scaffold_indices = range(start_domain_index, -1, -1)
 
         # Find all staples bound to scaffold (includes repeats)
         staples = {}
@@ -1093,7 +1194,7 @@ class GCMCBoundStaplesSimulation:
                 staple_index = staple_domain[0]
                 staple_domain_i = staple_domain[1]
                 try:
-                    staples[staple_index].append(domain_index, staple_domain_i)
+                    staples[staple_index].append((domain_index, staple_domain_i))
                 except KeyError:
                     staples[staple_index] = [(domain_index, staple_domain_i)]
 
@@ -1104,7 +1205,7 @@ class GCMCBoundStaplesSimulation:
 
         # Unassign staples
         for staple_index in staples.keys():
-            for domain_index in self._trial_system.chain_lengths[staple_index]:
+            for domain_index in range(self._trial_system.chain_lengths[staple_index]):
                 self._delta_e += self._trial_system.unassign_domain(staple_index,
                     domain_index)
 
@@ -1115,7 +1216,7 @@ class GCMCBoundStaplesSimulation:
             return
 
         # Regrow staples
-        for staple_index, bound_domains in staples.values():
+        for staple_index, bound_domains in staples.items():
 
             # Pick domain on scaffold and staple to grow from
             scaffold_domain_index, staple_domain_index = random.choice(
@@ -1130,7 +1231,7 @@ class GCMCBoundStaplesSimulation:
 
             # Attempt to set growth domain
             try:
-                self._delta_e += self._trial_system.set_configuration(
+                self._delta_e += self._trial_system.set_domain_configuration(
                         staple_index, staple_domain_index, position, o_new)
             except ConstraintViolation:
                 return
@@ -1153,7 +1254,7 @@ class GCMCBoundStaplesSimulation:
         """Randomly rotate random domain."""
 
         # Select random chain and domain
-        chain_lengths = self._accepted_system
+        chain_lengths = self._accepted_system.chain_lengths
         chain_index = random.randrange(len(chain_lengths))
         domain_index = random.randrange(chain_lengths[chain_index])
 
@@ -1165,7 +1266,7 @@ class GCMCBoundStaplesSimulation:
         else:
             pass
 
-        # Select random orientation and update
+        # Select random orientation and update (always accepted)
         dimension = random.choice([XHAT, YHAT, ZHAT])
         direction = random.randrange(-1, 2, 2)
         o_new = dimension * direction

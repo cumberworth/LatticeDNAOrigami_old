@@ -6,26 +6,28 @@ Takes template tikz scripts for geneting configuration diagrams and outputs a
 script for configurations at specified steps in the specified intput file.
 """
 
-#from lattice_origami_domains import JSONInputFile, HDF5InputFile
+from lattice_origami_domains import JSONInputFile, HDF5InputFile
 import sys
 import string
 
 
-INPUT_FILENAME = 'example_origami.json'
-OUTPUT_FILENAME = 'test.tex'
+INPUT_FILENAME = 'test_sim.json'
+OUTPUT_FILENAME = 'test_sim.tex'
 TEMPLATE_FILENAME = 'tikz_template.tex'
-STEP = 0
+STEP = 500
 
 
 def open_inputfile(filename):
     filename_extension = filename.split('.')[1]
     if filename_extension == 'json':
         input_file = JSONInputFile(filename)
-    elif filename_extension == 'h5':
+    elif filename_extension == 'hdf5':
         input_file = JSONInputFile(filename)
     else:
         print('Filetype {} not supported.'.format(filename_extension))
         sys.exit()
+
+    return input_file
 
 
 def make_tikz_position_bond_orientation_list(chains):
@@ -70,10 +72,8 @@ def insert_list_and_write(tikz_list, output_filename):
 
 
 def main():
-    #input_file = open_inputfile(INPUT_FILENAME)
-    #chains = input_file.chains(step)
-    import json
-    chains = json.load(open(INPUT_FILENAME))['origami']['configurations'][0]['chains']
+    input_file = open_inputfile(INPUT_FILENAME)
+    chains = input_file.chains(STEP)
     tikz_list = make_tikz_position_bond_orientation_list(chains)
     insert_list_and_write(tikz_list, OUTPUT_FILENAME)
 
