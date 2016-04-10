@@ -11,10 +11,11 @@ import sys
 import string
 
 
-INPUT_FILENAME = 'test_sim.json'
-OUTPUT_FILENAME = 'test_sim.tex'
+INPUT_FILENAME = sys.argv[1]
+OUTPUT_FILENAME = sys.argv[2]
+STEP = int(sys.argv[3])
+
 TEMPLATE_FILENAME = 'tikz_template.tex'
-STEP = 500
 
 
 def open_inputfile(filename):
@@ -22,7 +23,7 @@ def open_inputfile(filename):
     if filename_extension == 'json':
         input_file = JSONInputFile(filename)
     elif filename_extension == 'hdf5':
-        input_file = JSONInputFile(filename)
+        input_file = HDF5InputFile(filename)
     else:
         print('Filetype {} not supported.'.format(filename_extension))
         sys.exit()

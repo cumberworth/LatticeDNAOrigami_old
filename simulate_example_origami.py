@@ -9,7 +9,7 @@ input_file = JSONInputFile('example_origami.json')
 step = 0
 
 # Set conditions
-temp = 350
+temp = 340
 
 # Number density
 staple_p = 1
@@ -26,11 +26,11 @@ move_settings = {MOVETYPE.INSERT_STAPLE: 0.2,
 
 # Specify output file type and name
 output_file_name = 'test_sim.hdf5'
-output_file = JSONOutputFile(output_file_name, origami_system)
+output_file = HDF5OutputFile(output_file_name, origami_system)
 
 # Setup up simulation
 sim = GCMCBoundStaplesSimulation(origami_system, move_settings, output_file)
 
 # Run
-N = 1000
+N = 10000
 sim.run(N)

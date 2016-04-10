@@ -754,6 +754,9 @@ class HDF5OutputFile(OutputFile):
     def __init__(self, filename, origami_system, config_write_freq=1):
         self.hdf5_origami = h5py.File(filename, 'w')
         self.hdf5_origami.create_group('origami')
+        self.filename = filename
+        self._config_write_freq = config_write_freq
+        self._writes = 0
 
         # HDF5 does not allow variable length lists; fill with 0
         max_domains = 0
@@ -779,15 +782,22 @@ class HDF5OutputFile(OutputFile):
         for chain in origami_system.chains:
             self._create_chain(chain)
 
-        self.filename = filename
-        self._config_write_freq = config_write_freq
-        self._writes = 0
+        # Create array of chains present at each step
+        dt = h5py.special_dtype(vlen=np.dtype('int32'))
+        self.hdf5_origami.create_dataset('origami/chain_ids',
+                (1,),
+                maxshape=(None,),
+                chunks=(1,),
+                dtype=dt)
 
     def _write_configuration(self, origami_system, step):
         write_index = self._writes
         self._writes += 1
+        self.hdf5_origami['origami/chain_ids'].resize(self._writes, axis=0)
+        chain_ids = []
         for chain in origami_system.chains:
             chain_index = chain['index']
+            chain_ids.append(chain_index)
             base_key = 'origami/configurations/{}'.format(chain_index)
             try:
                 self.hdf5_origami[base_key]
@@ -803,6 +813,8 @@ class HDF5OutputFile(OutputFile):
             self.hdf5_origami[pos_key][write_index] = chain['positions']
             self.hdf5_origami[orient_key].resize(self._writes, axis=0)
             self.hdf5_origami[orient_key][write_index] = chain['orientations']
+
+        self.hdf5_origami['origami/chain_ids'][step] = chain_ids
 
     def _create_chain(self, chain):
         chain_length = len(chain['positions'])
@@ -872,20 +884,17 @@ class HDF5InputFile:
     def chains(self, step):
         """Standard format for passing chain configuration."""
         chains = []
+        chain_ids = self._hdf5_origami['origami/chain_ids'][step]
         base_key = 'origami/configurations'
-        for chain in self._hdf5_origami['origami/configurations']:
-            chain_key = base_key + '/' + chain
-            step_key = chain_key + '/step'
-            if step in self._hdf5_origami[step_key]:
-                chain_group = self._hdf5_origami[chain_key]
-                chain = {}
-                chain['index'] = chain_group.attrs['index']
-                chain['identity'] = chain_group.attrs['identity']
-                chain['positions'] = chain_group['positions'][step].tolist()
-                chain['orientations'] = chain_group['orientations'][step].tolist()
-                chains.append(chain)
-            else:
-                pass
+        for chain in chain_ids:
+            chain_key = base_key + '/' + str(chain)
+            chain_group = self._hdf5_origami[chain_key]
+            chain = {}
+            chain['index'] = chain_group.attrs['index']
+            chain['identity'] = chain_group.attrs['identity']
+            chain['positions'] = chain_group['positions'][step].tolist()
+            chain['orientations'] = chain_group['orientations'][step].tolist()
+            chains.append(chain)
 
         return chains
 
