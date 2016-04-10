@@ -197,3 +197,15 @@ I can have a new helix stick out from an old helix in any direction at the 5' en
 For now I'm going to stick with what I have and focus on testing the simulation remaining file objects.
 
 I suppose I could memoization to store the boltzman factors, as I would expect a fair amount of repitition.
+
+So things are sort of working now. I need to figure out what is gong on with the moves. I need to output what moves are being attempted and whether they are accepted. I want to see what the individual acceptance probabilities are and if they change with time. The calculate of acceptance ratios is simple. To show how they vary with time, I could plot a moving average. But I will need quite a few events to get accurate averages in the bins. At this stage, it might be more instructive to plot some 1d thing with blocks that are colored for either reject or acceptance of a particular move. Perhaps even before that I should just scan the text and see if it's clear.
+
+Sometimes it seems to get stuck in one position where only the orientations can change, even though no staples are bound. It should be able to regrow fairly easily without any staples.
+
+I have it directly printing, which I can just direct to standard out. Using grep and wc is good enough for now.
+
+During simulation runs at 300, it crashes from a math overflow error. delta_e ends up on the order of 2 * 10^5. Even if every domain unhybridized in one step, it would only be on the order of 10^4. When I reran the delete staples it HOLY FUCK WHAT THE FUCK. How are you so stupid. delta was only set to 0 once at the start of run. Christ.
+
+Now it's not inserting any new staples at 300. Yeah. I had the negative sign backwards.
+
+Things seem to make sense now. At 300 blocking becomes quite apparent, at least at the current number density, which is completely unrealisitic.

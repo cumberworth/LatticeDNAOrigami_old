@@ -9,7 +9,7 @@ input_file = JSONInputFile('example_origami.json')
 step = 0
 
 # Set conditions
-temp = 340
+temp = 300
 
 # Number density
 staple_p = 1

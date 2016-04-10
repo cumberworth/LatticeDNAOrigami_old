@@ -20,6 +20,10 @@ UNASSIGNED = 0
 UNBOUND = 1
 BOUND = 2
 
+# Move outcomes
+REJECTED = 0
+ACCEPTED = 1
+
 # Units vectors for euclidean space
 XHAT = np.array([1, 0, 0])
 YHAT = np.array([0, 1, 0])
@@ -244,7 +248,7 @@ class OrigamiSystem:
         self._orientations = []
 
         # Next domain vectors
-        self._next_domain_vectors = []
+        #self._next_domain_vectors = []
         self.chain_lengths = []
 
         # Dictionary with position keys and state values
@@ -539,6 +543,10 @@ class OrigamiSystem:
     def center(self):
         """Translates system such that first domain of scaffold on origin."""
 
+        # New occupancy dicts
+        position_occupancies = {}
+        unbound_domains = {}
+
         # Translation vector
         r_t = self._positions[0][0]
         for chain_index, chain_positions in enumerate(self._positions):
@@ -553,13 +561,15 @@ class OrigamiSystem:
                 r_o = tuple(r_o)
                 r_n = tuple(r_n)
                 occupancy = self._domain_occupancies[domain]
-                del self._position_occupancies[r_o]
+
                 if occupancy == BOUND:
-                    self._position_occupancies[r_n] = BOUND
+                    position_occupancies[r_n] = BOUND
                 elif occupancy == UNBOUND:
-                    self._position_occupancies[r_n] = UNBOUND
-                    del self._unbound_domains[r_o]
-                    self._unbound_domains[r_n] = domain
+                    position_occupancies[r_n] = UNBOUND
+                    unbound_domains[r_n] = domain
+
+        self._position_occupancies = position_occupancies
+        self._unbound_domains = unbound_domains
 
     def _bind_domain(self, trial_chain_index, trial_domain_index):
         """Bind given domain in preset trial config and return change in energy.
@@ -682,6 +692,8 @@ class OutputFile:
             self._write_configuration(origami_system, step)
         else:
             pass
+
+        # Move types and acceptances
 
 
 class JSONOutputFile(OutputFile):
@@ -916,6 +928,7 @@ class GCMCBoundStaplesSimulation:
         # Create cumalative probability distribution for movetypes
         # List to associate movetype method with index in distribution
         self._movetype_methods = []
+        self._movetypes = []
         self._movetype_probabilities = []
         cumulative_probability = 0
         for movetype, probability in move_settings.items():
@@ -934,6 +947,7 @@ class GCMCBoundStaplesSimulation:
 
             cumulative_probability += probability
             self._movetype_methods.append(movetype_method)
+            self._movetypes.append(movetype)
             self._movetype_probabilities.append(cumulative_probability)
 
         # Check movetype probabilities are normalized
@@ -951,19 +965,26 @@ class GCMCBoundStaplesSimulation:
         self._delta_e = 0
 
         # Frequency for translating system back to origin
-        self.center_freq = 1000
+        self.center_freq = 1
+
+        # Current movetype
+        self._movetype = -1
 
     def run(self, num_steps):
         """Run simulation for given number of steps."""
-        self._delta_e = 0
 
         for step in range(num_steps):
+            self._delta_e = 0
             self._trial_system = copy.deepcopy(self._accepted_system)
             movetype_method = self._select_movetype()
-            movetype_method()
-            self._output_file.check_and_write(self._accepted_system, step)
-            if step == self.center_freq:
+            outcome = movetype_method()
+            if value_is_multiple(step, self.center_freq):
                 self._accepted_system.center()
+
+            self._output_file.check_and_write(self._accepted_system, step)
+
+            # Debugging hack
+            print(step, self._movetype, outcome, len(self._accepted_system.chain_lengths), self._delta_e)
 
     def _select_movetype(self):
         """Return movetype method according to distribution."""
@@ -973,6 +994,7 @@ class GCMCBoundStaplesSimulation:
                 self._movetype_probabilities):
             if lower_boundary <= random_number < upper_boundary:
                 movetype_method = self._movetype_methods[movetype_index]
+                self._movetype = self._movetypes[movetype_index]
                 break
             else:
                 lower_boundary = upper_boundary
@@ -995,20 +1017,20 @@ class GCMCBoundStaplesSimulation:
     def _configuration_accepted(self):
         """Metropolis acceptance test for configuration change."""
         T = self._accepted_system.temp
-        boltz_factor = math.exp(self._delta_e / T)
+        boltz_factor = math.exp(-self._delta_e / T)
         return self._test_acceptance(boltz_factor)
 
     def _staple_insertion_accepted(self):
         """Metropolis acceptance test for particle insertion."""
         T = self._accepted_system.temp
-        boltz_factor = math.exp(self._delta_e / T)
+        boltz_factor = math.exp(-self._delta_e / T)
         number_density = self._accepted_system.staple_p
         return self._test_acceptance(number_density * boltz_factor)
 
     def _staple_deletion_accepted(self):
         """Metropolis acceptance test for particle deletion."""
         T = self._accepted_system.temp
-        boltz_factor = math.exp(self._delta_e / T)
+        boltz_factor = math.exp(-self._delta_e / T)
         inverse_number_density = 1 / self._accepted_system.staple_p
         return self._test_acceptance(inverse_number_density * boltz_factor)
 
@@ -1094,19 +1116,24 @@ class GCMCBoundStaplesSimulation:
             self._delta_e += self._trial_system.set_domain_configuration(
                     staple_index, staple_domain, position, orientation)
         except ConstraintViolation:
-            return
+            accepted = False
+            return accepted
 
         # Grow staple
         try:
             self._grow_staple(staple_length, staple_index, staple_domain)
         except MoveRejection:
-            return
+            accepted = False
+            return accepted
 
         # Test acceptance
         if self._staple_insertion_accepted():
             self._accepted_system = self._trial_system
+            accepted = True
         else:
-            pass
+            accepted = False
+
+        return accepted
 
     def _delete_staple(self):
         """Delete random staple."""
@@ -1118,15 +1145,19 @@ class GCMCBoundStaplesSimulation:
 
         # No staples in system
         except ValueError:
-            return
+            accepted = False
+            return accepted
 
         self._delta_e += self._trial_system.delete_chain(staple_index)
 
         # Test acceptance
         if self._staple_deletion_accepted():
             self._accepted_system = self._trial_system
+            accepted = True
         else:
-            pass
+            accepted = False
+
+        return accepted
 
     def _regrow_staple(self):
         """Regrow random staple."""
@@ -1138,7 +1169,8 @@ class GCMCBoundStaplesSimulation:
 
         # No staples in system
         except ValueError:
-            return
+            accepted = False
+            return accepted
 
         staple_length = self._accepted_system.chain_lengths[staple_index]
 
@@ -1163,13 +1195,17 @@ class GCMCBoundStaplesSimulation:
         try:
             self._grow_staple(staple_length, staple_index, bound_domain_index)
         except MoveRejection:
-            return
+            accepted = False
+            return accepted
 
         # Test acceptance
         if self._configuration_accepted():
             self._accepted_system = self._trial_system
+            accepted = True
         else:
-            pass
+            accepted = False
+
+        return accepted
 
     def _regrow_scaffold_and_bound_staples(self):
         """Randomly regrow terminal section of scaffold and bound staples.
@@ -1222,7 +1258,8 @@ class GCMCBoundStaplesSimulation:
         try:
             self._grow_chain(scaffold_index, scaffold_indices)
         except MoveRejection:
-            return
+            accepted = False
+            return accepted
 
         # Regrow staples
         for staple_index, bound_domains in staples.items():
@@ -1243,7 +1280,8 @@ class GCMCBoundStaplesSimulation:
                 self._delta_e += self._trial_system.set_domain_configuration(
                         staple_index, staple_domain_index, position, o_new)
             except ConstraintViolation:
-                return
+                accepted = False
+                return accepted
 
             # Grow remainder of staple
             staple_length = self._trial_system.chain_lengths[staple_index]
@@ -1251,13 +1289,17 @@ class GCMCBoundStaplesSimulation:
                 self._grow_staple(staple_length, staple_index,
                         staple_domain_index)
             except MoveRejection:
-                return
+                accepted = False
+                return accepted
 
         # Test acceptance
         if self._configuration_accepted():
             self._accepted_system = self._trial_system
+            accepted = True
         else:
-            pass
+            accepted = False
+
+        return accepted
 
     def _rotate_orientation_vector(self):
         """Randomly rotate random domain."""
@@ -1271,7 +1313,8 @@ class GCMCBoundStaplesSimulation:
         occupancy = self._accepted_system.get_domain_occupancy(chain_index,
                 domain_index)
         if occupancy == BOUND:
-            return
+            accepted = False
+            return accepted
         else:
             pass
 
@@ -1281,3 +1324,6 @@ class GCMCBoundStaplesSimulation:
         o_new = dimension * direction
         self._accepted_system.set_domain_orientation(chain_index, domain_index,
                 o_new)
+
+        accepted = True
+        return accepted

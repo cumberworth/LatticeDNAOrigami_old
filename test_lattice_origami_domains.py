@@ -661,8 +661,8 @@ class TestGCMCBoundStaplesSimulation:
 
     @pytest.mark.parametrize('delta_e, rand_ratio, expected', [
         (0, 0, True),
-        (300, 0, True),
-        (-300, 0.5, False)])
+        (300, 0.5, False),
+        (-300, 0, True)])
     def test_configuration_accepted(self, delta_e, rand_ratio, expected, test_sim, monkeypatch):
         monkeypatch.setattr(random, 'random', lambda: rand_ratio)
         test_sim._delta_e = delta_e
@@ -726,11 +726,12 @@ class TestGCMCBoundStaplesSimulation:
         assert test_sim._accepted_system.chains == expected_system.chains
 
     def test_delete_staple(self, test_sim):
+        all_staples = test_sim._accepted_system
         deleted_staple_1 = copy.deepcopy(test_sim._accepted_system)
         deleted_staple_1.delete_chain(1)
         deleted_staple_2 = copy.deepcopy(test_sim._accepted_system)
         deleted_staple_2.delete_chain(2)
-        expected_chains = [deleted_staple_1.chains, deleted_staple_2.chains]
+        expected_chains = [all_staples.chains, deleted_staple_1.chains, deleted_staple_2.chains]
         def test_delete_staple(test_sim):
             test_sim = copy.deepcopy(test_sim)
             test_sim._delete_staple()
