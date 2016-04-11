@@ -1,0 +1,34 @@
+Dependencies:
+
+Standalone programs:
+
+Python 3
+Tex Live
+pdfunite
+
+Python packages:
+
+h5py
+numpy
+scipy
+
+Latex packages:
+
+pgf/tikz
+tikz-3d-plot
+
+Running simulations:
+
+An example script is given in simulate_example_origami.py. To run:
+
+pythom [simulation script] > [log file]
+
+Visualizing simulations:
+
+Modify file name and step information in visualize_simulation.sh and run with:
+
+bash visualize_simulation.sh
+
+Analyzing simulations:
+
+TODO
