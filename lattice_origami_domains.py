@@ -111,6 +111,23 @@ def value_is_multiple(value, multiple):
     return is_multiple
 
 
+def rotate_vector_half(vector, rotation_axis):
+    vector = np.copy(vector)
+    if all(np.abs(rotation_axis == XHAT)):
+        y = -vector[1]
+        z = -vector[2]
+
+    if all(np.abs(rotation_axis == YHAT)):
+        x = -vector[0]
+        z = -vector[2]
+
+    if all(np.abs(rotation_axis == ZHAT)):
+        x = -vector[0]
+        y = -vector[1]
+
+    return vector
+
+
 def rotate_vector_quarter(vector, rotation_axis, direction):
     """Rotate given vector pi/2 about given axis in given direction."""
     vector = np.copy(vector)
@@ -238,6 +255,25 @@ class OrigamiSystem:
         self.temp = temp
         self.staple_p = staple_p
 
+        # Domain identities of each chain
+        self.identities = input_file.identities
+
+        # Domain sequences
+        self.sequences = input_file.sequences
+        
+        # Check all sequences are the same length
+        seq_l = len(self.sequences[0])
+        for sequence in self.sequences:
+            if seq_l != len(sequence):
+                print('Domain sequences not all equal length.')
+                sys.exit()
+
+        # Calculate and store hybridization energies
+        self._hybridization_energies = []
+        for sequence in self.sequences:
+            energy = calc_hybridization_energy(sequence, temp)
+            self._hybridization_energies.append(energy)
+
         # Unique indices and mapping dictionaries
         self._unique_to_working = {}
         self._working_to_unique = []
@@ -249,7 +285,6 @@ class OrigamiSystem:
 
         # Next domain vectors
         #self._next_domain_vectors = []
-        self.chain_lengths = []
 
         # Dictionary with position keys and state values
         self._position_occupancies = {}
@@ -262,16 +297,9 @@ class OrigamiSystem:
 
         # Dictionary with position keys and unbound domain values
         self._unbound_domains = {}
-        self.identities = input_file.identities
-        self.sequences = input_file.sequences
-
-        # Calculate and store hybridization energies
-        self._hybridization_energies = []
-        for sequence in self.sequences:
-            energy = calc_hybridization_energy(sequence, temp)
-            self._hybridization_energies.append(energy)
 
         # Set configuration to specified input file step
+        self.chain_lengths = []
         for chain_index, chain in enumerate(input_file.chains(step)):
             unique_index = chain['index']
             self._unique_to_working[unique_index] = chain_index
@@ -673,12 +701,37 @@ class OrigamiSystem:
 
         # Check twist constraint if same helix
         else:
-            orientation_1_r = (rotate_vector_quarter(orientation_1,
-                    next_domain_vector, -1))
-            if all(orientation_1_r == orientation_2):
-                constraints_obeyed = True
-            else:
-                constraints_obeyed = False
+            constraints_obeyed = self._check_twist_constraint(
+                    next_domain_vector, orientation_1, orientation_2)
+
+        return constraints_obeyed
+
+
+class OrigamiSystemEight(OrigamiSystem):
+    """Origami systems with 8 bp domains."""
+
+    def _check_twist_constraint(self, next_domain_vector, orientation_1,
+                orientation_2):
+        orientation_1_r = (rotate_vector_quarter(orientation_1,
+                next_domain_vector, -1))
+        if all(orientation_1_r == orientation_2):
+            constraints_obeyed = True
+        else:
+            constraints_obeyed = False
+
+        return constraints_obeyed
+
+
+class OrigamiSystemSixteen(OrigamiSystem):
+    """Origami systems with 16 bp domains."""
+
+    def _check_twist_constraint(self, orientation_1, orientation_2):
+        orientation_1_r = (rotate_vector_half(orientation_1,
+                next_domain_vector))
+        if all(orientation_1_r == orientation_2):
+            constraints_obeyed = True
+        else:
+            constraints_obeyed = False
 
         return constraints_obeyed
 

@@ -172,10 +172,10 @@ class TestJSONInputFile:
 
 @pytest.fixture
 def example_origami_system(example_origami_json):
-    return OrigamiSystem(example_origami_json, 0, 300, 1)
+    return OrigamiSystemEight(example_origami_json, 0, 300, 1)
 
 
-class TestOrigamiSystem:
+class TestOrigamiSystemEight:
 
     def test_chains(self, example_origami_system, example_origami_json):
         assert example_origami_system.chains == example_origami_json.chains(0)
@@ -627,7 +627,7 @@ def simple_loop_json():
 
 @pytest.fixture
 def simple_loop(simple_loop_json):
-    return OrigamiSystem(simple_loop_json, 0, 300, 1)
+    return OrigamiSystemEight(simple_loop_json, 0, 300, 1)
 
 
 @pytest.fixture
