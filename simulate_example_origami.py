@@ -15,7 +15,7 @@ temp = 300
 staple_p = 1
 
 # Setup origami system object
-origami_system = OrigamiSystem(input_file, step, temp, staple_p)
+origami_system = OrigamiSystemEight(input_file, step, temp, staple_p)
 
 # Specify moves to be used and associated probabilities
 move_settings = {MOVETYPE.INSERT_STAPLE: 0.2,

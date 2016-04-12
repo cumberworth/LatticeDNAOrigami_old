@@ -725,7 +725,8 @@ class OrigamiSystemEight(OrigamiSystem):
 class OrigamiSystemSixteen(OrigamiSystem):
     """Origami systems with 16 bp domains."""
 
-    def _check_twist_constraint(self, orientation_1, orientation_2):
+    def _check_twist_constraint(self, next_domain_vector, orientation_1,
+                orientation_2):
         orientation_1_r = (rotate_vector_half(orientation_1,
                 next_domain_vector))
         if all(orientation_1_r == orientation_2):
