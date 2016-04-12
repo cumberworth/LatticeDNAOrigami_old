@@ -24,4 +24,7 @@ for ((step=$skip; $step<$steps; step += $skip))
 do
     pdfunite $fileroot.pdf $fileroot-$step.pdf $fileroot-tmp.pdf
     mv $fileroot-tmp.pdf $fileroot.pdf
+    rm $fileroot-$step.pdf
 done
+
+rm $fileroot-tmp.pdf
