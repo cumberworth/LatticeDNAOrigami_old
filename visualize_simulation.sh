@@ -15,6 +15,9 @@ do
     output_file=$fileroot-$step.tex
     python create_tikz_diagram.py $configuration_file $output_file $step
     pdflatex $output_file > /dev/null
+    rm $fileroot-$step.tex
+    rm $fileroot-$step.log
+    rm $fileroot-$step.aux
 done
 
 # Merge pdfs
@@ -26,5 +29,3 @@ do
     mv $fileroot-tmp.pdf $fileroot.pdf
     rm $fileroot-$step.pdf
 done
-
-rm $fileroot-tmp.pdf

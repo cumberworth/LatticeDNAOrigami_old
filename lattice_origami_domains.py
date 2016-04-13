@@ -5,6 +5,7 @@
 import json
 import math
 import sys
+import os
 import random
 import pdb
 import copy
@@ -84,6 +85,7 @@ class MOVETYPE(Enum):
     REGROW_STAPLE = 4
     REGROW_SCAFFOLD_AND_BOUND_STAPLES = 5
     ROTATE_ORIENTATION_VECTOR = 6
+    EXCHANGE_STAPLE = 7
 
 
 class MoveRejection(Exception):
@@ -170,25 +172,29 @@ def rotate_vector_quarter(vector, rotation_axis, direction):
     return vector
 
 
-def calc_hybridization_energy(sequence, T):
+def calc_hybridization_energy(sequence, T, cation_M):
     """Calculate hybridization energy of domains with NN model.
 
     OUtputs energies in K (avoid multiplying by KB when calculating acceptances.
     Sequences are assumed to be 5' to 3'.
+
+    cation_M -- Total cation molarity.
     """
     complimentary_sequence = calc_complimentary_sequence(sequence)
 
     # Initiation free energy
-    DG_init = NN_ENTHALPY['INITIATION'] - T * NN_ENTROPY['INITIATION']
+    DH_init = NN_ENTHALPY['INITIATION']
+    DS_init = NN_ENTROPY['INITIATION']
 
     # Symmetry penalty for palindromic sequences
     if sequence_is_palindromic(sequence):
-        DG_sym = - T * NN_ENTROPY['SYMMETRY_CORRECTION']
+        DS_sym = NN_ENTROPY['SYMMETRY_CORRECTION']
     else:
-        DG_sym = 0
+        DS_sym = 0
 
     # NN pair energies
-    DG_stack = 0
+    DH_stack = 0
+    DS_stack = 0
     for base_index in range(0, len(sequence), 2):
         first_pair = sequence[base_index : base_index + 2]
         second_pair = complimentary_sequence[base_index : base_index + 2]
@@ -197,10 +203,12 @@ def calc_hybridization_energy(sequence, T):
         # Not all permutations are included in dict as some reversals have
         # identical energies
         try:
-            DG_stack += NN_ENTHALPY[key] - T * NN_ENTROPY[key]
+            DH_stack += NN_ENTHALPY[key]
+            DS_stack += NN_ENTROPY[key]
         except KeyError:
             key = key[::-1]
-            DG_stack += NN_ENTHALPY[key] - T * NN_ENTROPY[key]
+            DH_stack += NN_ENTHALPY[key]
+            DS_stack += NN_ENTROPY[key]
 
     # Terminal AT penalties
     terminal_AT_pairs = 0
@@ -209,17 +217,24 @@ def calc_hybridization_energy(sequence, T):
             terminal_AT_pairs += 1
 
     if terminal_AT_pairs > 0:
-        DG_at = (NN_ENTHALPY['TERMINAL_AT_PENALTY'] -
-                T * NN_ENTROPY['TERMINAL_AT_PENALTY']) * terminal_AT_pairs
+        DH_at = NN_ENTHALPY['TERMINAL_AT_PENALTY'] * terminal_AT_pairs
+        DS_at = NN_ENTROPY['TERMINAL_AT_PENALTY'] * terminal_AT_pairs
     else:
-        DG_at = 0
+        DH_at = 0
+        DS_at = 0
 
-    DG_hybridization = DG_init + DG_sym + DG_stack + DG_at
+    DH_hybrid = DH_init + DH_stack + DH_at
+    DS_hybrid = DS_init + DS_sym + DS_stack + DS_at
+
+    # Apply salt correction
+    DS_hybrid = DS_hybrid + 0.368 * (len(sequence) / 2) * math.log(cation_M)
+
+    DG_hybrid = DH_hybrid - T * DS_hybrid
 
     # Convert from kcal/mol to K (so avoid KB later)
-    DG_hybridization = DG_hybridization * J_PER_CAL * 1000 / R
+    DG_hybrid = DG_hybrid * J_PER_CAL * 1000 / R
 
-    return DG_hybridization
+    return DG_hybrid
 
 
 def calc_complimentary_sequence(sequence):
@@ -251,9 +266,8 @@ class OrigamiSystem:
     I don't want to do.
     """
 
-    def __init__(self, input_file, step, temp, staple_p):
+    def __init__(self, input_file, step, temp, cation_M):
         self.temp = temp
-        self.staple_p = staple_p
 
         # Domain identities of each chain
         self.identities = input_file.identities
@@ -271,7 +285,7 @@ class OrigamiSystem:
         # Calculate and store hybridization energies
         self._hybridization_energies = []
         for sequence in self.sequences:
-            energy = calc_hybridization_energy(sequence, temp)
+            energy = calc_hybridization_energy(sequence, temp, cation_M)
             self._hybridization_energies.append(energy)
 
         # Unique indices and mapping dictionaries
@@ -280,6 +294,11 @@ class OrigamiSystem:
 
         # Indices to identities list for current chains
         self._chain_identities = []
+
+        # Working indices indexed by identity
+        self._identity_to_index = [[] for i in range(len(self.identities))]
+
+        # Configuration arrays
         self._positions = []
         self._orientations = []
 
@@ -306,6 +325,7 @@ class OrigamiSystem:
             self._working_to_unique.append(unique_index)
 
             identity = chain['identity']
+            self._identity_to_index[identity].append(unique_index)
             self._chain_identities.append(identity)
             num_domains = len(self.identities[identity])
             self._positions.append([[]] * num_domains)
@@ -409,6 +429,17 @@ class OrigamiSystem:
         staple_identity = random.randrange(1, len(self.identities))
         domain_identities = self.identities[staple_identity]
         return staple_identity, domain_identities
+
+    def get_random_staple_of_identity(self, identity):
+        """Return random staple of given identity."""
+        staples = self._identity_to_index[identity]
+        if staples == []:
+            raise IndexError
+        else:
+            staple_index = random.choice(staples)
+
+        staple_index = self._unique_to_working[staple_index]
+        return staple_index
 
     def get_hybridization_energy(self, chain_index, domain_index):
         """Return precalculated hybridization energy."""
@@ -533,6 +564,7 @@ class OrigamiSystem:
         """Add chain with domains in unassigned state and return chain index."""
         self._current_chain_index += 1
         chain_index = len(self.chain_lengths)
+        self._identity_to_index[identity].append(self._current_chain_index)
         self._working_to_unique.append(self._current_chain_index)
         self._unique_to_working[self._current_chain_index] = chain_index
         self._chain_identities.append(identity)
@@ -551,6 +583,8 @@ class OrigamiSystem:
             delta_e += self.unassign_domain(chain_index, domain_index)
 
         unique_index = self._working_to_unique[chain_index]
+        identity = self._chain_identities[chain_index]
+        self._identity_to_index[identity].remove(unique_index)
         del self._working_to_unique[chain_index]
         del self._unique_to_working[unique_index]
 
@@ -762,6 +796,9 @@ class JSONOutputFile(OutputFile):
         self._config_write_freq = config_write_freq
         self.json_origami = json_origami
 
+    def write_seed(self, seed):
+        json_origami['origami']['seed'] = seed
+
     def _write_configuration(self, origami_system, step):
         self.json_origami['origami']['configurations'].append({})
         current_config = self.json_origami['origami']['configurations'][-1]
@@ -855,6 +892,9 @@ class HDF5OutputFile(OutputFile):
                 maxshape=(None,),
                 chunks=(1,),
                 dtype=dt)
+
+    def write_seed(self, seed):
+        self.hdf5_origami['origami'].attrs['seed'] = seed
 
     def _write_configuration(self, origami_system, step):
         write_index = self._writes
@@ -979,6 +1019,11 @@ class GCMCBoundStaplesSimulation:
     def __init__(self, origami_system, move_settings, output_file):
         self._output_file = output_file
 
+        # Set seed for python's Mersenne Twister (64 bits from os)
+        seed = os.urandom(8)
+        random.seed(seed)
+        output_file.write_seed(seed)
+
         # Create cumalative probability distribution for movetypes
         # List to associate movetype method with index in distribution
         self._movetype_methods = []
@@ -988,10 +1033,8 @@ class GCMCBoundStaplesSimulation:
         for movetype, probability in move_settings.items():
 
             # I still wonder if there is a way to avoid all the if statements
-            if movetype == MOVETYPE.INSERT_STAPLE:
-                movetype_method = self._insert_staple
-            elif movetype == MOVETYPE.DELETE_STAPLE:
-                movetype_method = self._delete_staple
+            if movetype == MOVETYPE.EXCHANGE_STAPLE:
+                movetype_method = self._exchange_staple
             elif movetype == MOVETYPE.REGROW_STAPLE:
                 movetype_method = self._regrow_staple
             elif movetype == MOVETYPE.REGROW_SCAFFOLD_AND_BOUND_STAPLES:
@@ -1074,19 +1117,19 @@ class GCMCBoundStaplesSimulation:
         boltz_factor = math.exp(-self._delta_e / T)
         return self._test_acceptance(boltz_factor)
 
-    def _staple_insertion_accepted(self):
+    def _staple_insertion_accepted(self, identity):
         """Metropolis acceptance test for particle insertion."""
         T = self._accepted_system.temp
         boltz_factor = math.exp(-self._delta_e / T)
-        number_density = self._accepted_system.staple_p
-        return self._test_acceptance(number_density * boltz_factor)
+        N = len(self._accepted_system._identity_to_index[identity])
+        return self._test_acceptance(boltz_factor / (N + 1))
 
-    def _staple_deletion_accepted(self):
+    def _staple_deletion_accepted(self, identity):
         """Metropolis acceptance test for particle deletion."""
         T = self._accepted_system.temp
         boltz_factor = math.exp(-self._delta_e / T)
-        inverse_number_density = 1 / self._accepted_system.staple_p
-        return self._test_acceptance(inverse_number_density * boltz_factor)
+        N = len(self._accepted_system._identity_to_index[identity])
+        return self._test_acceptance(N * boltz_factor)
 
     # Following are helper methods to the top level moves
     def _grow_chain(self, chain_index, domain_indices):
@@ -1141,7 +1184,6 @@ class GCMCBoundStaplesSimulation:
         except MoveRejection:
             raise
 
-    # Following are top level moves
     def _insert_staple(self):
         """Insert staple at random scaffold domain and grow."""
 
@@ -1181,7 +1223,7 @@ class GCMCBoundStaplesSimulation:
             return accepted
 
         # Test acceptance
-        if self._staple_insertion_accepted():
+        if self._staple_insertion_accepted(staple_identity):
             self._accepted_system = self._trial_system
             accepted = True
         else:
@@ -1192,24 +1234,37 @@ class GCMCBoundStaplesSimulation:
     def _delete_staple(self):
         """Delete random staple."""
 
+        # Randomly select staple identity
+        staple_identity, domain_identities = (
+                self._accepted_system.get_random_staple_identity())
+
         # Randomly select staple
         try:
-            staple_index = random.randrange(1,
-                    len(self._trial_system.chain_lengths))
+            staple_index = self._trial_system.get_random_staple_of_identity(
+                    staple_identity)
 
         # No staples in system
-        except ValueError:
+        except IndexError:
             accepted = False
             return accepted
 
         self._delta_e += self._trial_system.delete_chain(staple_index)
 
         # Test acceptance
-        if self._staple_deletion_accepted():
+        if self._staple_deletion_accepted(staple_identity):
             self._accepted_system = self._trial_system
             accepted = True
         else:
             accepted = False
+
+        return accepted
+
+    # Following are top level moves
+    def _exchange_staple(self):
+        if random.random() < 0.5:
+            accepted = self._delete_staple()
+        else:
+            accepted = self._insert_staple()
 
         return accepted
 

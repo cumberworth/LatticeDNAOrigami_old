@@ -11,15 +11,14 @@ step = 0
 # Set conditions
 temp = 300
 
-# Number density
-staple_p = 1
+# Cation concentration
+cation_M = 1
 
 # Setup origami system object
-origami_system = OrigamiSystemEight(input_file, step, temp, staple_p)
+origami_system = OrigamiSystemEight(input_file, step, temp, cation_M)
 
 # Specify moves to be used and associated probabilities
-move_settings = {MOVETYPE.INSERT_STAPLE: 0.2,
-                 MOVETYPE.DELETE_STAPLE: 0.2,
+move_settings = {MOVETYPE.EXCHANGE_STAPLE: 0.4,
                  MOVETYPE.REGROW_STAPLE: 0.2,
                  MOVETYPE.REGROW_SCAFFOLD_AND_BOUND_STAPLES: 0.2,
                  MOVETYPE.ROTATE_ORIENTATION_VECTOR: 0.2}

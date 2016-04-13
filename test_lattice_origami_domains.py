@@ -10,7 +10,7 @@ import sys
 import pdb
 import pytest
 import scipy.constants
-from lattice_origami_domains import *
+from lattice_origami_domains.lattice_origami_domains import *
 
 
 def all_possible_results_returned_set(result_set, function, *args, max_i=100):
@@ -113,7 +113,8 @@ def test_rotate_vector_quarter(vector, rotation_axis, direction, expected):
     ('AAATTACAGTCTGACGGCGG', 300, -7256.4281325889615)])
 # (0.2 - 300 * -0.0057 -7.6 - 300 * -0.0213 + -7.2 - 300 * -0.0204 + -7.2 - 300 * -0.0213 + -8.5 - 300 * -0.0227 + -8.4 - 300 * -0.0224 + -7.8 - 300 * -0.021 + -8.2 - 300 * -0.0222 + -10.6 - 300 * -0.0272 + -9.8 - 300 * -0.0244 + -8 - 300 * -0.0199 + 2.2 - 300 * 0.0069) * 4.184 * 1000 / scipy.constants.gas_constant
 def test_calc_hybridization_energy(sequence, T, expected):
-    energy = calc_hybridization_energy(sequence, T)
+    cation_M = 1
+    energy = calc_hybridization_energy(sequence, T, cation_M)
     assert math.isclose(energy, expected)
 
 
@@ -241,7 +242,8 @@ class TestOrigamiSystemEight:
         ((1, 1), 'GGGTGGGA')])
     def test_get_hybridization_energy(self, domain, sequence,
                 example_origami_system):
-        expected = calc_hybridization_energy(sequence, 300)
+        cation_M = 1
+        expected = calc_hybridization_energy(sequence, 300, cation_M)
         test_energy = example_origami_system.get_hybridization_energy(*domain)
         assert test_energy == expected
 
