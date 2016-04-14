@@ -42,7 +42,6 @@ R = scipy.constants.gas_constant
 # J/cal
 J_PER_CAL = 4.184
 
-a
 # santalucia2004; kcal/mol
 NN_ENTHALPY = {
     'AA/TT': -7.6,
