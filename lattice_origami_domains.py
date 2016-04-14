@@ -42,6 +42,7 @@ R = scipy.constants.gas_constant
 # J/cal
 J_PER_CAL = 4.184
 
+a
 # santalucia2004; kcal/mol
 NN_ENTHALPY = {
     'AA/TT': -7.6,
@@ -227,7 +228,7 @@ def calc_hybridization_energy(sequence, T, cation_M):
     DS_hybrid = DS_init + DS_sym + DS_stack + DS_at
 
     # Apply salt correction
-    DS_hybrid = DS_hybrid + 0.368 * (len(sequence) / 2) * math.log(cation_M)
+    DS_hybrid = DS_hybrid + (0.368 * (len(sequence) / 2) * math.log(cation_M))/1000
 
     DG_hybrid = DH_hybrid - T * DS_hybrid
 
