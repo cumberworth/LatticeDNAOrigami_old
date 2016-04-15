@@ -1,6 +1,6 @@
 #!/bin/bash
 
-fileroot=test_sim
+fileroot=simple_loop
 filetype=hdf5
 
 configuration_file=$fileroot.$filetype

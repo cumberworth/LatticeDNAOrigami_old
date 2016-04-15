@@ -5,7 +5,7 @@
 from lattice_origami_domains import *
 
 # Specificy initial configuration by setting input file and step number
-input_file = JSONInputFile('example_origami.json')
+input_file = JSONInputFile('simple_loop_linear.json')
 step = 0
 
 # Set conditions
@@ -24,7 +24,7 @@ move_settings = {MOVETYPE.EXCHANGE_STAPLE: 0.4,
                  MOVETYPE.ROTATE_ORIENTATION_VECTOR: 0.2}
 
 # Specify output file type and name
-output_file_name = 'test_sim.hdf5'
+output_file_name = 'simple_loop.hdf5'
 output_file = HDF5OutputFile(output_file_name, origami_system)
 
 # Setup up simulation

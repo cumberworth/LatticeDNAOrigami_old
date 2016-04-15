@@ -302,9 +302,6 @@ class OrigamiSystem:
         self._positions = []
         self._orientations = []
 
-        # Next domain vectors
-        #self._next_domain_vectors = []
-
         # Dictionary with position keys and state values
         self._position_occupancies = {}
 
@@ -342,7 +339,7 @@ class OrigamiSystem:
 
                 self.set_domain_configuration(chain_index, domain_index,
                         position, orientation)
-            
+
                 previous_position = np.array(chain['positions'][domain_index])
 
         # Keep track of unique chain index
@@ -469,16 +466,14 @@ class OrigamiSystem:
         occupancy = self.get_position_occupancy(position)
         if occupancy == BOUND:
 
-            # Note that exception raised before setting position. If the
-            # exceptions are to be handled, either set positions here or
-            # save and return previous positions for later exceptions
             raise ConstraintViolation
         else:
             pass
 
-        # Update position now for ease of access (considering allowing reversion
-        # if position rejected).
+        # Save current positions and set to trial
+        cur_r = self._positions[chain_index][domain_index]
         self._positions[chain_index][domain_index] = position
+        cur_o = self._orientations[chain_index][domain_index]
         self._orientations[chain_index][domain_index] = orientation
 
         # Attempt binding if position occupied in unbound state
@@ -486,6 +481,10 @@ class OrigamiSystem:
             try:
                 delta_e = self._bind_domain(*domain)
             except ConstraintViolation:
+
+                # Revert to current position
+                self._positions[chain_index][domain_index] = cur_r
+                self._orientations[chain_index][domain_index] = cur_o
                 raise
             else:
 
@@ -543,6 +542,7 @@ class OrigamiSystem:
             bound_domain = self._bound_domains[domain_key]
             position = tuple(self._positions[chain_index][domain_index])
             self._positions[chain_index][domain_index] = []
+            self._orientations[chain_index][domain_index] = []
             del self._bound_domains[domain_key]
             del self._bound_domains[bound_domain]
             del self._domain_occupancies[domain_key]
@@ -552,6 +552,7 @@ class OrigamiSystem:
         elif occupancy == UNBOUND:
             position = tuple(self._positions[chain_index][domain_index])
             self._positions[chain_index][domain_index] = []
+            self._orientations[chain_index][domain_index] = []
             del self._unbound_domains[position]
             del self._position_occupancies[position]
             del self._domain_occupancies[domain_key]
@@ -721,22 +722,32 @@ class OrigamiSystem:
         else:
             domain_index_1, domain_index_2 = domain_index_2, domain_index_1
 
-        position_1 = (self._positions[chain_index][domain_index_1])
-        position_2 = (self._positions[chain_index][domain_index_2])
-
         orientation_1 = (self._orientations[chain_index][domain_index_1])
         orientation_2 = (self._orientations[chain_index][domain_index_2])
 
-        next_domain_vector = position_2 - position_1
+        # Calculate next domain vectors
+        position_1 = self._positions[chain_index][domain_index_1]
+        position_2 = self._positions[chain_index][domain_index_2]
+        next_dr_1 = position_2 - position_1
+        if domain_index_2 == self.chain_lengths[chain_index] - 1:
+            next_dr_2 = np.zeros(3)
+        else:
+            position_3 = self._positions[chain_index][domain_index_2 + 1]
+            next_dr_2 = position_3 - position_2
 
         # Only one allowed configuration not in the same helix
-        if all(next_domain_vector == orientation_1):
+        if all(next_dr_1 == orientation_1):
             constraints_obeyed = True
+
+        # If next domain is not new helix, must be linear
+        elif all(next_dr_2 != orientation_2) and not (
+                all(next_dr_2 == np.zeros(3)) or all(next_dr_1 == next_dr_2)):
+            constraints_obeyed = False
 
         # Check twist constraint if same helix
         else:
             constraints_obeyed = self._check_twist_constraint(
-                    next_domain_vector, orientation_1, orientation_2)
+                    next_dr_1, orientation_1, orientation_2)
 
         return constraints_obeyed
 
@@ -744,10 +755,8 @@ class OrigamiSystem:
 class OrigamiSystemEight(OrigamiSystem):
     """Origami systems with 8 bp domains."""
 
-    def _check_twist_constraint(self, next_domain_vector, orientation_1,
-                orientation_2):
-        orientation_1_r = (rotate_vector_quarter(orientation_1,
-                next_domain_vector, -1))
+    def _check_twist_constraint(self, next_dr, orientation_1, orientation_2):
+        orientation_1_r = (rotate_vector_quarter(orientation_1, next_dr, -1))
         if all(orientation_1_r == orientation_2):
             constraints_obeyed = True
         else:
@@ -759,10 +768,8 @@ class OrigamiSystemEight(OrigamiSystem):
 class OrigamiSystemSixteen(OrigamiSystem):
     """Origami systems with 16 bp domains."""
 
-    def _check_twist_constraint(self, next_domain_vector, orientation_1,
-                orientation_2):
-        orientation_1_r = (rotate_vector_half(orientation_1,
-                next_domain_vector))
+    def _check_twist_constraint(self, next_dr, orientation_1, orientation_2):
+        orientation_1_r = (rotate_vector_half(orientation_1, next_dr))
         if all(orientation_1_r == orientation_2):
             constraints_obeyed = True
         else:
