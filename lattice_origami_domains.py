@@ -901,7 +901,9 @@ class HDF5OutputFile(OutputFile):
                 dtype=dt)
 
     def write_seed(self, seed):
-        self.hdf5_origami['origami'].attrs['seed'] = seed
+
+        # h5py docs recommend wrapping byte strings in np.void
+        self.hdf5_origami['origami'].attrs['seed'] = np.void(seed)
 
     def _write_configuration(self, origami_system, step):
         write_index = self._writes
