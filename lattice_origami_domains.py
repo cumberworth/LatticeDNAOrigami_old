@@ -1001,6 +1001,10 @@ class HDF5InputFile:
     def temp(self):
         return self._hdf5_origami.attrs['temp']
 
+    @property
+    def steps(self):
+        return len(self._hdf5_origami['origami/chain_ides'])
+
     def chains(self, step):
         """Standard format for passing chain configuration."""
         chains = []
