@@ -883,6 +883,7 @@ class HDF5OutputFile(OutputFile):
                 filled_identities[-1].append(0)
 
         self.hdf5_origami.attrs['identities'] = filled_identities
+        self.hdf5_origami.attrs['temp'] = origami_system.temp
 
         # HDF5 does not allow lists of strings
         sequences = np.array(origami_system.sequences, dtype='a')
@@ -995,6 +996,10 @@ class HDF5InputFile:
 
         # H5py outputs as type 'S', need type 'U'
         return self._hdf5_origami.attrs['sequences'].astype('U').tolist()
+
+    @property
+    def temp(self):
+        return self._hdf5_origami.attrs['temp']
 
     def chains(self, step):
         """Standard format for passing chain configuration."""
