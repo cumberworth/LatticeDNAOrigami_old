@@ -787,6 +787,8 @@ class OutputFile:
             self._write_configuration(origami_system, step)
         else:
             pass
+        if value_is_multiple(step, self._count_write_freq):
+            self._write_staple_domain_count(origami_system)
 
         # Move types and acceptances
 
@@ -861,12 +863,15 @@ class HDF5OutputFile(OutputFile):
     Custom format; not compatable with VMD (not H5MD).
     """
 
-    def __init__(self, filename, origami_system, config_write_freq=1):
+    def __init__(self, filename, origami_system, config_write_freq=1,
+                staple_domain_count_freq=0):
         self.hdf5_origami = h5py.File(filename, 'w')
         self.hdf5_origami.create_group('origami')
         self.filename = filename
         self._config_write_freq = config_write_freq
-        self._writes = 0
+        self._config_writes = 0
+        self._count_write_freq = staple_domain_count_freq
+        self._count_writes = 0
 
         # HDF5 does not allow variable length lists; fill with 0
         max_domains = 0
@@ -889,9 +894,19 @@ class HDF5OutputFile(OutputFile):
         sequences = np.array(origami_system.sequences, dtype='a')
         self.hdf5_origami.attrs['sequences'] = sequences
 
-        self.hdf5_origami.create_group('origami/configurations')
-        for chain in origami_system.chains:
-            self._create_chain(chain)
+        # Setup configuration datasets
+        if config_write_freq > 0:
+            self.hdf5_origami.create_group('origami/configurations')
+            for chain in origami_system.chains:
+                self._create_chain(chain)
+
+        # Setup up analysis datasets:
+        if self._count_write_freq > 0:
+            self.hdf5_origami.create_dataset('origami/staple_domain_count',
+                    (1, 2),
+                    maxshape=(None, 2),
+                    chunks=(1, 2),
+                    dtype=int)
 
         # Create array of chains present at each step
         dt = h5py.special_dtype(vlen=np.dtype('int32'))
@@ -906,10 +921,19 @@ class HDF5OutputFile(OutputFile):
         # h5py docs recommend wrapping byte strings in np.void
         self.hdf5_origami['origami'].attrs['seed'] = np.void(seed)
 
+    def _write_staple_domain_count(self, origami_system):
+        write_index = self._count_writes
+        self._count_writes += 1
+        num_staples = len(origami_system.chain_lengths) - 1
+        num_domains = len(origami_system._bound_domains) // 2
+        count_key = 'origami/staple_domain_count'
+        self.hdf5_origami[count_key].resize(self._count_writes, axis=0)
+        self.hdf5_origami[count_key][write_index] = (num_staples, num_domains)
+
     def _write_configuration(self, origami_system, step):
-        write_index = self._writes
-        self._writes += 1
-        self.hdf5_origami['origami/chain_ids'].resize(self._writes, axis=0)
+        write_index = self._config_writes
+        self._config_writes += 1
+        self.hdf5_origami['origami/chain_ids'].resize(self._config_writes, axis=0)
         chain_ids = []
         for chain in origami_system.chains:
             chain_index = chain['index']
@@ -923,11 +947,11 @@ class HDF5OutputFile(OutputFile):
             step_key = base_key + '/step'
             pos_key = base_key + '/positions'
             orient_key = base_key + '/orientations'
-            self.hdf5_origami[step_key].resize(self._writes, axis=0)
+            self.hdf5_origami[step_key].resize(self._config_writes, axis=0)
             self.hdf5_origami[step_key][write_index] = step
-            self.hdf5_origami[pos_key].resize(self._writes, axis=0)
+            self.hdf5_origami[pos_key].resize(self._config_writes, axis=0)
             self.hdf5_origami[pos_key][write_index] = chain['positions']
-            self.hdf5_origami[orient_key].resize(self._writes, axis=0)
+            self.hdf5_origami[orient_key].resize(self._config_writes, axis=0)
             self.hdf5_origami[orient_key][write_index] = chain['orientations']
 
         self.hdf5_origami['origami/chain_ids'][step] = chain_ids
@@ -1004,6 +1028,10 @@ class HDF5InputFile:
     @property
     def steps(self):
         return len(self._hdf5_origami['origami/chain_ids'])
+
+    @property
+    def staple_domain_counts(self):
+        return self._hdf5_origami['origami/staple_domain_count']
 
     def chains(self, step):
         """Standard format for passing chain configuration."""
