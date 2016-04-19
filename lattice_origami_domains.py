@@ -933,7 +933,6 @@ class HDF5OutputFile(OutputFile):
     def _write_configuration(self, origami_system, step):
         write_index = self._config_writes
         self._config_writes += 1
-        self.hdf5_origami['origami/chain_ids'].resize(self._config_writes, axis=0)
         chain_ids = []
         for chain in origami_system.chains:
             chain_index = chain['index']
@@ -954,7 +953,8 @@ class HDF5OutputFile(OutputFile):
             self.hdf5_origami[orient_key].resize(self._config_writes, axis=0)
             self.hdf5_origami[orient_key][write_index] = chain['orientations']
 
-        self.hdf5_origami['origami/chain_ids'][step] = chain_ids
+        self.hdf5_origami['origami/chain_ids'].resize(self._config_writes, axis=0)
+        self.hdf5_origami['origami/chain_ids'][write_index] = chain_ids
 
     def _create_chain(self, chain):
         chain_length = len(chain['positions'])
