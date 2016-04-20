@@ -98,6 +98,11 @@ class ConstraintViolation(Exception):
     pass
 
 
+class OrigamiMisuse(Exception):
+    """Used for miscellaneous misuse of the origami objects."""
+    pass
+
+
 def value_is_multiple(value, multiple):
     """Test if given value is a multiple of second value."""
     is_multiple = False
@@ -345,6 +350,10 @@ class OrigamiSystem:
         # Keep track of unique chain index
         self._current_chain_index = max(self._working_to_unique)
 
+        # Bookeeping for configuration bias
+        self._checked_list = []
+        self._current_domain = ()
+
     @property
     def chains(self):
         """Standard format for passing chain configuration."""
@@ -448,8 +457,89 @@ class OrigamiSystem:
         energy_index = abs(domain_identity) - 1
         return self._hybridization_energies[energy_index]
 
+    def check_domain_configuration(self, chain_index, domain_index, position,
+                orientation):
+        """Check if constraints are obeyed and return energy change."""
+        domain = (chain_index, domain_index)
+        delta_e = 0
+
+        # If checked list empty, set current domain identity
+        if self._checked_list == []:
+            self._current_domain = domain
+        else:
+
+        # Check if given domain identity matches current
+            if domain != self._current_domain:
+                raise OrigamiMisuse
+            else:
+                pass
+
+        # Constraint violation if position in bound state
+        occupancy = self.get_position_occupancy(position)
+        if occupancy == BOUND:
+
+            raise ConstraintViolation
+        else:
+            pass
+
+        # Save current positions and set to trial
+        cur_r = self._positions[chain_index][domain_index]
+        self._positions[chain_index][domain_index] = position
+        cur_o = self._orientations[chain_index][domain_index]
+        self._orientations[chain_index][domain_index] = orientation
+
+        # Attempt binding if position occupied in unbound state
+        if occupancy == UNBOUND:
+            try:
+                delta_e = self._bind_domain(*domain)
+            except ConstraintViolation:
+
+                # Revert to current position
+                self._positions[chain_index][domain_index] = cur_r
+                self._orientations[chain_index][domain_index] = cur_o
+                raise
+        else:
+            pass
+
+        # Revert to current position
+        self._positions[chain_index][domain_index] = cur_r
+        self._orientations[chain_index][domain_index] = cur_o
+
+        # Update checked list
+        self._checked_list.append(tuple(position))
+        return delta_e
+
+    def set_checked_domain_conguration(self, chain_index, domain_index,
+                position, orientation):
+        """Set domain to previously checked configuration."""
+        domain = (chain_index, domain_index)
+
+        # Check if give domain identity matches current
+        if domain != self._current_domain:
+            raise OrigamiMisuse
+        else:
+            pass
+
+        if tuple(position) in self._checked_list:
+
+            # Set domain configuration without further checks
+            self._positions[chain_index][domain_index] = position
+            self._orientations[chain_index][domain_index] = orientation
+            occupancy = self.get_position_occupancy(position)
+            unique_index = self._working_to_unique[chain_index]
+            domain_key = (unique_index, domain_index)
+            if occupancy == UNBOUND:
+                self._update_occupancies_bound(position, domain_key)
+            else:
+                self._update_occupancies_unbound(position, domain_key)
+        else:
+            raise OrigamiMisuse
+
+        self._checked_list = []
+        self._current_domain = ()
+
     def set_domain_configuration(self, chain_index, domain_index, position,
-            orientation):
+                orientation):
         """Set domain configuration and return change in energy.
 
         Assumes that given domain has already been unassigned. Consider adding a
@@ -487,23 +577,11 @@ class OrigamiSystem:
                 self._orientations[chain_index][domain_index] = cur_o
                 raise
             else:
-
-                # Update occupancies
-                position = tuple(position)
-                occupying_domain = self._unbound_domains[position]
-                del self._unbound_domains[position]
-                self._domain_occupancies[domain_key] = BOUND
-                self._domain_occupancies[occupying_domain] = BOUND
-                self._position_occupancies[position] = BOUND
-                self._bound_domains[occupying_domain] = domain_key
-                self._bound_domains[domain_key] = occupying_domain
+                self._update_occupancies_bound(position, domain_key)
 
         # Move to empty site and update occupancies
         else:
-            position = tuple(position)
-            self._domain_occupancies[domain_key] = UNBOUND
-            self._position_occupancies[position] = UNBOUND
-            self._unbound_domains[position] = domain_key
+            self._update_occupancies_unbound(position, domain_key)
 
         return delta_e
 
@@ -633,6 +711,22 @@ class OrigamiSystem:
 
         self._position_occupancies = position_occupancies
         self._unbound_domains = unbound_domains
+
+    def _update_occupancies_bound(self, position, domain_key):
+        position = tuple(position)
+        occupying_domain = self._unbound_domains[position]
+        del self._unbound_domains[position]
+        self._domain_occupancies[domain_key] = BOUND
+        self._domain_occupancies[occupying_domain] = BOUND
+        self._position_occupancies[position] = BOUND
+        self._bound_domains[occupying_domain] = domain_key
+        self._bound_domains[domain_key] = occupying_domain
+
+    def _update_occupancies_unbound(self, position, domain_key):
+        position = tuple(position)
+        self._domain_occupancies[domain_key] = UNBOUND
+        self._position_occupancies[position] = UNBOUND
+        self._unbound_domains[position] = domain_key
 
     def _bind_domain(self, trial_chain_index, trial_domain_index):
         """Bind given domain in preset trial config and return change in energy.
@@ -1498,3 +1592,11 @@ class GCMCBoundStaplesSimulation:
 
         accepted = True
         return accepted
+
+    def _regrow_scaffold_with_config_bias(self):
+        """Regrow scaffold between two points with configurational bias.
+        
+        All attached staple strands are regrown with configurational bias,
+        although unlike the scaffold strand, they do not require the fixed
+        end-point modification to the trial and Rosenbluth weights.
+        """
