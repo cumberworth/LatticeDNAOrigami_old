@@ -887,8 +887,11 @@ class HDF5OutputFile(OutputFile):
             for i in range(remainder):
                 filled_identities[-1].append(0)
 
+        # Fill attributes
         self.hdf5_origami.attrs['identities'] = filled_identities
         self.hdf5_origami.attrs['temp'] = origami_system.temp
+        self.hdf5_origami.attrs['config_write_freq'] = config_write_freq
+        self.hdf5_origami.attrs['count_write_freq'] = count_write_freq
 
         # HDF5 does not allow lists of strings
         sequences = np.array(origami_system.sequences, dtype='a')
@@ -999,6 +1002,13 @@ class HDF5InputFile:
         self._filename = filename
         self._hdf5_origami = hdf5_origami
 
+        # Try for backwards compatibility
+        try:
+            self.config_write_freq = hdf5_origami.attrs['config_write_freq']
+            self.count_write_freq = hdf5_origami.attrs['config_write_freq']
+        except KeyError:
+            pass
+
     @property
     def identities(self):
         """Standard format for passing origami domain identities."""
@@ -1035,6 +1045,9 @@ class HDF5InputFile:
 
     def chains(self, step):
         """Standard format for passing chain configuration."""
+
+        # For consistency, do not autoconvert step to index
+        #step = step / self.config_write_freq
         chains = []
         chain_ids = self._hdf5_origami['origami/chain_ids'][step]
         base_key = 'origami/configurations'
@@ -1113,7 +1126,7 @@ class GCMCBoundStaplesSimulation:
         # Current movetype
         self._movetype = -1
 
-    def run(self, num_steps):
+    def run(self, num_steps, logging=True):
         """Run simulation for given number of steps."""
 
         for step in range(num_steps):
@@ -1126,8 +1139,11 @@ class GCMCBoundStaplesSimulation:
 
             self._output_file.check_and_write(self._accepted_system, step)
 
-            # Debugging hack
-            print(step, self._movetype, outcome, len(self._accepted_system.chain_lengths), self._delta_e)
+            # Loggging hack
+            if logging:
+                print(step, self._movetype, outcome, len(self._accepted_system.chain_lengths), self._delta_e)
+            else:
+                pass
 
     def _select_movetype(self):
         """Return movetype method according to distribution."""
