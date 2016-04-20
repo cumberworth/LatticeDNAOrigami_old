@@ -864,7 +864,7 @@ class HDF5OutputFile(OutputFile):
     """
 
     def __init__(self, filename, origami_system, config_write_freq=1,
-                count_freq=0):
+                count_write_freq=0):
         self.hdf5_origami = h5py.File(filename, 'w')
         self.hdf5_origami.create_group('origami')
         self.filename = filename
