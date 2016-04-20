@@ -1129,7 +1129,7 @@ class GCMCBoundStaplesSimulation:
     def run(self, num_steps, logging=True):
         """Run simulation for given number of steps."""
 
-        for step in range(num_steps):
+        for step in range(1, num_steps + 1):
             self._delta_e = 0
             self._trial_system = copy.deepcopy(self._accepted_system)
             movetype_method = self._select_movetype()
