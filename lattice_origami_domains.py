@@ -870,7 +870,7 @@ class HDF5OutputFile(OutputFile):
         self.filename = filename
         self._config_write_freq = config_write_freq
         self._config_writes = 0
-        self._count_write_freq = count_freq
+        self._count_write_freq = count_write_freq
         self._count_writes = 0
 
         # HDF5 does not allow variable length lists; fill with 0
