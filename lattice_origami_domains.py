@@ -864,13 +864,13 @@ class HDF5OutputFile(OutputFile):
     """
 
     def __init__(self, filename, origami_system, config_write_freq=1,
-                staple_domain_count_freq=0):
+                count_freq=0):
         self.hdf5_origami = h5py.File(filename, 'w')
         self.hdf5_origami.create_group('origami')
         self.filename = filename
         self._config_write_freq = config_write_freq
         self._config_writes = 0
-        self._count_write_freq = staple_domain_count_freq
+        self._count_write_freq = count_freq
         self._count_writes = 0
 
         # HDF5 does not allow variable length lists; fill with 0
