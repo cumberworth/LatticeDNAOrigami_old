@@ -25,7 +25,12 @@ move_settings = {MOVETYPE.EXCHANGE_STAPLE: 0.4,
 
 # Specify output file type and name
 output_file_name = 'simple_loop.hdf5'
-output_file = HDF5OutputFile(output_file_name, origami_system)
+config_write_freq = 10
+count_write_freq = 1
+
+output_file = HDF5OutputFile(output_file_name, origami_system,
+        config_write_freq=config_write_freq,
+        count_write_freq=count_write_freq)
 
 # Setup up simulation
 sim = GCMCBoundStaplesSimulation(origami_system, move_settings, output_file)

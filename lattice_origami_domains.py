@@ -15,6 +15,8 @@ import h5py
 import numpy as np
 import scipy.constants
 
+# Scaffold domain index
+SCAFFOLD_INDEX = 0
 
 # Occupancy states
 UNASSIGNED = 0
@@ -260,11 +262,48 @@ def sequence_is_palindromic(sequence):
     return palindromic
 
 
+class IdealRandomWalks:
+
+    def __init__():
+        # Number of random walks indexed by tuple of end - start
+        self._num_walks = {}
+
+    def num_walks(start, end, N):
+        """Calculate number of walks between two positions."""
+
+        # Check stored values
+        walk = tuple(end - start)
+        try:
+            num_walks = self._num_walks[walk]
+        except KeyError:
+            pass
+        else:
+            return num_walks
+
+        # Calculate num walks (see dijkstra1994)
+        DX = walk[0]
+        DY = walk[1]
+        DZ = walk[2]
+        Nminus = (N - DX - DY - DZ) // 2
+        Nplus = (N - DX - DY + DZ) // 2
+        for ybar in range(0, Nminus + 1):
+            for xbar in range(0, Nminus + 1 - ybar):
+                f1 = math.factorial(N)
+                f2 = math.factorial(xbar)
+                f3 = math.factorial(xbar + DX)
+                f4 = math.factorial(ybar)
+                f5 = math.factorial(ybar + DY)
+                f6 = math.factorial(Nminus - xbar - ybar)
+                f7 = math.factorial(Nplus - xbar - ybar)
+                num_walks = f1 // (f2 * f3 * f4 * f5 * f6 * f7)
+
+        return num_walks
+
+
 class OrigamiSystem:
     """Simple cubic lattice model of DNA origami at domain level resolution.
 
-    The domains are 8 bp long. See reports/modelSpecs/domainResModelSpecs for
-    exposition on the model.
+    See reports/modelSpecs/domainResModelSpecs for exposition on the model.
 
     I've used get methods instead of properties as properties don't take
     indices. I would have to index the internal structure directly, which
@@ -274,9 +313,22 @@ class OrigamiSystem:
     def __init__(self, input_file, step, temp, cation_M):
         self.temp = temp
 
+        # Scaffold cyclic
+        cyclic = input_file.cyclic
+
         # Domain identities of each chain
         self.identities = input_file.identities
 
+        # Scaffold strand indices of complimentary domains to staple domains,
+        # indexed by staple identity
+        self.staple_to_scaffold_domains = {}
+        for staple_indentity, staple in enumerate(identities[1:]):
+            scaffold_domain_indices = []
+            for staple_domain_indent in staple:
+                scaffold_domain_i = self.identities.index(-staple_domain_ident)
+                scaffold_domain_indices.append(scaffold_domain_i)
+            self.staple_to_scaffold_domains[staple_index] = 
+            
         # Domain sequences
         self.sequences = input_file.sequences
         
@@ -346,6 +398,12 @@ class OrigamiSystem:
                         position, orientation)
 
                 previous_position = np.array(chain['positions'][domain_index])
+
+        # Check first and last domains of cyclic scaffold within 1
+        p_first = self_.positions[0][0]
+        p_last = self_.positions[0][-1]
+        if ((p_first - p_last)**2).sum() > 1:
+            raise ConstraintViolation
 
         # Keep track of unique chain index
         self._current_chain_index = max(self._working_to_unique)
@@ -754,11 +812,22 @@ class OrigamiSystem:
         # Check constraints between domains and neighbours
         for chain_index, domain_index in [trial_domain, occupying_domain]:
             for direction in [-1, 1]:
-                neighbour_domain = (chain_index, domain_index + direction)
+                adjacent_domain_i = domain_index + direction
+                neighbour_domain = (chain_index, adjacent_domain_i)
                 try:
                     occupancy = self.get_domain_occupancy(*neighbour_domain)
                 except KeyError:
-                    continue
+                    if self.cyclic:
+                        scaffold_length = self.chain_lengths[0]
+                        if adjacent_domain_i == scaffold_length:
+                            adjacent_domain_i = 0
+                        elif adjacent_domain_i == -1:
+                            adjacent_domain_i = scaffold_length - 1
+
+                        neighbour_domain = (chain_index, adjacent_domain_i)
+                        occupancy = self.get_domain_occupancy(*neighbour_domain)
+                    else:
+                        continue
 
                 if occupancy == BOUND:
                     if self._helical_pair_constraints_obeyed(*neighbour_domain,
@@ -894,6 +963,7 @@ class JSONOutputFile(OutputFile):
         json_origami = {'origami':{'identities':{}, 'configurations':[]}}
         json_origami['origami']['identities'] = origami_system.identities
         json_origami['origami']['sequences'] = origami_system.sequences
+        json_origami['origami']['cyclic'] = origami_system.cyclic
 
         self._filename = filename
         self._config_write_freq = config_write_freq
@@ -932,6 +1002,10 @@ class JSONInputFile:
 
         self._filename = filename
         self._json_origami = json_origami
+
+    @property
+    def cyclic(self):
+        self._json_origami['origami']['cyclic']
 
     @property
     def identities(self):
@@ -983,6 +1057,7 @@ class HDF5OutputFile(OutputFile):
 
         # Fill attributes
         self.hdf5_origami.attrs['identities'] = filled_identities
+        self.hdf5_origami.attrs['cyclicl'] = origami_system.cyclic
         self.hdf5_origami.attrs['temp'] = origami_system.temp
         self.hdf5_origami.attrs['config_write_freq'] = config_write_freq
         self.hdf5_origami.attrs['count_write_freq'] = count_write_freq
@@ -1104,6 +1179,10 @@ class HDF5InputFile:
             pass
 
     @property
+    def cyclic(self):
+        self._hdf5_origami.attrs['cyclic']
+
+    @property
     def identities(self):
         """Standard format for passing origami domain identities."""
 
@@ -1168,12 +1247,22 @@ class GCMCSimulation:
     """
 
     def __init__(self, origami_system, move_settings, output_file):
+        self._origami_system = origam_system
         self._output_file = output_file
 
         # Set seed for python's Mersenne Twister (64 bits from os)
         seed = os.urandom(8)
         random.seed(seed)
         output_file.write_seed(seed)
+
+        # Frequency for translating system back to origin
+        self.center_freq = 1
+
+        # Current movetype
+        self._movetype = -1
+
+        # Convienience variables
+        self.temp = origami_system.temp
 
         # Create cumalative probability distribution for movetypes
         # List to associate movetype method with index in distribution
@@ -1185,16 +1274,16 @@ class GCMCSimulation:
 
             # I still wonder if there is a way to avoid all the if statements
             if movetype == MOVETYPE.EXCHANGE_STAPLE:
-                movetype_method = self._exchange_staple
+                movetype_class = ExchangeMMCMovetype
             elif movetype == MOVETYPE.REGROW_STAPLE:
-                movetype_method = self._regrow_staple
+                movetype_class = StapleRegrowthMMCMovetype
             elif movetype == MOVETYPE.REGROW_SCAFFOLD_AND_BOUND_STAPLES:
-                movetype_method = self._regrow_scaffold_and_bound_staples
+                movetype_class = ScaffoldRegrowthMMCMovetype
             elif movetype == MOVETYPE.ROTATE_ORIENTATION_VECTOR:
-                movetype_method = self._rotate_orientation_vector
+                movetype_class = OrientationRotationMCMovetype
 
             cumulative_probability += probability
-            self._movetype_methods.append(movetype_method)
+            self._movetype_classes.append(movetype_class)
             self._movetypes.append(movetype)
             self._movetype_probabilities.append(cumulative_probability)
 
@@ -1205,36 +1294,22 @@ class GCMCSimulation:
             print('Movetype probabilities not normalized')
             sys.exit()
 
-        # Two copies of the system allows easy reversion upon rejection
-        self._accepted_system = origami_system
-        self._trial_system = copy.deepcopy(origami_system)
-
-        # Change in energy for a proposed trial move
-        self._delta_e = 0
-
-        # Frequency for translating system back to origin
-        self.center_freq = 1
-
-        # Current movetype
-        self._movetype = -1
-
     def run(self, num_steps, logging=True):
         """Run simulation for given number of steps."""
 
         for step in range(1, num_steps + 1):
-            self._delta_e = 0
-            self._trial_system = copy.deepcopy(self._accepted_system)
-            movetype_method = self._select_movetype()
-            outcome = movetype_method()
+            movetype_object = self._select_movetype()
+            outcome = movetype_object.attempt_move()
+            self._origami_system = movetype_object.accepted_system
             if value_is_multiple(step, self.center_freq):
-                self._accepted_system.center()
+                self._origami_system.center()
 
-            self._output_file.check_and_write(self._accepted_system, step)
+            self._output_file.check_and_write(self._origami_system, step)
 
             # Loggging hack
             if logging:
                 print(step, self._movetype, outcome,
-                        len(self._accepted_system.chain_lengths), self._delta_e)
+                        len(self._origami_system.chain_lengths))
             else:
                 pass
 
@@ -1245,13 +1320,26 @@ class GCMCSimulation:
         for movetype_index, upper_boundary in enumerate(
                 self._movetype_probabilities):
             if lower_boundary <= random_number < upper_boundary:
-                movetype_method = self._movetype_methods[movetype_index]
+                movetype_class = self._movetype_classes[movetype_index]
                 self._movetype = self._movetypes[movetype_index]
                 break
             else:
                 lower_boundary = upper_boundary
 
-        return movetype_method
+        movetype_object = movetype_class(self._origami_system,
+                self,_trial_system)
+        return movetype_object
+
+
+class MCMovetype:
+    """Base class for all movetype classes."""
+
+    def __init__(self, origami_system):
+        self.accepted_system = origami_system
+        self.trial_system = copy.deepcopy(origami_system)
+
+    def attempt_move(self):
+        raise NotImplementedError
 
     def _test_acceptance(self, ratio):
         """Metropolis acceptance test for given ratio."""
@@ -1268,260 +1356,97 @@ class GCMCSimulation:
 
         return accept
 
-    def _insert_staple(self):
-        """Insert staple at random scaffold domain and grow."""
+    def _find_bound_staples(self, domain_indices):
+        """Find all staples bound to scaffold segment (includes repeats).
 
-        # Randomly select staple identity and add chain
-        staple_identity, domain_identities = (
-                self._accepted_system.get_random_staple_identity())
-
-        staple_index = self._trial_system.add_chain(staple_identity)
-        staple_length = self._trial_system.chain_lengths[staple_index]
-
-        # Select staple domain
-        staple_domain = random.randrange(staple_length)
-        domain_identity = domain_identities[staple_domain]
-
-        # Select complimentary scaffold domain
-        scaffold_index = 0
-        scaffold_domain = self._trial_system.identities.index(-domain_identity)
-        
-        # Select correct position and orientation
-        position = self._trial_system.get_domain_position(scaffold_index,
-                scaffold_domain)
-        orientation = -self._trial_system.get_domain_orientation(scaffold_index,
-                scaffold_domain)
-
-        # Number of bound domains in system (for calculating overcounts)
-        init_num_bound_domains = self._trial_system.num_bound_domains
-
-        # Attempt to set position (fails if bound or twist constraints violated)
-        # First staple binding method?
-        try:
-            self._delta_e += self._trial_system.set_domain_configuration(
-                    staple_index, staple_domain, position, orientation)
-        except ConstraintViolation:
-            accepted = False
-            return accepted
-
-        # Grow staple
-        try:
-            self._grow_staple(staple_length, staple_index, staple_domain)
-        except MoveRejection:
-            accepted = False
-            return accepted
-
-        # If the configuration is such that the staple can bind with the other
-        # domain, then there are two ways this can happen, so the ratio should
-        # be halved to prevent overcounting. If staple ends in multiply bound
-        # state, save resulting overcounts.
-        cur_num_bound_domains = self._trial_system.num_bound_domains
-        D_bind_state = init_num_bound_domains - cur_num_bound_domains
-        overcounts = D_bind_state
-
-        # Test acceptance
-        if self._staple_insertion_accepted(staple_identity, overcounts):
-            self._accepted_system = self._trial_system
-            accepted = True
-        else:
-            accepted = False
-
-        return accepted
-
-    def _delete_staple(self):
-        """Delete random staple."""
-
-        # Randomly select staple identity
-        staple_identity, domain_identities = (
-                self._accepted_system.get_random_staple_identity())
-
-        # Randomly select staple
-        try:
-            staple_index = self._trial_system.get_random_staple_of_identity(
-                    staple_identity)
-
-        # No staples in system
-        except IndexError:
-            accepted = False
-            return accepted
-
-        # deletion sub method?
-        self._delta_e += self._trial_system.delete_chain(staple_index)
-
-        # Test acceptance
-        if self._staple_deletion_accepted(staple_identity):
-            self._accepted_system = self._trial_system
-            accepted = True
-        else:
-            accepted = False
-
-        return accepted
-
-    def _exchange_staple(self):
-        if random.random() < 0.5:
-            accepted = self._delete_staple()
-        else:
-            accepted = self._insert_staple()
-
-        return accepted
-
-    def _regrow_staple(self):
-        """Regrow random staple."""
-
-        # Randomly select staple
-        try:
-            staple_index = random.randrange(1,
-                    len(self._trial_system.chain_lengths))
-
-        # No staples in system
-        except ValueError:
-            accepted = False
-            return accepted
-
-        staple_length = self._accepted_system.chain_lengths[staple_index]
-
-        # Find all bound domains and randomly select growth point
-        bound_staple_domains = []
-        for domain_index in range(staple_length):
-            bound_domain = self._accepted_system.get_bound_domain(staple_index,
-                    domain_index)
-            if bound_domain != ():
-                bound_staple_domains.append(domain_index)
-
-        bound_domain_index = random.choice(bound_staple_domains)
-
-        # Unassign domains
-        for domain_index in range(staple_length):
-            if domain_index == bound_domain_index:
-                continue
-            self._delta_e += self._trial_system.unassign_domain(staple_index,
-                    domain_index)
-
-        # Grow staple
-        try:
-            self._grow_staple(staple_length, staple_index, bound_domain_index)
-        except MoveRejection:
-            accepted = False
-            return accepted
-        
-        # If staple started and ended in multiply bonded state, save resulting
-        # overcounts
-        cur_num_bound_domains = self._trial_system.num_bound_domains
-        D_bind_state = init_num_bound_domains - cur_num_bound_domains
-        if D_bind_state >= 0:
-            self._overcount.append(len(bound_staple_domains))
-
-        # Test acceptance
-        if self._configuration_accepted():
-            self._accepted_system = self._trial_system
-            accepted = True
-        else:
-            accepted = False
-
-        return accepted
-
-    def _regrow_scaffold_and_bound_staples(self):
-        """Randomly regrow terminal section of scaffold and bound staples.
-
-        From a randomly selected scaffold domain in a random direction to the
-        end.
+        Returns dictionary of staple indices and complimentary scaffold domains
+        in provided scaffold indices, with corresponding staple domain index.
         """
-
-        # Pick section of scaffold to regrow
-        scaffold_indices = self._select_scaffold_indices()
-
-        # Find all staples bound to scaffold (includes repeats)
         staples = {}
         for domain_index in scaffold_indices:
-            staple_domain = self._accepted_system.get_bound_domain(
-                    scaffold_index, domain_index)
+
+            # Check if scaffold domain bound
+            staple_domain = self.accepted_system.get_bound_domain(
+                    SCAFFOLD_INDEX, domain_index)
             if staple_domain == ():
                 continue
             else:
+
+                # Find remaining complimentary domains to bound staple
                 staple_index = staple_domain[0]
+                staple_identity = self.accepted_system._chain_indentities[
+                        staple_index]
                 staple_domain_i = staple_domain[1]
-                try:
-                    staples[staple_index].append((domain_index, staple_domain_i))
-                except KeyError:
-                    staples[staple_index] = [(domain_index, staple_domain_i)]
+                if staple_index in staples:
+                    continue
+                else:
+                    staples[staple_index] = []
+                    scaffold_domains = self.trial_system.staple_to_scaffold
+                    for staple_i, scaffold_i in scaffold_domains:
+                        if scaffold_i in domain_indices:
+                            staples[staple_index].append(staple_i, scaffold_i)
 
-        # Unassign scaffold domains
-        for domain_index in scaffold_indices[1:]:
-            self._delta_e += self._trial_system.unassign_domain(scaffold_index,
-                    domain_index)
+        return staples
 
-        # Unassign staples
-        for staple_index in staples.keys():
-            for domain_index in range(self._trial_system.chain_lengths[staple_index]):
-                self._delta_e += self._trial_system.unassign_domain(staple_index,
-                    domain_index)
+    def _set_staple_growth_point(self, staple_index, staple_domain_index,
+                scaffold_domain_index):
+        """Given scaffold and staple, attempt to bind with correct orientation.
+        """
+        position = self.trial_system.get_domain_position(SCAFFOLD_INDEX,
+                scaffold_domain_index)
+        orientation = self.trial_system.get_domain_orientation(
+                SCAFFOLD_INDEX, scaffod_domain_index)
 
-        # Regrow scaffold
+        # Attempt to set growth domain
         try:
-            self._grow_chain(scaffold_index, scaffold_indices)
+            delta_e = self.trial_system.set_domain_configuration(
+                    staple_index, staple_domain_index, position, o_new)
+        except ConstraintViolation:
+            raise MoveRejection
+
+        return delta_e
+
+    def _grow_staple(self, staple_length, staple_index, domain_index, *args,
+            **kwargs):
+        """Randomly grow staple out from given domain in both directions."""
+
+        # Grow in three-prime direction
+        staple_indices = range(domain_index, staple_length)
+        try:
+            self._grow_chain(staple_index, staple_indices, *args, **kwargs)
         except MoveRejection:
-            accepted = False
-            return accepted
+            raise
 
-        # Regrow staples
-        for staple_index, bound_domains in staples.items():
+        # Grow in five-prime direction
+        staple_indices = range(domain_index, -1, -1)
+        try:
+            self._grow_chain(staple_index, staple_indices, *args, **kwargs)
+        except MoveRejection:
+            raise
 
-            # Pick domain on scaffold and staple to grow from
-            # Could do in method if want to include in config bias
-            scaffold_domain_index, staple_domain_index = random.choice(
-                    bound_domains)
-            position = self._trial_system.get_domain_position(scaffold_index,
-                    scaffold_domain_index)
-            orientation = self._trial_system.get_domain_orientation(
-                    scaffold_index, scaffod_domain_index)
 
-            # Attempt to set growth domain
-            # Needs to be in first staple method
-            try:
-                self._delta_e += self._trial_system.set_domain_configuration(
-                        staple_index, staple_domain_index, position, o_new)
-            except ConstraintViolation:
-                accepted = False
-                return accepted
+class IdentityMCMovetype(MCMovetype):
+    """Identity movetype."""
 
-            # Number of bound domains in system (for calculating overcounts)
-            init_num_bound_domains = self._trial_system.num_bound_domains
-
-            # Grow remainder of staple
-            staple_length = self._trial_system.chain_lengths[staple_index]
-            try:
-                self._grow_staple(staple_length, staple_index,
-                        staple_domain_index)
-            except MoveRejection:
-                accepted = False
-                return accepted
-
-            # If staple started and ended in multiply bound state, save
-            # resulting overcounts
-            cur_num_bound_domains = self._trial_system.num_bound_domains
-            D_bind_state = init_num_bound_domains - cur_num_bound_domains
-            if D_bind_state >= 0:
-                self._overcount.append(len(bound_domains))
-
-        # Test acceptance
-        if self._configuration_accepted():
-            self._accepted_system = self._trial_system
-            accepted = True
-        else:
-            accepted = False
-
+    def attempt_move(self):
+        """Accept current configuration."""
+        accepted = True
         return accepted
 
-    def _rotate_orientation_vector(self):
+
+class OrientationRotationMCMovetype(MCMovetype):
+    """Class for rotating the orientation vectors."""
+
+    def attempt_move(self):
         """Randomly rotate random domain."""
 
         # Select random chain and domain
-        chain_lengths = self._accepted_system.chain_lengths
+        chain_lengths = self.accepted_system.chain_lengths
         chain_index = random.randrange(len(chain_lengths))
         domain_index = random.randrange(chain_lengths[chain_index])
 
         # Reject if in bound state
-        occupancy = self._accepted_system.get_domain_occupancy(chain_index,
+        occupancy = self.accepted_system.get_domain_occupancy(chain_index,
                 domain_index)
         if occupancy == BOUND:
             accepted = False
@@ -1533,39 +1458,22 @@ class GCMCSimulation:
         dimension = random.choice([XHAT, YHAT, ZHAT])
         direction = random.randrange(-1, 2, 2)
         o_new = dimension * direction
-        self._accepted_system.set_domain_orientation(chain_index, domain_index,
+        self.accepted_system.set_domain_orientation(chain_index, domain_index,
                 o_new)
 
         accepted = True
         return accepted
 
 
-class GCMCMetropolisSimulation(GCMCSimulation):
-    """GCMC simulation with metropolis acceptance criteria."""
+class MMCMovetype(Movetype):
+    """Base class for Metropolis MC movetypes."""
 
-    def _configuration_accepted(self):
-        """Metropolis acceptance test for configuration change."""
-        T = self._accepted_system.temp
-        boltz_factor = math.exp(-self._delta_e / T)
-        return self._test_acceptance(boltz_factor)
+    def __init__(self, *args, **kwargs):
+        self._delta_e = 0
+        super().__init__(self, *args, **kwargs)
 
-    def _staple_insertion_accepted(self, identity, overcounts):
-        """Metropolis acceptance test for particle insertion."""
-        T = self._accepted_system.temp
-        boltz_factor = math.exp(-self._delta_e / T)
-        N = len(self._accepted_system._identity_to_index[identity])
-        ratio = boltz_factor / (N + 1)
-
-        # Correct for overcounts
-        ratio = ratio / overcounts
-        return self._test_acceptance(ratio)
-
-    def _staple_deletion_accepted(self, identity):
-        """Metropolis acceptance test for particle deletion."""
-        T = self._accepted_system.temp
-        boltz_factor = math.exp(-self._delta_e / T)
-        N = len(self._accepted_system._identity_to_index[identity])
-        return self._test_acceptance(N * boltz_factor)
+    def attempt_move(self):
+        raise NotImplementedError
 
     def _grow_chain(self, chain_index, domain_indices):
         """Randomly grow out chain from given domain indices.
@@ -1581,7 +1489,7 @@ class GCMCMetropolisSimulation(GCMCSimulation):
             direction = random.randrange(-1, 2, 2)
 
             # Position vector of previous domain
-            r_prev = self._trial_system.get_domain_position(chain_index, domain_index)
+            r_prev = self.trial_system.get_domain_position(chain_index, domain_index)
 
             # Trial position vector
             r_new = np.array(r_prev + direction * dimension)
@@ -1595,35 +1503,263 @@ class GCMCMetropolisSimulation(GCMCSimulation):
 
             # Attempt to set position
             try:
-                self._delta_e += self._trial_system.set_domain_configuration(
+                self._delta_e += self.trial_system.set_domain_configuration(
                         chain_index, new_domain_index, r_new, o_new)
             except ConstraintViolation:
                 raise MoveRejection
 
         return
 
-    def _grow_staple(self, staple_length, staple_index, domain_index):
-        """Randomly grow staple out from given domain in both directions."""
 
-        # Grow in three-prime direction
-        staple_indices = range(domain_index, staple_length)
-        try:
-            self._grow_chain(staple_index, staple_indices)
-        except MoveRejection:
-            raise
+class ExchangeMMCMovetype(MMCMovetype):
+    """Simple staple exchange movetype with Metropolis acceptance."""
 
-        # Grow in five-prime direction
-        staple_indices = range(domain_index, -1, -1)
+    def attempt_move(self):
+        if random.random() < 0.5:
+            accepted = self._delete_staple()
+        else:
+            accepted = self._insert_staple()
+
+        return accepted
+
+    def _staple_insertion_accepted(self, identity, overcounts):
+        """Metropolis acceptance test for particle insertion."""
+        T = self.accepted_system.temp
+        boltz_factor = math.exp(-self._delta_e / T)
+        N = len(self.accepted_system._identity_to_index[identity])
+        ratio = boltz_factor / (N + 1)
+
+        # Correct for overcounts (can't call normal method)
+        p_accept = min(1, ratio) / overcounts
+        if p_accept == 1:
+            accept = True
+        else:
+            if p_accept > random.random():
+                accept = True
+            else:
+                accept = False
+
+        return accept
+
+    def _staple_deletion_accepted(self, identity):
+        """Metropolis acceptance test for particle deletion."""
+        T = self.accepted_system.temp
+        boltz_factor = math.exp(-self._delta_e / T)
+        N = len(self.accepted_system._identity_to_index[identity])
+        return self._test_acceptance(N * boltz_factor)
+
+    def _insert_staple(self):
+        """Insert staple at random scaffold domain and grow."""
+
+        # Randomly select staple identity and add chain
+        staple_identity, domain_identities = (
+                self.accepted_system.get_random_staple_identity())
+
+        staple_index = self.trial_system.add_chain(staple_identity)
+        staple_length = self.trial_system.chain_lengths[staple_index]
+
+        # Select staple domain
+        staple_domain = random.randrange(staple_length)
+        domain_identity = domain_identities[staple_domain]
+
+        # Select complimentary scaffold domain
+        scaffold_domain = self.trial_system.identities.index(-domain_identity)
+        
+        # Number of bound domains in system (for calculating overcounts)
+        init_num_bound_domains = self.trial_system.num_bound_domains
+
+        # Set growth point domain
         try:
-            self._grow_chain(staple_index, staple_indices)
+            self._delta_e += self._set_staple_growth_point(staple_index,
+                    staple_domain, scaffold_domain):
         except MoveRejection:
-            raise
+            accepted = False
+            return accepted
+
+        # Grow staple
+        try:
+            self._grow_staple(staple_length, staple_index, staple_domain)
+        except MoveRejection:
+            accepted = False
+            return accepted
+
+        # If the configuration is such that the staple can bind with the other
+        # domain, then there are two ways this can happen, so the ratio should
+        # be halved to prevent overcounting. If staple ends in multiply bound
+        # state, save resulting overcounts.
+        cur_num_bound_domains = self.trial_system.num_bound_domains
+        D_bind_state = init_num_bound_domains - cur_num_bound_domains
+        overcounts = D_bind_state
+
+        # Test acceptance
+        if self._staple_insertion_accepted(staple_identity, overcounts):
+            self.accepted_system = self._trial_system
+            accepted = True
+        else:
+            accepted = False
+
+        return accepted
+
+    def _delete_staple(self):
+        """Delete random staple."""
+
+        # Randomly select staple identity
+        staple_identity, domain_identities = (
+                self.accepted_system.get_random_staple_identity())
+
+        # Randomly select staple
+        try:
+            staple_index = self.trial_system.get_random_staple_of_identity(
+                    staple_identity)
+
+        # No staples in system
+        except IndexError:
+            accepted = False
+            return accepted
+
+        # deletion sub method?
+        self._delta_e += self.trial_system.delete_chain(staple_index)
+
+        # Test acceptance
+        if self._staple_deletion_accepted(staple_identity):
+            self.accepted_system = self._trial_system
+            accepted = True
+        else:
+            accepted = False
+
+        return accepted
+
+
+class RegrowthMMCMovetype(MMCMovetype):
+    """Base class for simple Metropolis conformational change movetypes."""
+
+    def attempt_move(self):
+        raise NotImplementedError
+
+    def _conformation_accepted(self):
+        """Metropolis acceptance test for configuration change."""
+        T = self.accepted_system.temp
+        boltz_factor = math.exp(-self._delta_e / T)
+        return self._test_acceptance(boltz_factor)
+
+
+class StapleRegrowthMMCMovetype(RegrowthMMCMovetype):
+    """Simple Metropolis staple regrowth movetype."""
+
+    def attempt_move(self):
+        """Regrow random staple from randomly chosen complimentary domain."""
+
+        # Randomly select staple
+        try:
+            staple_index = random.randrange(1,
+                    len(self.trial_system.chain_lengths))
+
+        # No staples in system
+        except ValueError:
+            accepted = False
+            return accepted
+
+        staple_length = self.accepted_system.chain_lengths[staple_index]
+
+        # Find all complimentary domains and randomly select growth point
+        staple_ident = self.trial_system._chain_identities[staple_index]
+        comp_domains = self.trial_system.staple_to_scaffold[staple_ident]
+
+        staple_domain_i = random.randrange(staple_length)
+        scaffold_domain_i = comp_domains[staple_domain_i]
+
+        # Unassign domains
+        for domain_index in range(staple_length):
+            self._delta_e += self.trial_system.unassign_domain(staple_index,
+                    domain_index)
+
+        # Grow staple
+        try:
+            self._grow_staple(staple_length, staple_index, bound_domain_index)
+        except MoveRejection:
+            accepted = False
+            return accepted
+        
+        # Test acceptance
+        if self._configuration_accepted():
+            self.accepted_system = self._trial_system
+            accepted = True
+        else:
+            accepted = False
+
+        return accepted
+
+
+class ScaffoldRegrowthMMCMovetype(RegrowthMMCMovetype):
+    """Simple Metropolis scaffold and bound staple regrowth movetype."""
+
+    def attempt_move(self):
+        """Randomly regrow terminal section of scaffold and bound staples.
+
+        From a randomly selected scaffold domain in a random direction to the
+        end.
+        """
+
+        # Pick section of scaffold to regrow
+        scaffold_indices = self._select_scaffold_indices()
+
+        # Find bound staples and all complimentary domains
+        staples = self._find_bound_staples(scaffold_indices)
+
+        # Unassign scaffold domains
+        for domain_index in scaffold_indices[1:]:
+            self._delta_e += self.trial_system.unassign_domain(SCAFFOLD_INDEX,
+                    domain_index)
+
+        # Unassign staples
+        for staple_index in staples.keys():
+            for domain_index in range(self.trial_system.chain_lengths[staple_index]):
+                self._delta_e += self.trial_system.unassign_domain(staple_index,
+                    domain_index)
+
+        # Regrow scaffold
+        try:
+            self._grow_chain(SCAFFOLD_INDEX, scaffold_indices)
+        except MoveRejection:
+            accepted = False
+            return accepted
+
+        # Regrow staples
+        for staple_index, comp_domains in staples.items():
+
+            # Pick domain on scaffold and staple to grow from
+            scaffold_domain_index, staple_domain_index = random.choice(
+                    comp_domains)
+            try:
+                self._delta_e += self._set_staple_growth_point(staple_index,
+                        staple_domain_index, scaffold_domain_index):
+            except MoveRejection:
+                accepted = False
+                return accepted
+
+            # Grow remainder of staple
+            staple_length = self.trial_system.chain_lengths[staple_index]
+            try:
+                self._grow_staple(staple_length, staple_index,
+                        staple_domain_index)
+            except MoveRejection:
+                accepted = False
+                return accepted
+
+        # Test acceptance
+        if self._configuration_accepted():
+            self.accepted_system = self.trial_system
+            accepted = True
+        else:
+            accepted = False
+
+        return accepted
 
     def _select_scaffold_indices(self):
+        """Return scaffold indices from random segment to end."""
 
         # Randomly select starting scaffold domain
-        scaffold_index = 0
-        scaffold_length = self._accepted_system.chain_lengths[scaffold_index]
+        scaffold_length = self.accepted_system.chain_lengths[SCAFFOLD_INDEX]
         start_domain_index = random.randrange(scaffold_length)
 
         # Select direction to regrow, create index list
@@ -1636,13 +1772,593 @@ class GCMCMetropolisSimulation(GCMCSimulation):
         return scaffold_indices
 
 
-class GCMCConfigurationBiasSimulation(GCMCSimulatoin):
-    """GCMC configurational bias bound staple simulations."""
+class CBMCMovetype(MCMovetype):
+    """Base class for configurational bias movetypes."""
 
-    def _regrow_chain(self):
-        """Regrow scaffold between two points with configurational bias.
+    def __init__(self, cyclic, *args, **kwargs):
+        self._bias = 0
+        self._ideal_random_walks = IdealRandomWalks()
+        if cyclic:
+            self._select_scaffold_indices_cyclic()
+        else:
+            self._select_scaffold_indices_linear()
+        super().__init__(*args, **kwargs)
+
+    def _calc_rosenbluth(self, weights, *args):
+        """Calculate rosenbluth weight and return normalized weights."""
+        rosenbluth_i = np.array(np.sum(weights))
+        weights /= rosenbluth_i
+        self._bias *= rosenbluth_i
+        return weights
+
+    def _calc_fixed_end_rosenbluth(self, weights, configs, end_point, N):
+        """Return fixed endpoint Rosenbluth factor and modify weights."""
+        for i, config in enumerate(configs):
+            start_point = config[0]
+            num_walks = self._ideal_random_walks(start_point, end_point, N)
+            weight[i] = weight[i] * num_walks
+
+        return self._calc_rosenbluth_and_select(weights)
+
+    def _select_config_with_bias(self, domain, weights, configs)
+        """Select configuration according to Rosenbluth weights.
         
-        All attached staple strands are regrown with configurational bias,
-        although unlike the scaffold strand, they do not require the fixed
-        end-point modification to the trial and Rosenbluth weights.
+        Domain is passed to allow consistent arguments between selection
+        methods.
         """
+        random_n = random.random()
+        cumalative_prob = 0
+        for i, weight in enumerate(weights):
+            cumalative_prob += weight
+            if random_n < cumalative_prob:
+                break
+
+        return configs[i]
+
+    def _select_old_config(self, domain, *args):
+        """Select old configuration."""
+        p_old = self._accepted_system.get_domain_position(*domain)
+        o_old = self._accepted_system.get_domain_orientation(*domain)
+        return (p_old, o_old)
+                
+    def _grow_chain(self, chain_index, domain_indices, end_point=None,
+            regrow_old=False):
+        """Grow chain with configurational bias."""
+
+        # Set method for calculating weights and selecting domain
+        if end_point == None:
+            calc_bias = self._calc_rosenbluth
+        else:
+            calc_bias = self._calc_fixed_end_rosenbluth
+
+        if regrow_old:
+            select_config = self._select_old_config
+        else:
+            select_config = self._select_config_with_bias
+
+        # Remaining number of domains
+        N = len(domain_indices)
+
+        # Iterate through given indices, growing next domain from current index
+        for i, domain_index in enumerate(domain_indices[:-1]):
+            new_domain_index = domain_indices[i + 1]
+            N -= 1
+
+            # List possible positions
+            possible_configs = []
+            boltzmann_factors = []
+
+            # Position vector of previous domain
+            r_prev = self.trial_system.get_domain_position(chain_index,
+                    domain_index)
+
+            # Iterate through all possible new positions
+            for dimension in [XHAT, YHAT, ZHAT]:
+                for direction in [-1, 1]:
+
+                # Trial position vector
+                r_new = np.array(r_prev + direction * dimension)
+
+                # Check energies of each configuration
+                occupancy = self.trial_system.get_position_occupancy(r_new)
+                if occupancy == BOUND:
+                    continue
+                elif occupancy == UNBOUND:
+                    unbound_domain = self.trial_system.get_unbound_domain(r_new)
+                    orientation = -self.trial_sytem.get_domain_orientation(
+                            unbound_domain)
+                    try:
+                        delta_e = self.trial_system.check_domain_configuration(
+                                r_new)
+                    except ConstraintViolation:
+                        pass
+                    else:
+                        possible_configs.append((r_new, orientation))
+                        temp = self.trial_system.temp
+                        boltzmann_factor = math.exp(-delta_e / temp)
+                        boltzmann_factors.append(boltzmann_factor)
+                else:
+                    num_orientations = 6
+                    possible_configs.append((r_new, num_orientations))
+                    boltzmann_factors.append(6)
+
+        # Check if dead end
+        if possible_configs == []:
+            raise MoveRejection
+
+        # Calculate bias and select position
+        weights = calc_bias(boltzmann_factors, possible_configs, end_point, N)
+        domain = (chain_index, domain_index)
+        selected_config = select_config(domain, weights, possible_configs)
+
+        # Set new configuration
+        p_new = selected_config[0]
+        if type(selected_config[1]) == int:
+
+            # Randomly select new orientation
+            dimension = random.choice([XHAT, YHAT, ZHAT])
+            direction = random.randrange(-1, 2, 2)
+            o_new = direction * dimension
+            self._trial_system.set_domain_configuration(
+                    chain_index, new_domain_index, r_new, o_new)
+        else:
+            o_new = selected_config[1]
+            self._trial_system.set_checked_domain_configuration(
+                    chain_index, new_domain_index, r_new, o_new)
+
+        return
+
+
+class ExchangeCBMCMovetype(CBMCMovetype):
+    """CB staple exchange movetype."""
+
+    def attempt_move(self):
+        if random.random() < 0.5:
+            accepted = self._delete_staple()
+        else:
+            accepted = self._insert_staple()
+
+        return accepted
+
+    def _staple_insertion_accepted(self, identity, overcounts):
+        """Metropolis acceptance test for particle insertion."""
+        N = len(self.accepted_system._identity_to_index[identity])
+        ratio = self.bias / (N + 1)
+
+        # Correct for overcounts (can't call normal method)
+        p_accept = min(1, ratio) / overcounts
+        if p_accept == 1:
+            accept = True
+        else:
+            if p_accept > random.random():
+                accept = True
+            else:
+                accept = False
+
+        return accept
+
+    def _staple_deletion_accepted(self, identity):
+        """Metropolis acceptance test for particle deletion."""
+        N = len(self.accepted_system._identity_to_index[identity])
+        ratio = N / self.bia
+        return self._test_acceptance(ratio)
+
+    def _insert_staple(self):
+        """Insert staple at random scaffold domain and grow."""
+
+        # Randomly select staple identity and add chain
+        staple_identity, domain_identities = (
+                self.accepted_system.get_random_staple_identity())
+
+        staple_index = self.trial_system.add_chain(staple_identity)
+        staple_length = self.trial_system.chain_lengths[staple_index]
+
+        # Select staple domain
+        staple_domain = random.randrange(staple_length)
+        domain_identity = domain_identities[staple_domain]
+
+        # Select complimentary scaffold domain
+        scaffold_domain = self.trial_system.identities.index(-domain_identity)
+        
+        # Number of bound domains in system (for calculating overcounts)
+        init_num_bound_domains = self.trial_system.num_bound_domains
+
+        # Set growth point domain
+        try:
+            delta_e = self._set_staple_growth_point(staple_index, staple_domain,
+                    scaffold_domain):
+        except MoveRejection:
+            accepted = False
+            return accepted
+        else:
+            self._bias *= math.exp(delta_e / self.accepted_system.temp)
+
+        # Grow staple
+        try:
+            self._grow_staple(staple_length, staple_index, staple_domain)
+        except MoveRejection:
+            accepted = False
+            return accepted
+
+        # If the configuration is such that the staple can bind with the other
+        # domain, then there are two ways this can happen, so the ratio should
+        # be halved to prevent overcounting. If staple ends in multiply bound
+        # state, save resulting overcounts.
+        cur_num_bound_domains = self.trial_system.num_bound_domains
+        D_bind_state = init_num_bound_domains - cur_num_bound_domains
+        overcounts = D_bind_state
+
+        # Test acceptance
+        if self._staple_insertion_accepted(staple_identity, overcounts):
+            self.accepted_system = self._trial_system
+            accepted = True
+        else:
+            accepted = False
+
+        return accepted
+
+    def _delete_staple(self):
+        """Delete random staple."""
+
+        # Randomly select staple identity
+        staple_identity, domain_identities = (
+                self.accepted_system.get_random_staple_identity())
+
+        # Randomly select staple
+        try:
+            staple_index = self.trial_system.get_random_staple_of_identity(
+                    staple_identity)
+
+        # No staples in system
+        except IndexError:
+            accepted = False
+            return accepted
+
+        # Unassign domains and collect bound domain indices
+        # list of staple_domain_i and scaffold_domain_i
+        bound_domains = []
+        for domain_i in range(self.accepted_system.chain_lengths[staple_index]):
+            occupancy = self.accepted_system.get_bound_domain(staple_index,
+                    domain_i)
+            if bound_domain != ():
+                bound_domains.append((domain_i, bound_domain[1]))
+            else:
+                pass
+
+            self._trial_system.unassign_domain(staple_index, domain_i)
+
+        # Select domain to regrow from
+        staple_domain_i, scaffold_domain_i = random.choice(bound_domains)
+
+        # Set growth point and regrow
+        delta_e += self._set_staple_growth_point(staple_index, staple_domain_i,
+                scaffold_domain_i)
+        self._bias *= math.exp(delta_e / self.trial_system.temp)
+        self._grow_chain(staple_index, domain_i, regrow_old=True)
+
+        # Delete chain to create correct trial system config
+        self.trial_system.delete_chain(staple_index)
+
+        # Test acceptance
+        if self._staple_deletion_accepted(staple_identity):
+            self.accepted_system = self._trial_system
+            accepted = True
+        else:
+            accepted = False
+
+        return accepted
+
+
+class RegrowthCBMCMovetype(CBMCMovetype):
+
+    def attempt_move(self):
+        raise NotImplementedError
+
+
+class StapleRegrowthCBMCMovetype(RegrowthCBMCMovetype):
+
+    def attempt_move(self):
+        """Regrow random staple."""
+
+        # Randomly select staple
+        try:
+            staple_index = random.randrange(1,
+                    len(self.trial_system.chain_lengths))
+
+        # No staples in system
+        except ValueError:
+            accepted = False
+            return accepted
+
+        staple_length = self.accepted_system.chain_lengths[staple_index]
+
+        # Unassign domains
+        for domain_index in range(staple_length):
+            delta_e = self.trial_system.unassign_domain(staple_index,
+                    domain_index)
+            self._bias *= math.exp(delta_e / self.temp)
+
+        # Find all complimentary domains and randomly select growth point
+        staple_ident = self._trial_system._chain_identities[staple_index]
+        comp_domains = self._trial_system.staple_to_scaffold[staple_ident]
+
+        staple_domain_i = random.randrange(staple_length)
+        scaffold_domain_i = comp_domains[staple_domain_i]
+
+        # Set growth point
+        try:
+            delta_e += self._set_staple_growth_point(staple_index,
+                    staple_domain_index, scaffold_domain_i)
+        except MoveRejection:
+            accepted = False
+            return accepted
+        else:
+            self._bias *= math.exp(delta_e / self.trial_system.temp)
+
+        # Grow staple
+        try:
+            self._grow_staple(staple_length, staple_index, staple_domain_i)
+        except MoveRejection:
+            accepted = False
+            return accepted
+
+        # Regrow staple in old conformation
+        trial_system = copy.deepcopy(self._trial_system)
+        new_bias = self._bias
+        self._bias = 1
+
+        # Unassign domains and find all bound domains on staple
+        bound_domains = []
+        for staple_domain_i in range(staple_length):
+            bound_domain = self._accepted_system.get_bound_domain(staple_index,
+                    staple_domain_i)
+            if occupancy != ():
+                bound_domains.append((staple_domain_i, bound_domain[1]))
+
+            delta_e = self._trial_system.unassign_domain(staple_index,
+                    staple_domain_i)
+            self._bias *= math.exp(delta_e / self.temp)
+
+        # Pick a starting point at random (will average over simulation)
+        staple_domain_i, scaffold_domain_i = random.choice(bound_domains)
+
+        # Grow staple
+        delta_e = self._set_staple_growth_point(staple_index, staple_domain_i,
+                scaffold_domain_i)
+        self._bias *= math.exp(delta_e / self.trial_system.temp)
+        self._grow_staple(staple_length, staple_index, staple_domain_i,
+                regrow_old=True)
+
+        # Test acceptance
+        ratio = bias_new / self._bias
+        if self._test_acceptence(ratio):
+            self._accepted_system = trial_system
+            accepted = True
+        else:
+            accepted = False
+
+        return accepted
+
+
+class ScaffoldRegrowthCBMCMovetype(RegrowthCBMCMovetype):
+    """CB scaffold regrowth movetype."""
+
+    def __init__(origami_system, *args):
+        self._endpoints = []
+        if origami_system.cyclic:
+            self._select_scaffold_indices = self._select_scaffold_indices_linear
+        else:
+            self._select_scaffold_indices = self._select_scaffold_indices_cyclic
+
+        super().__init__(origami_system, *args)
+
+    def attempt_move():
+        """Randomly regrow terminal section of scaffold and bound staples.
+
+        From a randomly selected scaffold domain in a random direction to the
+        end.
+        """
+
+        # Pick section of scaffold to regrow
+        scaffold_indices = self._select_scaffold_indices()
+
+        # Find bound staples and all complimentary domains
+        staples = self._find_bound_staples(scaffold_indices)
+
+        # Unassign scaffold domains
+        delta_e = 0
+        for domain_index in scaffold_indices[1:]:
+            delta_e += self.trial_system.unassign_domain(SCAFFOLD_INDEX,
+                    domain_index)
+
+        # Unassign staples
+        for staple_index in staples.keys():
+            for domain_index in range(self._trial_system.chain_lengths[staple_index]):
+                delta_e += self._trial_system.unassign_domain(staple_index,
+                    domain_index)
+
+        self._bias *= math.exp(delta_e / self.trial_system.temp)
+
+        # Regrow scaffold
+        if self._end_points == []:
+            end_point = None
+        else:
+            end_point = self._end_points[0]
+
+        try:
+            self._grow_chain(SCAFFOLD_INDEX, scaffold_indices,
+                    end_point=end_point)
+        except MoveRejection:
+            accepted = False
+            return accepted
+
+        # Regrow staples
+        for staple_index, comp_domains in staples.items():
+
+            # Pick domain on scaffold and staple to grow from
+            scaffold_domain_index, staple_domain_index = random.choice(
+                    comp_domains)
+            try:
+                delta_e = self._set_staple_growth_point(staple_index,
+                        staple_domain_index, scaffold_domain_index):
+            except MoveRejection:
+                accepted = False
+                return accepted
+            else:
+                self._bias *= math.exp(delta_e / self.trial_system.temp)
+
+            # Grow remainder of staple
+            staple_length = self._trial_system.chain_lengths[staple_index]
+            try:
+                self._grow_staple(staple_length, staple_index,
+                        staple_domain_index)
+            except MoveRejection:
+                accepted = False
+                return accepted
+
+        # Regrow in old conformation
+        trial_system = copy.deepcopy(self._trial_system)
+        new_bias = self._bias
+        self._bias = 1
+
+        # Find all bound staples
+        staples = self._find_bound_domains(scaffold_indices)
+
+        # Unassign scaffold
+        delta_e = 0
+        for domain_index in scaffold_indices[1:]:
+            delta_e += self.trial_system.unassign_domain(SCAFFOLD_INDEX,
+                    domain_index)
+
+        # Unassign staples
+        for staple_index in staples.keys():
+            for domain_index in range(self._trial_system.chain_lengths[staple_index]):
+                delta_e += self._trial_system.unassign_domain(staple_index,
+                    domain_index)
+
+        self._bias *= math.exp(delta_e / self.trial_system.temp)
+
+        # Regrow scaffold (same endpoint)
+            self._grow_chain(SCAFFOLD_INDEX, scaffold_indices,
+                    end_point=end_point)
+
+        # Regrow staples
+        for staple_index, bound_domains in staples.items():
+
+            # Pick a starting point at random (will average over simulation)
+            scaffold_domain_index, staple_domain_index = random.choice(
+                    bound_domains)
+            delta_e = self._set_staple_growth_point(staple_index,
+                    staple_domain_index, scaffold_domain_index):
+            self._bias *= math.exp(delta_e / self.trial_system.temp)
+
+            # Grow remainder of staple
+            staple_length = self._trial_system.chain_lengths[staple_index]
+            try:
+                self._grow_staple(staple_length, staple_index,
+                        staple_domain_index, regrow_old=True)
+            except MoveRejection:
+                accepted = False
+                return accepted
+
+        # Test acceptance
+        ratio = bias_new / self._bias
+        if self._test_acceptence(ratio):
+            self._accepted_system = trial_system
+            accepted = True
+        else:
+            accepted = False
+
+        return accepted
+
+    def _find_bound_domains(self, scaffold_indices):
+        """Find all bound staples and return with bound scaffold domains.
+
+        Includes only bound scaffold domains in given indices.
+        """
+        staples = {}
+        for domain_index in scaffold_indices:
+
+            # Check if scaffold domain bound
+            staple_domain = self.accepted_system.get_bound_domain(
+                    SCAFFOLD_INDEX, domain_index)
+            if staple_domain == ():
+                continue
+            else:
+                staple_index, staple_domain_i = staple_domain
+                if not staple_index in staples:
+                    staples[staple_index] = []
+                else:
+                    pass
+
+                staples[staple_index] = (staple_domain_i, domain_index)
+
+        return staples
+
+    def _select_scaffold_indices_linear(self):
+        """Return scaffold indices between two random segments."""
+
+        # Randomly select end points
+        scaffold_length = self._accepted_system.chain_lengths[SCAFFOLD_INDEX]
+        start_domain_i = end_domain_index = random.randrange(scaffold_length)
+        while start_domain_i == end_domain_i:
+            end_domain_i = random.randrange(scaffold_length)
+
+        # Ensure start domain is 5'
+        if start_domain_i > end_domain_i:
+            start_domain_i, end_domain_i = end_domain_i, start_domain_i
+
+        scaffold_indices = range(start_domain_i, end_domain_i)
+
+        # Set endpoint (always 3')
+        try:
+            endpoint = self.trial_system.get_domain_position(SCAFFOLD_INDEX,
+                    end_domain_i + 1)
+        except KeyError:
+            pass
+        else:
+            self._endpoints.append(endpoint)
+        
+        return scaffold_indices
+
+    def _select_scaffold_indices_cyclic(self):
+        """Return scaffold indices between two random segments."""
+
+        # Randomly select end points
+        scaffold_length = self._accepted_system.chain_lengths[SCAFFOLD_INDEX]
+        start_domain_i = end_domain_index = random.randrange(scaffold_length)
+        while start_domain_i == end_domain_i:
+            end_domain_i = random.randrange(scaffold_length)
+
+        # Ensure start domain is 5'
+        if start_domain_i > end_domain_i:
+            start_domain_i, end_domain_i = end_domain_i, start_domain_i
+
+        # Select direction to regrow
+        direction = random.randrange(2)
+        if direction == 1:
+            pass
+        else:
+            start_domain_i, end_domain_i = end_domain_i, start_domain_i
+
+        # Create index list
+        scaffold_indices = range(start_domain_i, start_domain_i +
+                end_domain_i)
+
+        # Wrap indices
+        for i, scaffold_domain_i in scaffold_indices:
+            if scaffold_domain_i >= scaffold_length:
+                scaffold_domain_i -= scaffold_length
+                scaffold_indices[i] = scaffold_domain_i
+
+        # Set endpoint
+        endpoint_i = end_domain_i + 1
+        if endpoint_i == scaffold_length:
+            endpoint_i = 0
+        else:
+            pass
+
+        endpoint.append(self.trial_system.get_domain_position(SCAFFOLD_INDEX,
+                endpoint_i)
+
+        return scaffold_indices
