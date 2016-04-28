@@ -80,14 +80,15 @@ COMPLIMENTARY_BASE_PAIRS = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G'}
 
 
 class MOVETYPE(Enum):
-    INSERT_STAPLE = 0
-    DELETE_STAPLE = 1
-    TRANSLATE_STAPLE = 2
-    ROTATE_STAPLE = 3
-    REGROW_STAPLE = 4
-    REGROW_SCAFFOLD_AND_BOUND_STAPLES = 5
-    ROTATE_ORIENTATION_VECTOR = 6
-    EXCHANGE_STAPLE = 7
+    IDENTITY = 0
+    ROTATE_ORIENTATION_VECTOR = 1
+    EXCHANGE_STAPLE = 2
+    REGROW_STAPLE = 3
+    REGROW_SCAFFOLD = 4
+    CB_EXCHANGE_STAPLE = 5
+    CB_REGROW_STAPLE = 6
+    CB_REGROW_SCAFFOLD = 7
+    CB_CONSERVED_TOPOLOGY = 8
 
 
 class MoveRejection(Exception):
@@ -435,6 +436,16 @@ class OrigamiSystem:
             chains.append(chain)
         return chains
 
+    def get_num_staples(self, identity):
+        """Return number of staples in system of given identity."""
+        Ni = len(self._identity_to_index[identity])
+        return Ni
+
+    def get_complimentary_scaffold_domains(self, staple_i):
+        """Return list of scaffold domains complimentary to given staple."""
+        staple_identity = self._chain_identities[staple_i]
+        return self.staple_to_scaffold[staple_identity]
+
     def get_domain_position(self, chain_index, domain_index):
         """Return domain position as numpy array."""
         return self._positions[chain_index][domain_index]
@@ -567,7 +578,7 @@ class OrigamiSystem:
         self._checked_list.append(tuple(position))
         return delta_e
 
-    def set_checked_domain_conguration(self, chain_index, domain_index,
+    def set_checked_domain_configuration(self, chain_index, domain_index,
                 position, orientation):
         """Set domain to previously checked configuration."""
         domain = (chain_index, domain_index)
@@ -1261,9 +1272,6 @@ class GCMCSimulation:
         # Current movetype
         self._movetype = -1
 
-        # Convienience variables
-        self.temp = origami_system.temp
-
         # Create cumalative probability distribution for movetypes
         # List to associate movetype method with index in distribution
         self._movetype_methods = []
@@ -1277,10 +1285,18 @@ class GCMCSimulation:
                 movetype_class = ExchangeMMCMovetype
             elif movetype == MOVETYPE.REGROW_STAPLE:
                 movetype_class = StapleRegrowthMMCMovetype
-            elif movetype == MOVETYPE.REGROW_SCAFFOLD_AND_BOUND_STAPLES:
+            elif movetype == MOVETYPE.REGROW_SCAFFOLD:
                 movetype_class = ScaffoldRegrowthMMCMovetype
             elif movetype == MOVETYPE.ROTATE_ORIENTATION_VECTOR:
                 movetype_class = OrientationRotationMCMovetype
+            if movetype == MOVETYPE.CB_EXCHANGE_STAPLE:
+                movetype_class = ExchangeMMCMovetype
+            elif movetype == MOVETYPE.CB_REGROW_STAPLE:
+                movetype_class = StapleRegrowthMMCMovetype
+            elif movetype == MOVETYPE.CB_REGROW_SCAFFOLD:
+                movetype_class = ScaffoldRegrowthMMCMovetype
+            elif movetype == MOVETYPE.CB_CONSERVED_TOPOLOGY:
+                movetype_class = ConservedTopologyCBMCMovetype
 
             cumulative_probability += probability
             self._movetype_classes.append(movetype_class)
@@ -1326,8 +1342,7 @@ class GCMCSimulation:
             else:
                 lower_boundary = upper_boundary
 
-        movetype_object = movetype_class(self._origami_system,
-                self,_trial_system)
+        movetype_object = movetype_class(self._origami_system)
         return movetype_object
 
 
@@ -1356,7 +1371,7 @@ class MCMovetype:
 
         return accept
 
-    def _find_bound_staples(self, domain_indices):
+    def _find_bound_staples_with_compliments(self, domain_indices):
         """Find all staples bound to scaffold segment (includes repeats).
 
         Returns dictionary of staple indices and complimentary scaffold domains
@@ -1424,6 +1439,20 @@ class MCMovetype:
         except MoveRejection:
             raise
 
+    def _select_random_orientation(self):
+        """Select a random orientation."""
+        dimensions = [XHAT, YHAT, ZHAT]
+        directions = [-1, 1]
+        positions = [i * j for i in dimensions for j in directions]
+        return random.choice(positions)
+
+    def _select_random_position(self, p_prev):
+        """Select a random position."""
+        dimensions = [XHAT, YHAT, ZHAT]
+        directions = [-1, 1]
+        positions = [i * j for i in dimensions for j in directions]
+        return p_prev + random.choice(positions)
+
 
 class IdentityMCMovetype(MCMovetype):
     """Identity movetype."""
@@ -1455,9 +1484,7 @@ class OrientationRotationMCMovetype(MCMovetype):
             pass
 
         # Select random orientation and update (always accepted)
-        dimension = random.choice([XHAT, YHAT, ZHAT])
-        direction = random.randrange(-1, 2, 2)
-        o_new = dimension * direction
+        o_new = self._select_random_orientation()
         self.accepted_system.set_domain_orientation(chain_index, domain_index,
                 o_new)
 
@@ -1484,27 +1511,19 @@ class MMCMovetype(Movetype):
         for i, domain_index in enumerate(domain_indices[:-1]):
             new_domain_index = domain_indices[i + 1]
 
-            # Randomly select neighbour lattice site for new position
-            dimension = random.choice([XHAT, YHAT, ZHAT])
-            direction = random.randrange(-1, 2, 2)
-
             # Position vector of previous domain
-            r_prev = self.trial_system.get_domain_position(chain_index, domain_index)
+            p_prev = self.trial_system.get_domain_position(chain_index, domain_index)
 
-            # Trial position vector
-            r_new = np.array(r_prev + direction * dimension)
+            # Randomly select neighbour lattice site for new position
+            p_new = self._select_random_position(p_prev)
 
             # Randomly select new orientation
-            dimension = random.choice([XHAT, YHAT, ZHAT])
-            direction = random.randrange(-1, 2, 2)
-
-            # Trial position orientation
-            o_new = dimension * direction
+            o_new = self._select_random_orientation
 
             # Attempt to set position
             try:
                 self._delta_e += self.trial_system.set_domain_configuration(
-                        chain_index, new_domain_index, r_new, o_new)
+                        chain_index, new_domain_index, p_new, o_new)
             except ConstraintViolation:
                 raise MoveRejection
 
@@ -1526,8 +1545,8 @@ class ExchangeMMCMovetype(MMCMovetype):
         """Metropolis acceptance test for particle insertion."""
         T = self.accepted_system.temp
         boltz_factor = math.exp(-self._delta_e / T)
-        N = len(self.accepted_system._identity_to_index[identity])
-        ratio = boltz_factor / (N + 1)
+        Ni = self.accepted_system.get_num_staples(identity)
+        ratio = boltz_factor / (Ni + 1)
 
         # Correct for overcounts (can't call normal method)
         p_accept = min(1, ratio) / overcounts
@@ -1545,8 +1564,8 @@ class ExchangeMMCMovetype(MMCMovetype):
         """Metropolis acceptance test for particle deletion."""
         T = self.accepted_system.temp
         boltz_factor = math.exp(-self._delta_e / T)
-        N = len(self.accepted_system._identity_to_index[identity])
-        return self._test_acceptance(N * boltz_factor)
+        Ni = self.accepted_system.get_num_staples(identity)
+        return self._test_acceptance(Ni * boltz_factor)
 
     def _insert_staple(self):
         """Insert staple at random scaffold domain and grow."""
@@ -1617,7 +1636,7 @@ class ExchangeMMCMovetype(MMCMovetype):
             accepted = False
             return accepted
 
-        # deletion sub method?
+        # Delete staple
         self._delta_e += self.trial_system.delete_chain(staple_index)
 
         # Test acceptance
@@ -1659,12 +1678,10 @@ class StapleRegrowthMMCMovetype(RegrowthMMCMovetype):
             accepted = False
             return accepted
 
-        staple_length = self.accepted_system.chain_lengths[staple_index]
-
         # Find all complimentary domains and randomly select growth point
-        staple_ident = self.trial_system._chain_identities[staple_index]
-        comp_domains = self.trial_system.staple_to_scaffold[staple_ident]
+        comp_domains = self.trial_system.get_complimentary_domains(staple_index)
 
+        staple_length = self.accepted_system.chain_lengths[staple_index]
         staple_domain_i = random.randrange(staple_length)
         scaffold_domain_i = comp_domains[staple_domain_i]
 
@@ -1704,7 +1721,7 @@ class ScaffoldRegrowthMMCMovetype(RegrowthMMCMovetype):
         scaffold_indices = self._select_scaffold_indices()
 
         # Find bound staples and all complimentary domains
-        staples = self._find_bound_staples(scaffold_indices)
+        staples = self._find_bound_staples_with_compliments(scaffold_indices)
 
         # Unassign scaffold domains
         for domain_index in scaffold_indices[1:]:
@@ -1725,26 +1742,11 @@ class ScaffoldRegrowthMMCMovetype(RegrowthMMCMovetype):
             return accepted
 
         # Regrow staples
-        for staple_index, comp_domains in staples.items():
-
-            # Pick domain on scaffold and staple to grow from
-            scaffold_domain_index, staple_domain_index = random.choice(
-                    comp_domains)
-            try:
-                self._delta_e += self._set_staple_growth_point(staple_index,
-                        staple_domain_index, scaffold_domain_index):
-            except MoveRejection:
-                accepted = False
-                return accepted
-
-            # Grow remainder of staple
-            staple_length = self.trial_system.chain_lengths[staple_index]
-            try:
-                self._grow_staple(staple_length, staple_index,
-                        staple_domain_index)
-            except MoveRejection:
-                accepted = False
-                return accepted
+        try:
+            self._grow_staples(staples)
+        except MoveRejection:
+            accepted = False
+            return accepted
 
         # Test acceptance
         if self._configuration_accepted():
@@ -1755,17 +1757,28 @@ class ScaffoldRegrowthMMCMovetype(RegrowthMMCMovetype):
 
         return accepted
 
+    def _grow_staples(staples):
+        for staple_i, comp_domains in staples.items():
+
+            # Pick domain on scaffold and staple to grow from
+            scaffold_domain_i, staple_domain_i = random.choice(comp_domains)
+            self._delta_e += self._set_staple_growth_point(staple_index,
+                    staple_domain_i, scaffold_domain_i):
+
+            # Grow remainder of staple
+            staple_length = self.trial_system.chain_lengths[staple_index]
+            self._grow_staple(staple_length, staple_index, staple_domain_i)
+
     def _select_scaffold_indices(self):
         """Return scaffold indices from random segment to end."""
 
         # Randomly select starting scaffold domain
-        scaffold_length = self.accepted_system.chain_lengths[SCAFFOLD_INDEX]
-        start_domain_index = random.randrange(scaffold_length)
+        start_domain_index = random.randrange(self.scaffold_length)
 
         # Select direction to regrow, create index list
         direction = random.randrange(2)
         if direction == 1:
-            scaffold_indices = range(start_domain_index, scaffold_length)
+            scaffold_indices = range(start_domain_index, self.scaffold_length)
         else:
             scaffold_indices = range(start_domain_index, -1, -1)
         
@@ -1777,7 +1790,6 @@ class CBMCMovetype(MCMovetype):
 
     def __init__(self, cyclic, *args, **kwargs):
         self._bias = 0
-        self._ideal_random_walks = IdealRandomWalks()
         if cyclic:
             self._select_scaffold_indices_cyclic()
         else:
@@ -1791,21 +1803,8 @@ class CBMCMovetype(MCMovetype):
         self._bias *= rosenbluth_i
         return weights
 
-    def _calc_fixed_end_rosenbluth(self, weights, configs, end_point, N):
-        """Return fixed endpoint Rosenbluth factor and modify weights."""
-        for i, config in enumerate(configs):
-            start_point = config[0]
-            num_walks = self._ideal_random_walks(start_point, end_point, N)
-            weight[i] = weight[i] * num_walks
-
-        return self._calc_rosenbluth_and_select(weights)
-
-    def _select_config_with_bias(self, domain, weights, configs)
-        """Select configuration according to Rosenbluth weights.
-        
-        Domain is passed to allow consistent arguments between selection
-        methods.
-        """
+    def _select_config_with_bias(self, weights, configs, **kwargs)
+        """Select configuration according to Rosenbluth weights."""
         random_n = random.random()
         cumalative_prob = 0
         for i, weight in enumerate(weights):
@@ -1815,18 +1814,17 @@ class CBMCMovetype(MCMovetype):
 
         return configs[i]
 
-    def _select_old_config(self, domain, *args):
+    def _select_old_config(self, *args, domain=domain):
         """Select old configuration."""
         p_old = self._accepted_system.get_domain_position(*domain)
         o_old = self._accepted_system.get_domain_orientation(*domain)
         return (p_old, o_old)
                 
-    def _grow_chain(self, chain_index, domain_indices, end_point=None,
-            regrow_old=False):
+    def _grow_chain(self, chain_index, domain_indices, regrow_old=False):
         """Grow chain with configurational bias."""
 
         # Set method for calculating weights and selecting domain
-        if end_point == None:
+        if endpoint == {}:
             calc_bias = self._calc_rosenbluth
         else:
             calc_bias = self._calc_fixed_end_rosenbluth
@@ -1836,81 +1834,89 @@ class CBMCMovetype(MCMovetype):
         else:
             select_config = self._select_config_with_bias
 
-        # Remaining number of domains
-        N = len(domain_indices)
+        # All position combinations for new domains
+        dimensions = [XHAT, YHAT, ZHAT]
+        directions = [-1, 1]
+        positions = [np.array(j * i) for i in dimensions for j in directions]
+
+        # Position vector of previous domain
+        p_prev = self.trial_system.get_domain_position(chain_index,
+                domain_indices[0])
 
         # Iterate through given indices, growing next domain from current index
-        for i, domain_index in enumerate(domain_indices[:-1]):
-            new_domain_index = domain_indices[i + 1]
-            N -= 1
+        for i, domain_i in enumerate(domain_indices[:-1]):
+            new_domain_i = domain_indices[i + 1]
 
-            # List possible positions
-            possible_configs = []
-            boltzmann_factors = []
-
-            # Position vector of previous domain
-            r_prev = self.trial_system.get_domain_position(chain_index,
-                    domain_index)
+            # List possible positions and associated boltzmann factors
+            configs = []
+            bfactors = []
 
             # Iterate through all possible new positions
-            for dimension in [XHAT, YHAT, ZHAT]:
-                for direction in [-1, 1]:
+            for position in positions:
 
                 # Trial position vector
-                r_new = np.array(r_prev + direction * dimension)
+                p_new = np.array(p_prev + direction * dimension)
 
                 # Check energies of each configuration
-                occupancy = self.trial_system.get_position_occupancy(r_new)
+                occupancy = self.trial_system.get_position_occupancy(p_new)
+
+                # No contribution from blocked domain
                 if occupancy == BOUND:
                     continue
+
+                # Add energy and configuration if binding possible
                 elif occupancy == UNBOUND:
-                    unbound_domain = self.trial_system.get_unbound_domain(r_new)
+                    unbound_domain = self.trial_system.get_unbound_domain(p_new)
                     orientation = -self.trial_sytem.get_domain_orientation(
                             unbound_domain)
                     try:
                         delta_e = self.trial_system.check_domain_configuration(
-                                r_new)
+                                p_new)
                     except ConstraintViolation:
                         pass
                     else:
-                        possible_configs.append((r_new, orientation))
-                        temp = self.trial_system.temp
-                        boltzmann_factor = math.exp(-delta_e / temp)
-                        boltzmann_factors.append(boltzmann_factor)
+                        configs.append((p_new, orientation))
+                        bfactor = math.exp(-delta_e / self.trial_system.temp)
+                        bfactors.append(bfactor)
+
+                # If unoccupied site, all 6 orientations possible
                 else:
                     num_orientations = 6
-                    possible_configs.append((r_new, num_orientations))
+                    possible_configs.append((p_new, num_orientations))
                     boltzmann_factors.append(6)
 
-        # Check if dead end
-        if possible_configs == []:
-            raise MoveRejection
+            # Check if dead end
+            if possible_configs == []:
+                raise MoveRejection
 
-        # Calculate bias and select position
-        weights = calc_bias(boltzmann_factors, possible_configs, end_point, N)
-        domain = (chain_index, domain_index)
-        selected_config = select_config(domain, weights, possible_configs)
+            # Calculate bias and select position
+            weights = calc_bias(boltzmann_factors, possible_configs)
+            domain = (chain_index, domain_i)
+            selected_config = select_config(domain, weights, possible_configs)
 
-        # Set new configuration
-        p_new = selected_config[0]
-        if type(selected_config[1]) == int:
+            # If unnoccupied lattice site, randomly select orientation
+            p_new = p_prev = selected_config[0]
+            if type(selected_config[1]) == int:
+                o_new = self._select_random_orientation()
+                self.trial_system.set_domain_configuration(
+                        chain_index, new_domain_i, p_new, o_new)
 
-            # Randomly select new orientation
-            dimension = random.choice([XHAT, YHAT, ZHAT])
-            direction = random.randrange(-1, 2, 2)
-            o_new = direction * dimension
-            self._trial_system.set_domain_configuration(
-                    chain_index, new_domain_index, r_new, o_new)
-        else:
-            o_new = selected_config[1]
-            self._trial_system.set_checked_domain_configuration(
-                    chain_index, new_domain_index, r_new, o_new)
+            # Otherwise use complimentary orientation
+            else:
+                o_new = selected_config[1]
+                self.trial_system.set_checked_domain_configuration(
+                        chain_index, new_domain_i, p_new, o_new)
+
+            # Update endpoints
+            endpoints['steps'] -= 1
 
         return
 
 
 class ExchangeCBMCMovetype(CBMCMovetype):
     """CB staple exchange movetype."""
+
+    NORMLIZE THE BIAS
 
     def attempt_move(self):
         if random.random() < 0.5:
@@ -2051,11 +2057,125 @@ class ExchangeCBMCMovetype(CBMCMovetype):
 
 class RegrowthCBMCMovetype(CBMCMovetype):
 
+    def __init__(origami_system, *args):
+        self.endpoints = {}
+        self._ideal_random_walks = IdealRandomWalks()
+        if origami_system.cyclic:
+            self._select_scaffold_indices = self._select_scaffold_indices_linear
+        else:
+            self._select_scaffold_indices = self._select_scaffold_indices_cyclic
+
+        super().__init__(origami_system, *args)
+
     def attempt_move(self):
         raise NotImplementedError
 
+    def _calc_fixed_end_rosenbluth(self, weights, configs):
+        """Return fixed endpoint Rosenbluth factor and modify weights."""
+        for i, config in enumerate(configs):
+            start = config[0]
+            end = self.endpoints['position']
+            steps = self.endpoints['steps']
+            num_walks = self._ideal_random_walks(start, end, steps)
+            weight[i] = weight[i] * num_walks
+
+        return self._calc_rosenbluth_and_select(weights)
+
+    def _select_scaffold_indices_linear(self):
+        """Return scaffold indices between two random segments."""
+
+        # Randomly select end points
+        start_domain_i = end_domain_index = random.randrange(
+                self.scaffold_length)
+        while start_domain_i == end_domain_i:
+            end_domain_i = random.randrange(self.scaffold_length)
+
+        # Ensure start domain is 5'
+        if start_domain_i > end_domain_i:
+            start_domain_i, end_domain_i = end_domain_i, start_domain_i
+
+        scaffold_indices = range(start_domain_i, end_domain_i)
+
+        # Set endpoint (always 3')
+        try:
+            endpoint = self.trial_system.get_domain_position(SCAFFOLD_INDEX,
+                    end_domain_i + 1)
+        except KeyError:
+            pass
+        else:
+            self._endpoints.append(endpoint)
+        
+        return scaffold_indices
+
+    def _select_scaffold_indices_cyclic(self):
+        """Return scaffold indices between two random segments."""
+
+        # Randomly select end points
+        start_domain_i = end_domain_index = random.randrange(
+                self.scaffold_length)
+        while start_domain_i == end_domain_i:
+            end_domain_i = random.randrange(self.scaffold_length)
+
+        # Ensure start domain is 5'
+        if start_domain_i > end_domain_i:
+            start_domain_i, end_domain_i = end_domain_i, start_domain_i
+
+        # Select direction to regrow
+        direction = random.randrange(2)
+        if direction == 1:
+            pass
+        else:
+            start_domain_i, end_domain_i = end_domain_i, start_domain_i
+
+        # Create index list
+        scaffold_indices = range(start_domain_i, start_domain_i +
+                end_domain_i)
+
+        # Wrap indices
+        for i, scaffold_domain_i in scaffold_indices:
+            if scaffold_domain_i >= self.scaffold_length:
+                scaffold_domain_i -= self.scaffold_length
+                scaffold_indices[i] = scaffold_domain_i
+
+        # Set endpoint
+        endpoint_i = end_domain_i + 1
+        if endpoint_i == self.scaffold_length:
+            endpoint_i = 0
+        else:
+            pass
+
+        endpoint.append(self.trial_system.get_domain_position(SCAFFOLD_INDEX,
+                endpoint_i))
+
+        return scaffold_indices
+
+    def _find_bound_domains(self, scaffold_indices):
+        """Find all bound staples and return with bound scaffold domains.
+
+        Includes only bound scaffold domains in given indices.
+        """
+        staples = {}
+        for domain_index in scaffold_indices:
+
+            # Check if scaffold domain bound
+            staple_domain = self.accepted_system.get_bound_domain(
+                    SCAFFOLD_INDEX, domain_index)
+            if staple_domain == ():
+                continue
+            else:
+                staple_index, staple_domain_i = staple_domain
+                if not staple_index in staples:
+                    staples[staple_index] = []
+                else:
+                    pass
+
+                staples[staple_index] = (staple_domain_i, domain_index)
+
+        return staples
+
 
 class StapleRegrowthCBMCMovetype(RegrowthCBMCMovetype):
+    """CB staple regrowth movetype."""
 
     def attempt_move(self):
         """Regrow random staple."""
@@ -2143,15 +2263,6 @@ class StapleRegrowthCBMCMovetype(RegrowthCBMCMovetype):
 class ScaffoldRegrowthCBMCMovetype(RegrowthCBMCMovetype):
     """CB scaffold regrowth movetype."""
 
-    def __init__(origami_system, *args):
-        self._endpoints = []
-        if origami_system.cyclic:
-            self._select_scaffold_indices = self._select_scaffold_indices_linear
-        else:
-            self._select_scaffold_indices = self._select_scaffold_indices_cyclic
-
-        super().__init__(origami_system, *args)
-
     def attempt_move():
         """Randomly regrow terminal section of scaffold and bound staples.
 
@@ -2163,7 +2274,7 @@ class ScaffoldRegrowthCBMCMovetype(RegrowthCBMCMovetype):
         scaffold_indices = self._select_scaffold_indices()
 
         # Find bound staples and all complimentary domains
-        staples = self._find_bound_staples(scaffold_indices)
+        staples = self._find_bound_staples_with_compliments(scaffold_indices)
 
         # Unassign scaffold domains
         delta_e = 0
@@ -2180,14 +2291,14 @@ class ScaffoldRegrowthCBMCMovetype(RegrowthCBMCMovetype):
         self._bias *= math.exp(delta_e / self.trial_system.temp)
 
         # Regrow scaffold
-        if self._end_points == []:
-            end_point = None
+        if self._endpoints == []:
+            endpoint = None
         else:
-            end_point = self._end_points[0]
+            endpoint = self._endpoints[0]
 
         try:
             self._grow_chain(SCAFFOLD_INDEX, scaffold_indices,
-                    end_point=end_point)
+                    endpoint=endpoint)
         except MoveRejection:
             accepted = False
             return accepted
@@ -2240,7 +2351,7 @@ class ScaffoldRegrowthCBMCMovetype(RegrowthCBMCMovetype):
 
         # Regrow scaffold (same endpoint)
             self._grow_chain(SCAFFOLD_INDEX, scaffold_indices,
-                    end_point=end_point)
+                    endpoint=endpoint)
 
         # Regrow staples
         for staple_index, bound_domains in staples.items():
@@ -2271,94 +2382,260 @@ class ScaffoldRegrowthCBMCMovetype(RegrowthCBMCMovetype):
 
         return accepted
 
-    def _find_bound_domains(self, scaffold_indices):
-        """Find all bound staples and return with bound scaffold domains.
 
-        Includes only bound scaffold domains in given indices.
+class ConservedTopologyCBMCMovetype(RegrowthCBMCMovetype):
+    """CB constant topology scaffold/staple regrowth movetype."""
+
+    def attempt_move(self):
+        """Regrow scaffold and staples with fixed topology."""
+
+        # Pick scaffold segment to regrow
+        scaffold_indices = self._select_scaffold_indices()
+
+        # Find and classify all bound staples
+        staples = self._find_bound_domains(scaffold_indices)
+        staple_types = self._classify_staples(staples, scaffold_indices)
+        initial_endpoints = self.endpoints
+
+        # Unassign scaffold and non-externaly bound staples
+        self._unassign_domains(scaffold_indices, staples)
+
+        # Regrow scaffold and staples
+        self._grow_scaffold_and_staples(scaffold_indices, staples, staple_types)
+
+        # Regrow in old conformation
+        trial_system = copy.deepcopy(self._trial_system)
+        new_bias = self._bias
+        self._bias = 1
+        self.endpoints = initial_endpoints
+
+        # Unassign scaffold and non-externaly bound staples
+        self._unassign_domains(scaffold_indices, staples)
+
+        # Regrow scaffold and staples
+        self._grow_scaffold_and_staples(scaffold_indices, staples, staple_types)
+
+        # Test acceptance
+        ratio = bias_new / self._bias
+        if self._test_acceptence(ratio):
+            self._accepted_system = trial_system
+            accepted = True
+        else:
+            accepted = False
+
+        return accepted
+
+    def _classify_staples(self, staples, scaffold_indices):
+        """Find and classify all staples bound to give indices.
+
+        Returns a dictionary with single, multiple, and external keys to bound
+        staples.
         """
-        staples = {}
-        for domain_index in scaffold_indices:
+        self.endpoints['singly_bound'] = []
+        self.endpoints['multiply_bound'] = []
+        for staple_index, staple in staples.values():
+            staple_length = self.trial_system.chain_lengths[staple_index]
 
-            # Check if scaffold domain bound
-            staple_domain = self.accepted_system.get_bound_domain(
-                    SCAFFOLD_INDEX, domain_index)
-            if staple_domain == ():
-                continue
+            # Check unbound domains if bound to another part of scaffold
+            for staple_domain_i in range(staple_length):
+                if filter(lambda x: x[0] == staple_domain_i, staple) != []:
+                    domain = (staple_index, staple_domain_i)
+                    bound_domain == self.trial_system.get_bound_domain(*domain)
+                    if bound_domain != ():
+                        for domain in staple:
+                            self.endpoints['indices'].append(domain[1])
+                            position = self.trial_system.get_domain_position(
+                                    *domain)
+                            self.endpoints['positions'].append(position)
+                            Ni = domain[1] - scaffold_indices[0]
+
+                            # Correct if cyclic
+                            if Ni < 0:
+                                Ni = (domains[1] + self.scaffold_length -
+                                        scaffold_indices)
+
+                            np.concatenate([self.endpoints['steps'], Ni])
+
+                        del staples[staple_index]
+                        break
+
+            # If no externally bound domains, save possible growth points
             else:
-                staple_index, staple_domain_i = staple_domain
-                if not staple_index in staples:
-                    staples[staple_index] = []
+                if len(staple) == 1:
+                    staple_types['singly_bound'].append(staple[0][1])
                 else:
-                    pass
+                    scaffold_domains = [pair[1] for pair in staple]
+                    staple_types['multiply_bound'].extend(scaffold_domains)
 
-                staples[staple_index] = (staple_domain_i, domain_index)
+        return staple_types
 
-        return staples
+    def _unassign_domains(self, scaffold_indices, staples):
+        """Unassign all give scaffold and non-externaly bound staple domains."""
 
-    def _select_scaffold_indices_linear(self):
-        """Return scaffold indices between two random segments."""
+        # Unassign scaffold domains
+        delta_e = 0
+        for domain_index in scaffold_indices[1:]:
+            delta_e += self.trial_system.unassign_domain(SCAFFOLD_INDEX,
+                    domain_index)
 
-        # Randomly select end points
-        scaffold_length = self._accepted_system.chain_lengths[SCAFFOLD_INDEX]
-        start_domain_i = end_domain_index = random.randrange(scaffold_length)
-        while start_domain_i == end_domain_i:
-            end_domain_i = random.randrange(scaffold_length)
+        # Unassign staples
+        for staple_index in staples.keys():
+            for domain_index in range(self._trial_system.chain_lengths[staple_index]):
+                delta_e += self._trial_system.unassign_domain(staple_index,
+                    domain_index)
 
-        # Ensure start domain is 5'
-        if start_domain_i > end_domain_i:
-            start_domain_i, end_domain_i = end_domain_i, start_domain_i
+        self._bias *= math.exp(delta_e / self.trial_system.temp)
 
-        scaffold_indices = range(start_domain_i, end_domain_i)
+    def _calc_fixed_end_rosenbluth(self, weights, configs):
+        """Return fixed endpoint Rosenbluth factor and modify weights."""
+        for i, config in enumerate(configs):
+            start_point = config[0]
+            num_walks = 1
+            for endpoint_i, in range(len(self.endpoints['indices'])):
+                endpoint_p = endpoint['positions'][endpoint_i]
+                endpoint_s = endpoint['steps'][endpoint_i]
+                num_walks *= self._ideal_random_walks(start_point, endpoint_p,
+                        endpoint_s)
 
-        # Set endpoint (always 3')
+            weight[i] = weight[i] * num_walks
+
+        return self._calc_rosenbluth_and_select(weights)
+
+    def _grow_staple_and_update_endpoints(self, domain_i, staple_types,
+            staples):
+        """Grow staples, update endpoints, and return modified staple_types."""
+
+        # Grow singly bound staple if present
+        if domain_i in staple_types['singly_bound'].keys():
+            staple_domain = staple_types['singly_bound'][domain_i]
+            self._grow_staple(staple_domain, domain_i)
+            del staple_types['singly_bound'][domain_i]
+
+        # Grow multiply bound staple and add endpoints if present
+        elif domain_i in staple_types['multiply_bound'].keys():
+            staple_domain = staple_types['multiply_bound'][domain_i]
+            self._grow_staple(staple_domain, domain_i)
+            del staple_types['multiply_bound'][domain_i]
+
+            # Add remaining staple domains to endpoints
+            staple_index = staple_domain[0]
+            staples[staple_index].remove((staple_domain, domain_i))
+            for staple_domain_i, scaffold_domain_i in staples[staple_index]:
+                self.endpoints['indices'].append(scaffold_domain_i)
+                position = self.trial_system.get_domain_position(
+                        staple_index, staple_domain_i)
+                self.endpoints['position'].append(position)
+                Ni = scaffold_domain_i - domain_i
+
+                # Correct Ni if cyclic
+                if Ni < 0:
+                    Ni = scaffold_domain_i + self.scaffold_length- domain_i
+
+                np.concatenate(self.endpoints['steps'], [Ni])
+                del staple_types['multiply_bound'][scaffold_domain_i]
+
+        # Otherwise continue with scaffold
+        else:
+            pass
+
+        return staple_types
+
+    def _update_endpoints(self, domain_i):
         try:
-            endpoint = self.trial_system.get_domain_position(SCAFFOLD_INDEX,
-                    end_domain_i + 1)
-        except KeyError:
+            endpoint_i = self.endpoints['indices'].index(domain_i)
+        except ValueError:
             pass
         else:
-            self._endpoints.append(endpoint)
-        
-        return scaffold_indices
+            del self.endpoints['indices'][endpoint_i]
+            del self.endpoints['positions'][endpoint_i]
+            del self.endpoints['steps'][endpoint_i]
 
-    def _select_scaffold_indices_cyclic(self):
-        """Return scaffold indices between two random segments."""
+        endpoints['steps'] -= 1
 
-        # Randomly select end points
-        scaffold_length = self._accepted_system.chain_lengths[SCAFFOLD_INDEX]
-        start_domain_i = end_domain_index = random.randrange(scaffold_length)
-        while start_domain_i == end_domain_i:
-            end_domain_i = random.randrange(scaffold_length)
+    def _grow_scaffold_and_staples(self, scaffold_indices, staples,
+                staple_types):
+        """Grow scaffold and staple chains."""
 
-        # Ensure start domain is 5'
-        if start_domain_i > end_domain_i:
-            start_domain_i, end_domain_i = end_domain_i, start_domain_i
+        # All position combinations for new domains
+        dimensions = [XHAT, YHAT, ZHAT]
+        directions = [-1, 1]
+        positions = [np.array(j * i) for i in dimensions for j in directions]
 
-        # Select direction to regrow
-        direction = random.randrange(2)
-        if direction == 1:
-            pass
-        else:
-            start_domain_i, end_domain_i = end_domain_i, start_domain_i
+        # Position vector of previous domain
+        p_prev = self.trial_system.get_domain_position(chain_index,
+                domain_indices[0])
 
-        # Create index list
-        scaffold_indices = range(start_domain_i, start_domain_i +
-                end_domain_i)
+        # Iterate through given indices, growing next domain from current index
+        for i, domain_i in enumerate(domain_indices[:-1]):
+            new_domain_i = domain_indices[i + 1]
 
-        # Wrap indices
-        for i, scaffold_domain_i in scaffold_indices:
-            if scaffold_domain_i >= scaffold_length:
-                scaffold_domain_i -= scaffold_length
-                scaffold_indices[i] = scaffold_domain_i
+            # Grow staples
+            grow_staple_and_update_endpoints(domain_i, staple_types, staples)
 
-        # Set endpoint
-        endpoint_i = end_domain_i + 1
-        if endpoint_i == scaffold_length:
-            endpoint_i = 0
-        else:
-            pass
+            # List of tuples of position and orientations (if bound, orientation
+            # vector, otherwise the number of possible orientation (6)
+            configs = []
 
-        endpoint.append(self.trial_system.get_domain_position(SCAFFOLD_INDEX,
-                endpoint_i)
+            # List of associated boltzmann factors
+            bfactors = []
 
-        return scaffold_indices
+            # Iterate through all possible new positions
+            for position in positions:
+
+                # Trial position vector
+                p_new = p_prev + position
+
+                # Check energies of each configuration
+                occupancy = self.trial_system.get_position_occupancy(p_new)
+
+                # No contribution from blocked domain
+                if occupancy == BOUND:
+                    continue
+
+                # Add energy and configuration if binding possible
+                elif occupancy == UNBOUND:
+                    unbound_domain = self.trial_system.get_unbound_domain(p_new)
+                    orientation = -self.trial_sytem.get_domain_orientation(
+                            unbound_domain)
+                    try:
+                        delta_e = self.trial_system.check_domain_configuration(
+                                p_new)
+                    except ConstraintViolation:
+                        pass
+                    else:
+                        configs.append((p_new, orientation))
+                        bfactor = math.exp(-delta_e / self.trial_system.temp)
+                        bfactors.append(bfactor)
+
+                # If unoccupied site, all 6 orientations possible
+                else:
+                    num_orientations = 6
+                    possible_configs.append((p_new, num_orientations))
+                    boltzmann_factors.append(6)
+
+            # Check if dead end
+            if possible_configs == []:
+                raise MoveRejection
+
+            # Calculate bias and select position
+            weights = calc_bias(boltzmann_factors, possible_configs)
+            domain = (chain_index, domain_i)
+            selected_config = select_config(domain, weights, possible_configs)
+
+            # If unnoccupied lattice site, randomly select orientation
+            p_new = p_prev = selected_config[0]
+            if type(selected_config[1]) == int:
+                o_new = self._select_random_orientation()
+                self.trial_system.set_domain_configuration(
+                        chain_index, new_domain_i, p_new, o_new)
+
+            # Otherwise use complimentary orientation
+            else:
+                o_new = selected_config[1]
+                self.trial_system.set_checked_domain_configuration(
+                        chain_index, new_domain_i, p_new, o_new)
+
+            # Update endpoints
+            self._update_endpoints(domain_i)
+
+        return
