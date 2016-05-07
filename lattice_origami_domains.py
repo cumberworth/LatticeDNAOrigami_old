@@ -349,13 +349,6 @@ class OrigamiSystem:
         # Domain sequences
         self.sequences = input_file.sequences
 
-        # Check all sequences are the same length
-        seq_l = len(self.sequences[0])
-        for sequence in self.sequences:
-            if seq_l != len(sequence):
-                print('Domain sequences not all equal length.')
-                sys.exit()
-
         # Calculate and store hybridization energies
         self._hybridization_energies = []
         for sequence in self.sequences:
