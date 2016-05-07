@@ -203,7 +203,7 @@ def calc_hybridization_energy(sequence, T, cation_M):
     # NN pair energies
     DH_stack = 0
     DS_stack = 0
-    for base_index in range(0, len(sequence), 2):
+    for base_index in range(0, len(sequence) - 1):
         first_pair = sequence[base_index : base_index + 2]
         second_pair = complimentary_sequence[base_index : base_index + 2]
         key = first_pair + '/' + second_pair
