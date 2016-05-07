@@ -1067,11 +1067,11 @@ class OutputFile:
     def check_and_write(self, origami_system, step):
         """Check property write frequencies and write accordingly."""
         if value_is_multiple(step, self._config_write_freq):
-            self._write_configuration(origami_system, step)
+            self.write_configuration(origami_system, step)
         else:
             pass
         if value_is_multiple(step, self._count_write_freq):
-            self._write_staple_domain_count(origami_system)
+            self.write_staple_domain_count(origami_system)
 
         # Move types and acceptances
 
@@ -1091,7 +1091,7 @@ class JSONOutputFile(OutputFile):
     def write_seed(self, seed):
         self.json_origami['origami']['seed'] = seed
 
-    def _write_configuration(self, origami_system, step):
+    def write_configuration(self, origami_system, step):
         self.json_origami['origami']['configurations'].append({})
         current_config = self.json_origami['origami']['configurations'][-1]
         current_config['step'] = step
@@ -1211,7 +1211,7 @@ class HDF5OutputFile(OutputFile):
         # h5py docs recommend wrapping byte strings in np.void
         self.hdf5_origami['origami'].attrs['seed'] = np.void(seed)
 
-    def _write_staple_domain_count(self, origami_system):
+    def write_staple_domain_count(self, origami_system):
         write_index = self._count_writes
         self._count_writes += 1
         num_staples = origami_system.num_staples
@@ -1220,7 +1220,7 @@ class HDF5OutputFile(OutputFile):
         self.hdf5_origami[count_key].resize(self._count_writes, axis=0)
         self.hdf5_origami[count_key][write_index] = (num_staples, num_domains)
 
-    def _write_configuration(self, origami_system, step):
+    def write_configuration(self, origami_system, step):
         write_index = self._config_writes
         self._config_writes += 1
         chain_ids = []
@@ -1245,6 +1245,10 @@ class HDF5OutputFile(OutputFile):
 
         self.hdf5_origami['origami/chain_ids'].resize(self._config_writes, axis=0)
         self.hdf5_origami['origami/chain_ids'][write_index] = chain_ids
+
+    def close(self):
+        """Perform any cleanup."""
+        self.hdf5_origami.close()
 
     def _create_chain(self, chain):
         chain_length = len(chain['positions'])
@@ -1274,10 +1278,6 @@ class HDF5OutputFile(OutputFile):
                 maxshape=(None, chain_length, 3),
                 compression='gzip',
                 dtype='i')
-
-    def close(self):
-        """Perform any cleanup."""
-        self.hdf5_origami.close()
 
 
 class HDF5InputFile:
