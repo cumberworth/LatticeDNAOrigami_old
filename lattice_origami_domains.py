@@ -15,6 +15,11 @@ import h5py
 import numpy as np
 import scipy.constants
 
+from nearest_neighbour import *
+
+# Avogadro's number
+AN = scipy.constants.N_A
+
 # Scaffold domain index
 SCAFFOLD_INDEX = 0
 
@@ -31,53 +36,6 @@ ACCEPTED = 1
 XHAT = np.array([1, 0, 0])
 YHAT = np.array([0, 1, 0])
 ZHAT = np.array([0, 0, 1])
-
-# Boltzmann constant in J/K
-KB = scipy.constants.k
-
-# Avogadro's number
-AN = scipy.constants.Avogadro
-
-# Molar gas constant
-R = scipy.constants.gas_constant
-
-# J/cal
-J_PER_CAL = 4.184
-
-# santalucia2004; kcal/mol
-NN_ENTHALPY = {
-    'AA/TT': -7.6,
-    'AT/TA': -7.2,
-    'TA/AT': -7.2,
-    'CA/GT': -8.5,
-    'GT/CA': -8.4,
-    'CT/GA': -7.8,
-    'GA/CT': -8.2,
-    'CG/GC': -10.6,
-    'GC/CG': -9.8,
-    'GG/CC': -8.0,
-    'INITIATION': 0.2,
-    'TERMINAL_AT_PENALTY': 2.2,
-    'SYMMETRY_CORRECTION': 0}
-
-# kcal/mol/K
-NN_ENTROPY = {
-    'AA/TT': -0.0213,
-    'AT/TA': -0.0204,
-    'TA/AT': -0.0213,
-    'CA/GT': -0.0227,
-    'GT/CA': -0.0224,
-    'CT/GA': -0.0210,
-    'GA/CT': -0.0222,
-    'CG/GC': -0.0272,
-    'GC/CG': -0.0244,
-    'GG/CC': -0.0199,
-    'INITIATION': -0.0057,
-    'TERMINAL_AT_PENALTY': 0.0069,
-    'SYMMETRY_CORRECTION': -0.0014}
-
-COMPLIMENTARY_BASE_PAIRS = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G'}
-
 
 class MOVETYPE(Enum):
     IDENTITY = 0
@@ -119,6 +77,22 @@ def value_is_multiple(value, multiple):
         is_multiple = False
 
     return is_multiple
+
+
+def molarity_to_lattice_volume(molarity, lattice_site_volume):
+    """Given a molarity, calculate the volume that cancels the fugacity.
+
+    Volume is in units of number of lattice sites.
+    """
+    # Number of lattice sites per L (1 L * (1000) cm^3 / L * m^3 / (10^2)^3 cm^3)
+    sites_per_litre = 1e-3 / lattice_site_volume
+
+    # u = KB*T*ln(p), where p is the number of particles per lattice site
+    # g = exp(1/(-KB*T)*u) = exp(ln(p)) = p
+    # V * p = 1, V = 1 / p
+    # So just convert molarity to number of particles per lattice site
+    V = 1 / (molarity * AN / sites_per_litre)
+    return V
 
 
 def rotate_vector_half(vector, rotation_axis):
@@ -178,89 +152,6 @@ def rotate_vector_quarter(vector, rotation_axis, direction):
         vector[1] = direction * -x
 
     return vector
-
-
-def calc_hybridization_energy(sequence, T, cation_M):
-    """Calculate hybridization energy of domains with NN model.
-
-    OUtputs energies in K (avoid multiplying by KB when calculating acceptances.
-    Sequences are assumed to be 5' to 3'.
-
-    cation_M -- Total cation molarity.
-    """
-    complimentary_sequence = calc_complimentary_sequence(sequence)
-
-    # Initiation free energy
-    DH_init = NN_ENTHALPY['INITIATION']
-    DS_init = NN_ENTROPY['INITIATION']
-
-    # Symmetry penalty for palindromic sequences
-    if sequence_is_palindromic(sequence):
-        DS_sym = NN_ENTROPY['SYMMETRY_CORRECTION']
-    else:
-        DS_sym = 0.
-
-    # NN pair energies
-    DH_stack = 0
-    DS_stack = 0
-    for base_index in range(0, len(sequence) - 1):
-        first_pair = sequence[base_index : base_index + 2]
-        second_pair = complimentary_sequence[base_index : base_index + 2]
-        key = first_pair + '/' + second_pair
-
-        # Not all permutations are included in dict as some reversals have
-        # identical energies
-        try:
-            DH_stack += NN_ENTHALPY[key]
-            DS_stack += NN_ENTROPY[key]
-        except KeyError:
-            key = key[::-1]
-            DH_stack += NN_ENTHALPY[key]
-            DS_stack += NN_ENTROPY[key]
-
-    # Terminal AT penalties
-    terminal_AT_pairs = 0
-    for sequence_index in [0, -1]:
-        if sequence[sequence_index] in ['A', 'T']:
-            terminal_AT_pairs += 1
-
-    if terminal_AT_pairs > 0:
-        DH_at = NN_ENTHALPY['TERMINAL_AT_PENALTY'] * terminal_AT_pairs
-        DS_at = NN_ENTROPY['TERMINAL_AT_PENALTY'] * terminal_AT_pairs
-    else:
-        DH_at = 0
-        DS_at = 0
-
-    DH_hybrid = DH_init + DH_stack + DH_at
-    DS_hybrid = DS_init + DS_sym + DS_stack + DS_at
-
-    # Apply salt correction
-    DS_hybrid = DS_hybrid + (0.368 * (len(sequence) / 2) * math.log(cation_M))/1000
-
-    DG_hybrid = DH_hybrid - T * DS_hybrid
-
-    # Convert from kcal/mol to K (so avoid KB later)
-    DG_hybrid = DG_hybrid * J_PER_CAL * 1000 / R
-
-    return DG_hybrid
-
-
-def calc_complimentary_sequence(sequence):
-    """Return the complimentary DNA sequence."""
-    complimentary_seq_list = []
-    for base in sequence:
-        complimentary_seq_list.append(COMPLIMENTARY_BASE_PAIRS[base])
-
-    complimentary_sequence = ''.join(complimentary_seq_list)
-    return complimentary_sequence
-
-
-def sequence_is_palindromic(sequence):
-    """True if reverse complimenet is equal to given sequence."""
-    complimentary_sequence = calc_complimentary_sequence(sequence)
-    reverse_complimentary_sequence = complimentary_sequence[::-1]
-    palindromic = reverse_complimentary_sequence == sequence
-    return palindromic
 
 
 class IdealRandomWalks:
@@ -1038,6 +929,16 @@ class OrigamiSystem:
 class OrigamiSystemEight(OrigamiSystem):
     """Origami systems with 8 bp domains."""
 
+    def __init__(self, input_file, step, temp, strand_M, cation_M):
+
+        # Volume of lattice site (m)
+        self.lattice_site_volume = 0.332e-9 * 8 * 2e-9 * 2e-9
+
+        # System volume
+        V = molarity_to_lattice_volume(strand_M, self.lattice_site_volume)
+        self.volume = V
+        super().__init__(input_file, step, temp, cation_M)
+
     def _check_twist_constraint(self, next_dr, orientation_1, orientation_2):
         orientation_1_r = (rotate_vector_quarter(orientation_1, next_dr, -1))
         if all(orientation_1_r == orientation_2):
@@ -1050,6 +951,16 @@ class OrigamiSystemEight(OrigamiSystem):
 
 class OrigamiSystemSixteen(OrigamiSystem):
     """Origami systems with 16 bp domains."""
+
+    def __init__(self, input_file, step, temp, strand_M, cation_M):
+
+        # Volume of lattice site (m)
+        self.lattice_site_volume = 0.332e-9 * 16 * 2e-9 * 2e-9
+
+        # System volume
+        V = molarity_to_lattice_volume(strand_M, self.lattice_site_volume)
+        self.volume = V
+        super().__init__(input_file, step, temp, cation_M)
 
     def _check_twist_constraint(self, next_dr, orientation_1, orientation_2):
         orientation_1_r = rotate_vector_half(orientation_1, next_dr)
@@ -1654,8 +1565,8 @@ class ExchangeMMCMovetype(MMCMovetype):
         Ni = self.accepted_system.get_num_staples(identity)
         ratio = boltz_factor / (Ni + 1)
 
-        # Correct for overcounts (can't call normal method)
-        p_accept = min(1, ratio) / overcounts
+        # Correct for overcounts and insertint to subset of volume
+        p_accept = min(1, ratio) / overcounts / self.trial_system.volume
         if p_accept == 1:
             accept = True
         else:
@@ -2054,8 +1965,8 @@ class ExchangeCBMCMovetype(CBMCMovetype):
         # Subtract one as I don't multiply the first weight by k
         ratio = self._bias / (Ni + 1) / k**(length - 1)
 
-        # Correct for overcounts (can't call normal method)
-        p_accept = min(1, ratio) / overcounts
+        # Correct for overcounts and insertint to subset of volume
+        p_accept = min(1, ratio) / overcounts / self.trial_system.volume
         if p_accept == 1:
             accept = True
         else:
