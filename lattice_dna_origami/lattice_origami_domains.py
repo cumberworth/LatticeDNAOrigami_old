@@ -471,7 +471,6 @@ class OrigamiSystem:
 
         # Update next domain vectors and check distance constraints
         self._update_next_domain(*domain)
-        self._dist_constraints_obeyed(*domain)
 
         # Attempt binding if position occupied in unbound state
         if occupancy == UNBOUND:
@@ -495,12 +494,18 @@ class OrigamiSystem:
         return delta_e
 
     def set_checked_domain_configuration(self, chain_index, domain_index,
-                position, orientation):
+                position, orientation, step):
         """Set domain to previously checked configuration."""
         domain = (chain_index, domain_index)
 
         # Check if give domain identity matches current
         if domain != self._current_domain:
+            raise OrigamiMisuse
+        else:
+            pass
+
+        # Check if step matches current
+        if step != self._current_step:
             raise OrigamiMisuse
         else:
             pass
@@ -553,7 +558,6 @@ class OrigamiSystem:
 
         # Update next domain vectors and check distance constraints
         self._update_next_domain(*domain)
-        self._dist_constraints_obeyed(*domain)
 
         # Attempt binding if position occupied in unbound state
         if occupancy == UNBOUND:
@@ -629,10 +633,10 @@ class OrigamiSystem:
         # Delete next domain vectors
         self._next_domains[chain_index][domain_index] = []
         prev_domain_i = domain_index - 1
-        try:
-            self._next_domains[chain_index][prev_domain_i] = []
-        except IndexError:
-            if self.cyclic and chain_index == SCAFFOLD_INDEX:
+        if prev_domain_i >= 0 and prev_domain_i < self.chain_lengths[0]:
+            ndr = self._next_domains[chain_index][prev_domain_i] = []
+        else:
+            if self.cyclic and chain_i == SCAFFOLD_INDEX:
                 prev_domain_i = self.wrap_cyclic_scaffold(domain_index - 1)
                 self._next_domains[chain_index][prev_domain_i] = []
             else:
@@ -874,27 +878,12 @@ class OrigamiSystem:
 
         return linear
 
-    def _dist_constraints_obeyed(self, chain_i, domain_i):
-        for domain_j in [domain_i - 1, domain_i]:
-            try:
-                ndr = self._next_domains[chain_i][domain_j]
-            except IndexError:
-                continue
-
-            if ndr == []:
-                continue
-            elif all(ndr == np.zeros(3)):
-                continue
-            else:
-                if (ndr**2).sum() != 1:
-                    raise ConstraintViolation
-
     def _update_next_domain(self, chain_i, domain_i):
         """Update next domain vectors."""
         for d_i in [domain_i - 1, domain_i]:
-            try:
+            if d_i >= 0 and d_i < self.chain_lengths[0]:
                 ndr = self._next_domains[chain_i][d_i]
-            except IndexError:
+            else:
                 if self.cyclic and chain_i == SCAFFOLD_INDEX:
                     d_i = self.wrap_cyclic_scaffold(d_i)
                 else:
@@ -919,6 +908,11 @@ class OrigamiSystem:
                 continue
 
             ndr = p_j - p_i
+
+            # Check distance constraints obeyed
+            if (ndr**2).sum() != 1:
+                raise ConstraintViolation
+
             self._next_domains[chain_i][d_i] = ndr
 
     def _check_twist_constraint(self, *args):
@@ -1907,7 +1901,7 @@ class CBMCMovetype(MCMovetype):
             self.trial_system.check_domain_configuration(chain_index,
                     domain_i, p_new, o_new, self._step)
             self.trial_system.set_checked_domain_configuration(
-                    chain_index, domain_i, p_new, o_new)
+                    chain_index, domain_i, p_new, o_new, self._step)
 
         # Otherwise use complimentary orientation
         else:
@@ -1917,7 +1911,7 @@ class CBMCMovetype(MCMovetype):
             self.trial_system.check_domain_configuration(chain_index,
                     domain_i, p_new, o_new, self._step)
             self.trial_system.set_checked_domain_configuration(
-                    chain_index, domain_i, p_new, o_new)
+                    chain_index, domain_i, p_new, o_new, self._step)
 
         # Update endpoints
         self._update_endpoints(domain_i)
