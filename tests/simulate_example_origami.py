@@ -2,7 +2,9 @@
 
 """Run a basic simulation of the example origami system."""
 
-from lattice_origami_domains import *
+import sys
+sys.path.append('../')
+from lattice_dna_origami.lattice_origami_domains import *
 
 # Specificy initial configuration by setting input file and step number
 #input_file = JSONInputFile('simple_loop_linear.json')

@@ -15,7 +15,7 @@ import h5py
 import numpy as np
 import scipy.constants
 
-from nearest_neighbour import *
+from lattice_dna_origami.nearest_neighbour import *
 
 # Avogadro's number
 AN = scipy.constants.N_A
