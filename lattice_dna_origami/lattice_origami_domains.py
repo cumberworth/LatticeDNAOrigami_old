@@ -955,7 +955,8 @@ class OrigamiSystemSixteen(OrigamiSystem):
     def __init__(self, input_file, step, temp, strand_M, cation_M):
 
         # Volume of lattice site (m)
-        self.lattice_site_volume = 0.332e-9 * 16 * 2e-9 * 2e-9
+        #self.lattice_site_volume = 0.332e-9 * 16 * 2e-9 * 2e-9
+        self.lattice_site_volume = 4e-28
 
         # System volume
         V = molarity_to_lattice_volume(strand_M, self.lattice_site_volume)
