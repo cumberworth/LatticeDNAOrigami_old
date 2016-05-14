@@ -1467,6 +1467,23 @@ class MCMovetype:
 
         return delta_e
 
+    def _set_new_staple_growth_point(self, staple_index, staple_domain_i,
+                scaffold_domain_i):
+        """Given scaffold and staple, attempt to bind with correct orientation.
+        """
+        p_growth = self.trial_system.get_domain_position(SCAFFOLD_INDEX,
+                scaffold_domain_i)
+        o_growth = self._select_random_orientation()
+
+        # Attempt to set growth domain
+        try:
+            delta_e = self.trial_system.set_domain_configuration(
+                    staple_index, staple_domain_i, p_growth, o_growth)
+        except ConstraintViolation:
+            raise MoveRejection
+
+        return delta_e
+
     def _select_random_orientation(self):
         """Select a random orientation."""
         return random.choice(self._vectors)
@@ -1623,7 +1640,7 @@ class ExchangeMMCMovetype(MMCMovetype):
         init_num_bound_domains = self.trial_system.num_bound_domains
 
         # Set growth point domain
-        self._delta_e += self._set_staple_growth_point(staple_index,
+        self._delta_e += self._set_new_staple_growth_point(staple_index,
                     staple_domain, scaffold_domain)
 
         # Grow staple
@@ -1809,10 +1826,11 @@ class CBMCMovetype(MCMovetype):
 
     def _calc_rosenbluth(self, weights, *args):
         """Calculate rosenbluth weight and return normalized weights."""
-        rosenbluth_i = np.array(np.sum(weights))
+        rosenbluth_i = sum(weights)
         if rosenbluth_i == 0:
             raise MoveRejection
-        weights /= rosenbluth_i
+
+        weights = (np.array(weights) / rosenbluth_i).tolist()
         self._bias *= rosenbluth_i
         return weights
 
@@ -2028,7 +2046,7 @@ class ExchangeCBMCMovetype(CBMCMovetype):
         init_num_bound_domains = self.trial_system.num_bound_domains
 
         # Set growth point domain and grow staple
-        delta_e = self._set_staple_growth_point(staple_index, staple_domain,
+        delta_e = self._set_new_staple_growth_point(staple_index, staple_domain,
                 scaffold_domain)
         self._bias *= math.exp(-delta_e / self.accepted_system.temp)
         self._grow_staple(staple_index, staple_domain)
@@ -2112,7 +2130,7 @@ class RegrowthCBMCMovetype(CBMCMovetype):
 
     def _calc_fixed_end_rosenbluth(self, weights, configs):
         """Return fixed endpoint weights."""
-        rosenbluth_i = np.array(np.sum(weights))
+        rosenbluth_i = sum(weights)
         self._bias *= rosenbluth_i
         for i, config in enumerate(configs):
             start_point = config[0]
@@ -2125,10 +2143,11 @@ class RegrowthCBMCMovetype(CBMCMovetype):
 
             weights[i] *= num_walks
 
-        bias = np.array(np.sum(weights))
+        bias = sum(weights)
         if bias == 0:
             raise MoveRejection
-        weights /= bias
+
+        weights = (np.array(weights) / bias).tolist()
         return weights
 
     def _select_scaffold_indices_linear(self):
