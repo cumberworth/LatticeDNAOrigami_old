@@ -783,7 +783,15 @@ class OrigamiSystem:
                     domain_j = self.wrap_cyclic_scaffold(domain_j)
 
                 domain_is.append(domain_j)
-                occupancy = self.get_domain_occupancy(chain_i, domain_j)
+
+                # Get occupancy will return incorrect things if negative index given
+                if domain_j >= 0:
+                    occupancy = self.get_domain_occupancy(chain_i, domain_j)
+                else:
+
+                    # More like undefined
+                    occupancy = UNASSIGNED
+
                 occupancies.append(occupancy)
 
             # Check pairs from left to right
