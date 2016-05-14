@@ -1302,7 +1302,7 @@ class GCMCSimulation:
         # Current movetype
         self._movetype = -1
 
-        # Create cumalative probability distribution for movetypes
+        # Create cumulative probability distribution for movetypes
         # List to associate movetype method with index in distribution
         self._movetype_classes = []
         self._movetypes = []
@@ -1819,10 +1819,10 @@ class CBMCMovetype(MCMovetype):
     def _select_config_with_bias(self, weights, configs, **kwargs):
         """Select configuration according to Rosenbluth weights."""
         random_n = random.random()
-        cumalative_prob = 0
+        cumulative_prob = 0
         for i, weight in enumerate(weights):
-            cumalative_prob += weight
-            if random_n < cumalative_prob:
+            cumulative_prob += weight
+            if random_n < cumulative_prob:
                 config = configs[i]
                 break
 
