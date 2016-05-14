@@ -1342,7 +1342,7 @@ class GCMCSimulation:
             print('Movetype probabilities not normalized')
             sys.exit()
 
-    def run(self, num_steps, logging=True):
+    def run(self, num_steps, logging=1):
         """Run simulation for given number of steps."""
 
         for step in range(1, num_steps + 1):
@@ -1358,7 +1358,7 @@ class GCMCSimulation:
             self._output_file.check_and_write(self._origami_system, step)
 
             # Loggging hack
-            if logging:
+            if value_is_multiple(step, logging):
                 print(step, self._movetype, outcome,
                         len(self._origami_system.chain_lengths))
             else:
