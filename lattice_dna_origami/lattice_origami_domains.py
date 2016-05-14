@@ -463,14 +463,19 @@ class OrigamiSystem:
         else:
             pass
 
-        # Save current positions and set to trial
-        cur_r = self._positions[chain_index][domain_index]
         self._positions[chain_index][domain_index] = position
-        cur_o = self._orientations[chain_index][domain_index]
         self._orientations[chain_index][domain_index] = orientation
 
         # Update next domain vectors and check distance constraints
-        self._update_next_domain(*domain)
+        try:
+            self._update_next_domain(*domain)
+        except ConstraintViolation:
+
+            # Remove attempted configuration
+            self._positions[chain_index][domain_index] = []
+            self._orientations[chain_index][domain_index] = []
+            self._update_next_domain(*domain)
+            raise
 
         # Attempt binding if position occupied in unbound state
         if occupancy == UNBOUND:
@@ -478,16 +483,18 @@ class OrigamiSystem:
                 delta_e = self._bind_domain(*domain)
             except ConstraintViolation:
 
-                # Revert to current position
-                self._positions[chain_index][domain_index] = cur_r
-                self._orientations[chain_index][domain_index] = cur_o
+                # Remove attempted configuration
+                self._positions[chain_index][domain_index] = []
+                self._orientations[chain_index][domain_index] = []
+                self._update_next_domain(*domain)
                 raise
         else:
             pass
 
-        # Revert to current position
-        self._positions[chain_index][domain_index] = cur_r
-        self._orientations[chain_index][domain_index] = cur_o
+        # Remove checked configuration
+        self._positions[chain_index][domain_index] = []
+        self._orientations[chain_index][domain_index] = []
+        self._update_next_domain(*domain)
 
         # Update checked list
         self._checked_list.append(tuple(position))
@@ -515,6 +522,7 @@ class OrigamiSystem:
             # Set domain configuration without further checks
             self._positions[chain_index][domain_index] = position
             self._orientations[chain_index][domain_index] = orientation
+            self._update_next_domain(*domain)
             occupancy = self.get_position_occupancy(position)
             unique_index = self._working_to_unique[chain_index]
             domain_key = (unique_index, domain_index)
@@ -550,14 +558,19 @@ class OrigamiSystem:
         else:
             pass
 
-        # Save current positions and set to trial
-        cur_r = self._positions[chain_index][domain_index]
         self._positions[chain_index][domain_index] = position
-        cur_o = self._orientations[chain_index][domain_index]
         self._orientations[chain_index][domain_index] = orientation
 
         # Update next domain vectors and check distance constraints
-        self._update_next_domain(*domain)
+        try:
+            self._update_next_domain(*domain)
+        except ConstraintViolation:
+
+            # Remove attempted configuration
+            self._positions[chain_index][domain_index] = []
+            self._orientations[chain_index][domain_index] = []
+            self._update_next_domain(*domain)
+            raise
 
         # Attempt binding if position occupied in unbound state
         if occupancy == UNBOUND:
@@ -565,9 +578,10 @@ class OrigamiSystem:
                 delta_e = self._bind_domain(*domain)
             except ConstraintViolation:
 
-                # Revert to current position
-                self._positions[chain_index][domain_index] = cur_r
-                self._orientations[chain_index][domain_index] = cur_o
+                # Remove attempted configuration
+                self._positions[chain_index][domain_index] = []
+                self._orientations[chain_index][domain_index] = []
+                self._update_next_domain(*domain)
                 raise
             else:
                 self._update_occupancies_bound(position, domain_key)
@@ -633,7 +647,7 @@ class OrigamiSystem:
         # Delete next domain vectors
         self._next_domains[chain_index][domain_index] = []
         prev_domain_i = domain_index - 1
-        if prev_domain_i >= 0 and prev_domain_i < self.chain_lengths[0]:
+        if prev_domain_i >= 0:
             ndr = self._next_domains[chain_index][prev_domain_i] = []
         else:
             if self.cyclic and chain_i == SCAFFOLD_INDEX:
