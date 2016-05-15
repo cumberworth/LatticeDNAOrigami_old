@@ -1103,14 +1103,15 @@ class HDF5OutputFile(OutputFile):
 
         # Fill attributes
         self.hdf5_origami.attrs['identities'] = filled_identities
-        self.hdf5_origami.attrs['cyclicl'] = origami_system.cyclic
+        self.hdf5_origami.attrs['cyclic'] = origami_system.cyclic
         self.hdf5_origami.attrs['temp'] = origami_system.temp
         self.hdf5_origami.attrs['config_write_freq'] = config_write_freq
         self.hdf5_origami.attrs['count_write_freq'] = count_write_freq
 
         # HDF5 does not allow lists of strings
         sequences = np.array(origami_system.sequences, dtype='a')
-        self.hdf5_origami.attrs['sequences'] = sequences
+        self.hdf5_origami.create_dataset('origami/sequences',
+                data=sequences)
 
         # Setup configuration datasets
         if config_write_freq > 0:
@@ -1243,7 +1244,7 @@ class HDF5InputFile:
         """
 
         # H5py outputs as type 'S', need type 'U'
-        return self._hdf5_origami.attrs['sequences'].astype('U').tolist()
+        return self._hdf5_origami['origami/sequences'].astype('U').tolist()
 
     @property
     def temp(self):
