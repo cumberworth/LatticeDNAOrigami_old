@@ -650,7 +650,7 @@ class OrigamiSystem:
         if prev_domain_i >= 0:
             ndr = self._next_domains[chain_index][prev_domain_i] = []
         else:
-            if self.cyclic and chain_i == SCAFFOLD_INDEX:
+            if self.cyclic and chain_index == SCAFFOLD_INDEX:
                 prev_domain_i = self.wrap_cyclic_scaffold(domain_index - 1)
                 self._next_domains[chain_index][prev_domain_i] = []
             else:
