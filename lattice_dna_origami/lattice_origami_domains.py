@@ -1101,8 +1101,10 @@ class HDF5OutputFile(OutputFile):
             for i in range(remainder):
                 filled_identities[-1].append(0)
 
+        self.hdf5_origami.create_dataset('origami/identities',
+                data=filled_identities)
+
         # Fill attributes
-        self.hdf5_origami.attrs['identities'] = filled_identities
         self.hdf5_origami.attrs['cyclic'] = origami_system.cyclic
         self.hdf5_origami.attrs['temp'] = origami_system.temp
         self.hdf5_origami.attrs['config_write_freq'] = config_write_freq
@@ -1229,7 +1231,7 @@ class HDF5InputFile:
         """Standard format for passing origami domain identities."""
 
         # HDF5 does not allow variable length lists; fill with 0
-        raw = self._hdf5_origami.attrs['identities'].tolist()
+        raw = self._hdf5_origami['origami/identities'].tolist()
         identities = []
         for raw_domain_identities in raw:
             identities.append([i for i in raw_domain_identities if i != 0])
