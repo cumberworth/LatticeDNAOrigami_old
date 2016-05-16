@@ -906,13 +906,13 @@ class OrigamiSystem:
             return constraints_obeyed
 
         # Can't be in the same helix if next domain vectors equal
-        try:
-            ndr2 = self._next_domains[bound_domain[0]][bound_domain[1]]
-        except IndexError:
+        ndr2 = self._next_domains[bound_domain[0]][bound_domain[1]]
+        if ndr2 == []:
             pass
+        elif all(next_dr == ndr2):
+            return False
         else:
-            if all(next_dr == ndr2):
-                return False
+            pass
 
         # Check twist constraint if same helix
         constraints_obeyed = self._check_twist_constraint(next_dr, o_1, o_2)
