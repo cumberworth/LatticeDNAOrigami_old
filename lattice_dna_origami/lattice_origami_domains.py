@@ -260,8 +260,9 @@ class OrigamiSystem:
         self._positions = []
         self._orientations = []
 
-        # Next domain vectors
+        # Next and previous domain vectors
         self._next_domains = []
+        #self._prev_domains = []
 
         # Dictionary with position keys and state values
         self._position_occupancies = {}
@@ -289,6 +290,7 @@ class OrigamiSystem:
             self._positions.append([[]] * num_domains)
             self._orientations.append([[]] * num_domains)
             self._next_domains.append([[]] * num_domains)
+            #self._prev_domains.append([[]] * num_domains)
             self.chain_lengths.append(num_domains)
             previous_position = np.array(chain['positions'][0])
             for domain_index in range(num_domains):
@@ -644,8 +646,10 @@ class OrigamiSystem:
         else:
             pass
 
-        # Delete next domain vectors
+        # Delete next/prev domain vectors
         self._next_domains[chain_index][domain_index] = []
+        #self._prev_domains[chain_index][domain_index] = []
+
         prev_domain_i = domain_index - 1
         if prev_domain_i >= 0:
             ndr = self._next_domains[chain_index][prev_domain_i] = []
@@ -655,6 +659,16 @@ class OrigamiSystem:
                 self._next_domains[chain_index][prev_domain_i] = []
             else:
                 pass
+
+#        next_domain_i = domain_index + 1
+#        if next_domain_i < self.chain_lengths[chain_index]:
+#            ndr = self._prev_domains[chain_index][next_domain_i] = []
+#        else:
+#            if self.cyclic and chain_index == SCAFFOLD_INDEX:
+#                next_domain_i = self.wrap_cyclic_scaffold(domain_index + 1)
+#                self._prev_domains[chain_index][next_domain_i] = []
+#            else:
+#                pass
 
         return delta_e
 
@@ -670,6 +684,7 @@ class OrigamiSystem:
         self._positions.append([[]] * chain_length)
         self._orientations.append([[]] * chain_length)
         self._next_domains.append([[]] * chain_length)
+#        self._prev_domains.append([[]] * chain_length)
         self.chain_lengths.append(chain_length)
         return chain_index
 
@@ -698,6 +713,7 @@ class OrigamiSystem:
         del self._positions[chain_index]
         del self._orientations[chain_index]
         del self._next_domains[chain_index]
+#        del self._prev_domains[chain_index]
         del self.chain_lengths[chain_index]
 
         return delta_e
@@ -786,7 +802,9 @@ class OrigamiSystem:
             pass
 
         # Check constraints between domains and neighbours
-        for chain_i, domain_i in [trial_domain, occupying_domain]:
+        domains = [trial_domain, occupying_domain]
+        for domains_i, domain in enumerate(domains):
+            chain_i, domain_i = domain
 
             # Occupancies and domain indices of the 4 relevant neighbouring domains
             occupancies = []
@@ -810,8 +828,9 @@ class OrigamiSystem:
 
             # Check pairs from left to right
             if occupancies[1] == BOUND:
+                bound_domain = self.get_bound_domain(chain_i, domain_is[1])
                 self._helical_pair_constraints_obeyed(chain_i, domain_is[1],
-                    domain_i)
+                    domain_i, bound_domain)
                 if occupancies[0] == BOUND:
                     self._linear_helix(chain_i, domain_is[0], domain_is[1])
 
@@ -819,8 +838,9 @@ class OrigamiSystem:
                 self._linear_helix(chain_i, domain_is[1], domain_i)
 
             if occupancies[2] == BOUND:
+                bound_domain = domains[domains_i - 1]
                 self._helical_pair_constraints_obeyed(chain_i, domain_i,
-                    domain_is[2])
+                    domain_is[2], bound_domain)
                 if occupancies[3] == BOUND:
                     self._linear_helix(chain_i, domain_i, domain_is[2])
 
@@ -858,10 +878,13 @@ class OrigamiSystem:
 
         return match
 
-    def _helical_pair_constraints_obeyed(self, chain_i, domain_i_1, domain_i_2):
+    def _helical_pair_constraints_obeyed(self, chain_i, domain_i_1, domain_i_2,
+            bound_domain):
         """Return True if domains not in same helix or twist constraints obeyed.
 
         Assumes domain occupancies are bound.
+
+        bound_domain -- domain bound to domain_i_1
         """
 
         # Next domain vector
@@ -871,13 +894,31 @@ class OrigamiSystem:
 
         # Only one allowed configuration not in the same helix
         if all(next_dr == o_1):
-            constraints_obeyed = True
+
+            # If bound chain's previous domain bound to current chain next
+            # domain, can't be a new helix
+            prd = self._calc_prev_domain(*bound_domain)
+            if all(next_dr == prd):
+                constraints_obeyed = False
+            else:
+                constraints_obeyed = True
+
             return constraints_obeyed
+
+        # Can't be in the same helix if next domain vectors equal
+        try:
+            ndr2 = self._next_domains[bound_domain[0]][bound_domain[1]]
+        except IndexError:
+            pass
+        else:
+            if all(next_dr == ndr2):
+                return False
 
         # Check twist constraint if same helix
         constraints_obeyed = self._check_twist_constraint(next_dr, o_1, o_2)
         if not constraints_obeyed:
             raise ConstraintViolation
+
 
         return constraints_obeyed
 
@@ -903,27 +944,24 @@ class OrigamiSystem:
     def _update_next_domain(self, chain_i, domain_i):
         """Update next domain vectors."""
         for d_i in [domain_i - 1, domain_i]:
-            if d_i >= 0 and d_i < self.chain_lengths[0]:
-                ndr = self._next_domains[chain_i][d_i]
-            else:
+            if d_i < 0 or d_i >= self.chain_lengths[chain_i]:
                 if self.cyclic and chain_i == SCAFFOLD_INDEX:
                     d_i = self.wrap_cyclic_scaffold(d_i)
                 else:
                     continue
 
             p_i = self.get_domain_position(chain_i, d_i)
+
             d_j = d_i + 1
-            try:
-                p_j = self.get_domain_position(chain_i, d_j)
-            except IndexError:
+            if d_j < 0 or d_j >= self.chain_lengths[chain_i]:
                 if self.cyclic and chain_i == SCAFFOLD_INDEX:
                     d_j = self.wrap_cyclic_scaffold(d_j)
-                    p_j = self.get_domain_position(chain_i, d_j)
                 else:
                     ndr = np.zeros(3)
                     self._next_domains[chain_i][d_i] = ndr
                     continue
 
+            p_j = self.get_domain_position(chain_i, d_j)
             if p_i == [] or p_j == []:
                 ndr = np.zeros(3)
                 self._next_domains[chain_i][d_i] = ndr
@@ -936,6 +974,58 @@ class OrigamiSystem:
                 raise ConstraintViolation
 
             self._next_domains[chain_i][d_i] = ndr
+
+#    def _update_prev_domain(self, chain_i, domain_i):
+#        """Update next domain vectors."""
+#        for d_i in [domain_i, domain_i + 1]:
+#            if d_i >= 0 and d_i < self.chain_lengths[0]:
+#                if self.cyclic and chain_i == SCAFFOLD_INDEX:
+#                    d_i = self.wrap_cyclic_scaffold(d_i)
+#                else:
+#                    continue
+#
+#            p_i = self.get_domain_position(chain_i, d_i)
+#
+#            d_j = d_i - 1
+#            if d_i < 0 or d_i >= self.chain_lengths[0]:
+#                if self.cyclic and chain_i == SCAFFOLD_INDEX:
+#                    d_j = self.wrap_cyclic_scaffold(d_j)
+#                else:
+#                    pdr = np.zeros(3)
+#                    self._prev_domains[chain_i][d_i] = pdr
+#                    continue
+#
+#            p_j = self.get_domain_position(chain_i, d_j)
+#            if p_i == [] or p_j == []:
+#                pdr = np.zeros(3)
+#                self._prev_domains[chain_i][d_i] = pdr
+#                continue
+#
+#            pdr = p_j - p_i
+#
+#            self._prev_domains[chain_i][d_i] = pdr
+
+    def _calc_prev_domain(self, chain_i, d_i):
+        """Update next domain vectors.
+        
+        Assumes that d_i is always an actual index.
+        """
+
+        p_i = self.get_domain_position(chain_i, d_i)
+        d_j = d_i - 1
+        if d_j < 0 or d_j >= self.chain_lengths[chain_i]:
+            if self.cyclic and chain_i == SCAFFOLD_INDEX:
+                d_j = self.wrap_cyclic_scaffold(d_j)
+            else:
+                return np.zeros(3)
+
+        p_j = self.get_domain_position(chain_i, d_j)
+        if p_i == [] or p_j == []:
+            return np.zeros(3)
+
+        pdr = p_j - p_i
+
+        return pdr
 
     def _check_twist_constraint(self, *args):
         raise NotImplementedError
