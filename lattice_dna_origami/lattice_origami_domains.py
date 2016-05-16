@@ -1733,7 +1733,7 @@ class ExchangeMMCMovetype(MMCMovetype):
         init_num_bound_domains = self.trial_system.num_bound_domains
 
         # Set growth point domain
-        self._delta_e += self._set_new_staple_growth_point(staple_index,
+        self._delta_e += self._set_staple_growth_point(staple_index,
                     staple_domain, scaffold_domain)
 
         # Grow staple
@@ -2139,7 +2139,7 @@ class ExchangeCBMCMovetype(CBMCMovetype):
         init_num_bound_domains = self.trial_system.num_bound_domains
 
         # Set growth point domain and grow staple
-        delta_e = self._set_new_staple_growth_point(staple_index, staple_domain,
+        delta_e = self._set_staple_growth_point(staple_index, staple_domain,
                 scaffold_domain)
         self._bias *= math.exp(-delta_e / self.accepted_system.temp)
         self._grow_staple(staple_index, staple_domain)
