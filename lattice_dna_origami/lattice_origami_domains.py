@@ -900,7 +900,7 @@ class OrigamiSystem:
             ndr2 = self._next_domains[bound_domain[0]][bound_domain[1]]
             if ndr2 == []:
                 pass
-            if all(next_dr == ndr2):
+            elif all(next_dr == ndr2):
                 raise ConstraintViolation
             else:
                 constraints_obeyed = True
