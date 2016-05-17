@@ -895,22 +895,25 @@ class OrigamiSystem:
         # Only one allowed configuration not in the same helix
         if all(next_dr == o_1):
 
-            # If bound chain's previous domain bound to current chain next
+            # If bound chain's next domain bound to current chain next
             # domain, can't be a new helix
-            prd = self._calc_prev_domain(*bound_domain)
-            if all(next_dr == prd):
-                constraints_obeyed = False
+            ndr2 = self._next_domains[bound_domain[0]][bound_domain[1]]
+            if ndr2 == []:
+                pass
+            if all(next_dr == ndr2):
+                raise ConstraintViolation
             else:
                 constraints_obeyed = True
 
             return constraints_obeyed
 
-        # Can't be in the same helix if next domain vectors equal
-        ndr2 = self._next_domains[bound_domain[0]][bound_domain[1]]
-        if ndr2 == []:
+        # Can't be in the same helix if next domain vector equals bound domain
+        # previous domain vector
+        prd = self._calc_prev_domain(*bound_domain)
+        if prd == []:
             pass
-        elif all(next_dr == ndr2):
-            return False
+        elif all(next_dr == prd):
+            raise ConstraintViolation
         else:
             pass
 
@@ -918,7 +921,6 @@ class OrigamiSystem:
         constraints_obeyed = self._check_twist_constraint(next_dr, o_1, o_2)
         if not constraints_obeyed:
             raise ConstraintViolation
-
 
         return constraints_obeyed
 
