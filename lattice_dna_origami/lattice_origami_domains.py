@@ -2254,23 +2254,23 @@ class RegrowthCBMCMovetype(CBMCMovetype):
         while start_domain_i == end_domain_i:
             end_domain_i = random.randrange(self.scaffold_length)
 
-        # Ensure start domain is 5'
-        if start_domain_i > end_domain_i:
-            start_domain_i, end_domain_i = end_domain_i, start_domain_i
-
-        scaffold_indices = range(start_domain_i, end_domain_i + 1)
+        # Select direction to regrow, create index list
+        if start_domain_i < end_domain_i:
+            scaffold_indices = range(start_domain_i, end_domain_i + 1)
+        else:
+            scaffold_indices = range(start_domain_i, end_domain_i - 1, -1)
 
         # No endpoint if regrowing to end
-        if end_domain_i == self.scaffold_length - 1:
+        if end_domain_i in (0, self.scaffold_length - 1):
             pass
 
-        # Set endpoint (always 3')
+        # Set endpoint
         else:
             self._endpoints['indices'].append(end_domain_i)
             endpoint_p = self.trial_system.get_domain_position(SCAFFOLD_INDEX,
                     end_domain_i)
             self._endpoints['positions'].append(endpoint_p)
-            steps = end_domain_i - start_domain_i - 1
+            steps = scaffold_indices.index(end_domain_i) - 1
             self._endpoints['steps'] = np.concatenate([self._endpoints['steps'],
                     [steps]])
 
@@ -2591,13 +2591,7 @@ class ConservedTopologyCBMCMovetype(RegrowthCBMCMovetype):
                     position = self.trial_system.get_domain_position(
                             SCAFFOLD_INDEX, scaffold_domain_i)
                     self._endpoints['positions'].append(position)
-                    Ni = scaffold_domain_i - scaffold_indices[0]
-
-                    # Correct if cyclic
-                    if Ni < 0:
-                        Ni = (domain[1] + self.scaffold_length -
-                                scaffold_indices[0])
-
+                    Ni = scaffold_indices.index(scaffold_domain_i)
                     steps = np.concatenate([self._endpoints['steps'], [Ni]])
                     self._endpoints['steps'] = steps
 
@@ -2642,7 +2636,7 @@ class ConservedTopologyCBMCMovetype(RegrowthCBMCMovetype):
         self._bias *= math.exp(-delta_e / self.trial_system.temp)
 
     def _grow_staple_and_update_endpoints(self, scaffold_domain_i, staple_types,
-            staples, regrow_old=False):
+            staples, scaffold_indices, regrow_old=False):
         """Grow staples, update endpoints, and return modified staple_types."""
 
         # Grow singly bound staple if present
@@ -2672,13 +2666,8 @@ class ConservedTopologyCBMCMovetype(RegrowthCBMCMovetype):
                 position = self.trial_system.get_domain_position(
                         staple_i, staple_domain_j)
                 self._endpoints['positions'].append(position)
-                Ni = scaffold_domain_j - scaffold_domain_i - 1
-
-                # Correct Ni if cyclic
-                if Ni < 0:
-                    Ni = (scaffold_domain_j + self.scaffold_length -
-                            scaffold_domain_i)
-
+                Ni = (scaffold_indices.index(scaffold_domain_j) -
+                        scaffold_indices.index(scaffold_domain_i) - 1)
                 steps = np.concatenate([self._endpoints['steps'], [Ni]])
                 self._endpoints['steps'] = steps
                 del staple_types['multiply_bound'][scaffold_domain_j]
@@ -2714,7 +2703,7 @@ class ConservedTopologyCBMCMovetype(RegrowthCBMCMovetype):
         # Grow staples
         domain_i = scaffold_indices[0]
         self._grow_staple_and_update_endpoints(domain_i, staple_types,
-                staples, regrow_old=regrow_old)
+                staples, scaffold_indices, regrow_old=regrow_old)
         for i, domain_i in enumerate(scaffold_indices[1:]):
 
             # Reset bias calc and endpoint update methods
@@ -2726,5 +2715,5 @@ class ConservedTopologyCBMCMovetype(RegrowthCBMCMovetype):
 
             # Grow staples
             self._grow_staple_and_update_endpoints(domain_i, staple_types,
-                    staples, regrow_old=regrow_old)
+                    staples, scaffold_indices, regrow_old=regrow_old)
 
