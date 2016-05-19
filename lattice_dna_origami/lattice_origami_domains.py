@@ -1323,7 +1323,7 @@ class HDF5InputFile:
         """Standard format for passing origami domain identities."""
 
         # HDF5 does not allow variable length lists; fill with 0
-        raw = self._hdf5_origami['origami/identities'].tolist()
+        raw = np.array(self._hdf5_origami['origami/identities']).tolist()
         identities = []
         for raw_domain_identities in raw:
             identities.append([i for i in raw_domain_identities if i != 0])
