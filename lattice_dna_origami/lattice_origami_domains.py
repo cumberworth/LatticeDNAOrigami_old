@@ -2025,7 +2025,7 @@ class CBMCMovetype(MCMovetype):
             raise MoveRejection
 
         # Calculate bias and select position
-        weights = self._calc_bias(bfactors, configs)
+        weights = self._calc_bias(bfactors, configs, p_prev)
         domain = (chain_index, domain_i)
         selected_config = self._select_config(weights, configs, domain=domain)
 
@@ -2223,10 +2223,10 @@ class RegrowthCBMCMovetype(CBMCMovetype):
     def attempt_move(self):
         raise NotImplementedError
 
-    def _calc_fixed_end_rosenbluth(self, weights, configs):
+    def _calc_fixed_end_rosenbluth(self, weights, configs, p_prev):
         """Return fixed endpoint weights."""
-        rosenbluth_i = sum(weights)
-        self._bias *= rosenbluth_i
+
+        # Bias weights with number of walks
         for i, config in enumerate(configs):
             start_point = config[0]
             num_walks = 1
@@ -2238,7 +2238,17 @@ class RegrowthCBMCMovetype(CBMCMovetype):
 
             weights[i] *= num_walks
 
-        bias = sum(weights)
+        # Calculate number of walks for previous position
+        num_walks = 1
+        for endpoint_i in range(len(self._endpoints['indices'])):
+            endpoint_p = self._endpoints['positions'][endpoint_i]
+            endpoint_s = self._endpoints['steps'][endpoint_i] + 1
+            num_walks *= self._ideal_random_walks.num_walks(p_prev,
+                    endpoint_p, endpoint_s)
+
+        # Modified Rosenbluth
+        bias = sum(weights) / num_walks
+        self._bias *= bias
         if bias == 0:
             raise MoveRejection
 
