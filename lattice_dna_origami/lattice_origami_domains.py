@@ -1338,7 +1338,7 @@ class HDF5InputFile:
         """
 
         # H5py outputs as type 'S', need type 'U'
-        return self._hdf5_origami['origami/sequences'].astype('U').tolist()
+        return np.array(self._hdf5_origami['origami/sequences']).astype('U').tolist()
 
     @property
     def temp(self):
