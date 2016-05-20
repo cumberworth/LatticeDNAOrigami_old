@@ -1165,6 +1165,9 @@ class JSONInputFile:
         """Standard format for passing chain configuration."""
         return self._json_origami['origami']['configurations'][step]['chains']
 
+    def close(self):
+        pass
+
 
 class HDF5OutputFile(OutputFile):
     """HDF5 output file class.
