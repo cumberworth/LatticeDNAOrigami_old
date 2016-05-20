@@ -307,6 +307,9 @@ class OrigamiSystem:
         self._current_domain = ()
         self._current_step = 1
 
+        # Close input file to prevent corruption
+        input_file.close()
+
     @property
     def chains(self):
         """Standard format for passing chain configuration."""
@@ -1371,6 +1374,9 @@ class HDF5InputFile:
             chains.append(chain)
 
         return chains
+
+    def close(self):
+        self.hdf5_origami.close()
 
 
 class GCMCSimulation:
