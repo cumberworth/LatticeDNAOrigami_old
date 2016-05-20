@@ -1376,7 +1376,7 @@ class HDF5InputFile:
         return chains
 
     def close(self):
-        self.hdf5_origami.close()
+        self._hdf5_origami.close()
 
 
 class GCMCSimulation:
