@@ -341,6 +341,18 @@ class OrigamiSystem:
     def num_bound_domains(self):
         return len(self._bound_domains) // 2
 
+    @property
+    def energy(self):
+        """System energy in 1/K."""
+        energy = 0
+
+        # Iterate over all scaffold domains and sum hybridization energies
+        for domain_i in range(self.chain_lengths[SCAFFOLD_INDEX]):
+            if self.get_domain_occupancy(SCAFFOLD_INDEX, domain_i) == BOUND:
+                energy += self.get_hybridization_energy(SCAFFOLD_INDEX, domain_i)
+
+        return energy
+
     def get_num_staples(self, identity):
         """Return number of staples in system of given identity."""
         Ni = len(self._identity_to_index[identity])
@@ -428,7 +440,7 @@ class OrigamiSystem:
         chain_identity = self._chain_identities[chain_index]
         domain_identity = self.identities[chain_identity][domain_index]
 
-        # Because identites start at 1
+        # Because identities start at 1
         energy_index = abs(domain_identity) - 1
         return self._hybridization_energies[energy_index]
 
