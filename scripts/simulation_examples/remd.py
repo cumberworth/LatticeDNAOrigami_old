@@ -5,8 +5,7 @@
 import multiprocessing as multi
 import sys
 import time
-#sys.path.insert(0, '../../lib/lattice_origami_domains')
-sys.path.insert(0, '../')
+sys.path.insert(0, '../../lib/lattice_origami_domains')
 
 from lattice_dna_origami.lattice_origami_domains import *
 
@@ -63,11 +62,22 @@ def exchange_accepted(energy1, energy2, temp1, temp2):
 
     return accept
 
-def replica_exchange(pipes, reps, temps, swaps, replicas):
-    pair = 0
+def replica_exchange(pipes, reps, temps, swaps, replicas, output_root):
+
+    # Keep track of swap counts
+    swap_count = np.zeros(reps - 1, dtype=int)
+    attempt_count = np.zeros(reps - 1, dtype=int)
+
+    # Keep track of swaps
+    swap_file = open(output_root + '.swaps', 'w')
+    for temp in temps:
+        swap_file.write(str(temp) + ' ')
+
+    swap_file.write('\n')
 
     # Indexed by temp index, contains indices to reps
     tempi_to_repi = list(range(reps))
+    pair = 0
     for swap in range(swaps):
 
         # Wait for reps to finish
@@ -95,6 +105,7 @@ def replica_exchange(pipes, reps, temps, swaps, replicas):
 
         # Attempt exchanges on pairs
         for i in range(pair, reps - pair, 2):
+            attempt_count[i] += 1
             temp1 = temps[i]
             temp2 = temps[i + 1]
             repi1 = tempi_to_repi[i]
@@ -102,6 +113,7 @@ def replica_exchange(pipes, reps, temps, swaps, replicas):
             energy1 = energies[repi1]
             energy2 = energies[repi2]
             if exchange_accepted(energy1, energy2, temp1, temp2):
+                swap_count[i] += 1
                 repi1, repi2 = repi2, repi1
                 tempi_to_repi[i] = repi1
                 tempi_to_repi[i + 1] = repi2
@@ -117,8 +129,19 @@ def replica_exchange(pipes, reps, temps, swaps, replicas):
         else:
             pair = 0
             
-        # Print replica temperatures
-        print(*tempi_to_repi, sep=' ')
+        # Print replica indices
+        for repi in tempi_to_repi:
+            swap_file.write(str(repi) + ' ')
+
+        swap_file.write('\n')
+
+        # Print exchange frequencies
+        exchange_freqs = swap_count / attempt_count
+        for i in range(reps - 1):
+            print(temps[i], temps[i + 1], swap_count[i], attempt_count[i],
+                    exchange_freqs[i])
+
+        print()
 
     # Kill all replicas (this a very harsh method)
     for replica in replicas:
@@ -128,7 +151,7 @@ def main():
     reps = 4
     temps = [320, 330, 340, 350]
 
-    swap_freq = 10000
+    swap_freq = 1000
     prod_steps = 100000
     if not value_is_multiple(prod_steps, swap_freq):
         print('Number of production steps must be a multiple of swap frequency.')
@@ -150,7 +173,7 @@ def main():
                      MOVETYPE.CB_CONSERVED_TOPOLOGY: 0.25,
                      MOVETYPE.ROTATE_ORIENTATION_VECTOR: 0.25}
 
-    input_filename = 'snodin_unbound.json'
+    input_filename = 'simple_loop_linear.json'
     step = 0
     output_root = 'remd_test'
 
@@ -170,8 +193,7 @@ def main():
         pipe_masterside.send(temp)
         replicas.append(replica)
 
-    print(*temps, sep=' ')
-    replica_exchange(pipes_masterside, reps, temps, swaps, replicas)
+    replica_exchange(pipes_masterside, reps, temps, swaps, replicas, output_root)
 
 if __name__ == '__main__':
     main()

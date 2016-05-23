@@ -82,6 +82,20 @@ def calc_melting_point(sequence, strand_M, cation_M):
 
     return melting_T
 
+def calc_internal_melting_point(sequence, cation_M):
+    """Calculate temperature at which enthalpy and entropy are equal."""
+    DH, DS = calc_hybridization_enthalpy_and_entropy(sequence, cation_M)
+
+    # Convert to J/mol
+    DH = DH * J_PER_CAL * 1000
+
+    # Convert to J/mol/K
+    DS = DS * J_PER_CAL * 1000
+
+    melting_T = DH / DS
+
+    return melting_T
+
 
 def calc_hybridization_enthalpy_and_entropy(sequence, cation_M):
     """Calculate hybridization enthalpy and entropy of domains with NN model.
