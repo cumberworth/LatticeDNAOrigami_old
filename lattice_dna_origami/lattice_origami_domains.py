@@ -2268,12 +2268,13 @@ class RegrowthCBMCMovetype(CBMCMovetype):
                     endpoint_p, endpoint_s)
 
         # Modified Rosenbluth
-        bias = sum(weights) / num_walks
+        weights_sum = sum(weights)
+        bias = weights_sum / num_walks
         self._bias *= bias
         if bias == 0:
             raise MoveRejection
 
-        weights = (np.array(weights) / bias).tolist()
+        weights = (np.array(weights) / weights_sum).tolist()
         return weights
 
     def _select_scaffold_indices_linear(self):

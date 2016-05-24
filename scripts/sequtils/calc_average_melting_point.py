@@ -33,6 +33,24 @@ mean_T = np.mean(melting_points)
 min_T = min(melting_points)
 max_T = max(melting_points)
 
-print('Average melting temperature: {:.1} K'.format(mean_T))
-print('Maximum melting temperature: {:.1} K'.format(max_T))
-print('Minimum melting temperature: {:.1} K'.format(min_T))
+print('Unbound melting temperatures:')
+print('Average: {:.1f} K'.format(mean_T))
+print('Maximum: {:.1f} K'.format(max_T))
+print('Minimum: {:.1f} K'.format(min_T))
+print()
+
+# Calculate internal melting temperatures
+internal_melting_points = []
+for seq in input_file.sequences:
+    internal_melting_point = calc_internal_melting_point(seq, cation_M)
+    internal_melting_points.append(internal_melting_point)
+
+# Averages
+mean_iT = np.mean(internal_melting_points)
+min_iT = min(internal_melting_points)
+max_iT = max(internal_melting_points)
+
+print('Bound melting temperatures:')
+print('Average: {:.1f} K'.format(mean_iT))
+print('Maximum: {:.1f} K'.format(max_iT))
+print('Minimum: {:.1f} K'.format(min_iT))
