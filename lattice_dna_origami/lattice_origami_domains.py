@@ -1103,10 +1103,10 @@ class OutputFile:
         """Check property write frequencies and write accordingly."""
         if value_is_multiple(step, self._config_write_freq):
             self.write_configuration(origami_system, step)
-        else:
-            pass
         if value_is_multiple(step, self._count_write_freq):
             self.write_staple_domain_count(origami_system)
+        if value_is_multiple(step, self._energy_write_freq):
+            self.write_energy(origami_system)
 
         # Move types and acceptances
 
@@ -1188,7 +1188,7 @@ class HDF5OutputFile(OutputFile):
     """
 
     def __init__(self, filename, origami_system, config_write_freq=1,
-                count_write_freq=0):
+                count_write_freq=0, energy_write_freq=1):
         self.hdf5_origami = h5py.File(filename, 'w')
         self.hdf5_origami.create_group('origami')
         self.filename = filename
@@ -1196,6 +1196,8 @@ class HDF5OutputFile(OutputFile):
         self._config_writes = 0
         self._count_write_freq = count_write_freq
         self._count_writes = 0
+        self._energy_write_freq = energy_write_freq
+        self._energy_writes = 0
 
         # HDF5 does not allow variable length lists; fill with 0
         max_domains = 0
@@ -1239,6 +1241,13 @@ class HDF5OutputFile(OutputFile):
                     chunks=(1, 2),
                     dtype=int)
 
+        if self._energy_write_freq > 0:
+            self.hdf5_origami.create_dataset('origami/energies',
+                    (1, 1),
+                    maxshape=(None, 1),
+                    chunks=(1, 1),
+                    dtype=float)
+
         # Create array of chains present at each step
         dt = h5py.special_dtype(vlen=np.dtype('int32'))
         self.hdf5_origami.create_dataset('origami/chain_ids',
@@ -1260,6 +1269,14 @@ class HDF5OutputFile(OutputFile):
         count_key = 'origami/staple_domain_count'
         self.hdf5_origami[count_key].resize(self._count_writes, axis=0)
         self.hdf5_origami[count_key][write_index] = (num_staples, num_domains)
+
+    def write_energy(self, origami_system):
+        write_index = self._energy_writes
+        self._energy_writes += 1
+        energy = origami_system.energy
+        energy_key = 'origami/energies'
+        self.hdf5_origami[energy_key].resize(self._count_writes, axis=0)
+        self.hdf5_origami[energy_key][write_index] = energy
 
     def write_configuration(self, origami_system, step):
         write_index = self._config_writes
@@ -1369,6 +1386,10 @@ class HDF5InputFile:
     @property
     def staple_domain_counts(self):
         return self._hdf5_origami['origami/staple_domain_count']
+
+    @property
+    def energy(self):
+        return self._hdf5_origami['origami/energies'][:].flatten()
 
     def chains(self, step):
         """Standard format for passing chain configuration."""
