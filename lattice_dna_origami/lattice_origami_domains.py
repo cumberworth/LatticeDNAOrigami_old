@@ -1275,7 +1275,7 @@ class HDF5OutputFile(OutputFile):
         self._energy_writes += 1
         energy = origami_system.energy
         energy_key = 'origami/energies'
-        self.hdf5_origami[energy_key].resize(self._count_writes, axis=0)
+        self.hdf5_origami[energy_key].resize(self._energy_writes, axis=0)
         self.hdf5_origami[energy_key][write_index] = energy
 
     def write_configuration(self, origami_system, step):
