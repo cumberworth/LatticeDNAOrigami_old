@@ -1964,12 +1964,12 @@ class CBMCMovetype(MCMovetype):
         super().__init__(*args, **kwargs)
 
     def _calc_rosenbluth(self, weights, *args):
-        """Calculate rosenbluth weight and return normalized weights."""
+        """calculate rosenbluth weight and return normalized weights."""
         rosenbluth_i = sum(weights)
 
-        # Deadend
+        # deadend
         if rosenbluth_i == 0:
-            raise MoveRejection
+            raise moverejection
 
         weights = (np.array(weights) / rosenbluth_i).tolist()
         self._bias *= rosenbluth_i
@@ -2780,3 +2780,68 @@ class ConservedTopologyCBMCMovetype(RegrowthCBMCMovetype):
             self._grow_staple_and_update_endpoints(domain_i, staple_types,
                     staples, scaffold_indices, regrow_old=regrow_old)
 
+    def _calc_rosenbluth(self, weights, configs, *args):
+        """calculate rosenbluth weight and return normalized weights."""
+
+        # Set weights of complimentary domains to 0
+        for i, weight in enumerate(weights):
+
+            # WARNING: This assumes all weights are either 6 for an unbound
+            # state, otherwise it's a bound state
+            if weight != 6:
+                weights[i] = 0
+
+        # deadend
+        rosenbluth_i = sum(weights)
+        if rosenbluth_i == 0:
+            raise moverejection
+
+        weights = (np.array(weights) / rosenbluth_i).tolist()
+        self._bias *= rosenbluth_i
+        return weights
+
+    def _calc_fixed_end_rosenbluth(self, weights, configs, p_prev):
+        """Return fixed endpoint weights."""
+        
+        # Set weights of complimentary domains to 0
+        for i, weight in enumerate(weights):
+
+            # WARNING: This assumes all weights are either 6 for an unbound
+            # state, otherwise it's a bound state
+            if weight != 6:
+                config = configs[i][0]
+                endpoint_ps = self._endpoints['positions']
+                if any((config == endpoint).all() for endpoint in endpoint_ps):
+                    continue
+                else:
+                    weights[i] = 0
+
+        # Bias weights with number of walks
+        for i, config in enumerate(configs):
+            start_point = config[0]
+            num_walks = 1
+            for endpoint_i in range(len(self._endpoints['indices'])):
+                endpoint_p = self._endpoints['positions'][endpoint_i]
+                endpoint_s = self._endpoints['steps'][endpoint_i]
+                num_walks *= self._ideal_random_walks.num_walks(start_point,
+                        endpoint_p, endpoint_s)
+
+            weights[i] *= num_walks
+
+        # Calculate number of walks for previous position
+        num_walks = 1
+        for endpoint_i in range(len(self._endpoints['indices'])):
+            endpoint_p = self._endpoints['positions'][endpoint_i]
+            endpoint_s = self._endpoints['steps'][endpoint_i] + 1
+            num_walks *= self._ideal_random_walks.num_walks(p_prev,
+                    endpoint_p, endpoint_s)
+
+        # Modified Rosenbluth
+        weights_sum = sum(weights)
+        bias = weights_sum / num_walks
+        self._bias *= bias
+        if bias == 0:
+            raise MoveRejection
+
+        weights = (np.array(weights) / weights_sum).tolist()
+        return weights
