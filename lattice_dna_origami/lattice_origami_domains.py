@@ -1754,7 +1754,7 @@ class ExchangeMMCMovetype(MMCMovetype):
         T = self.accepted_system.temp
         boltz_factor = math.exp(-self._delta_e / T)
         Ni = self.accepted_system.get_num_staples(identity)
-        return self._test_acceptance(Ni / boltz_factor)
+        return self._test_acceptance(Ni * boltz_factor)
 
     def _insert_staple(self):
         """Insert staple at random scaffold domain and grow."""
