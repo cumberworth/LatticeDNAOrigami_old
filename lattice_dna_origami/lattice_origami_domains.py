@@ -1966,6 +1966,8 @@ class CBMCMovetype(MCMovetype):
     def _calc_rosenbluth(self, weights, *args):
         """Calculate rosenbluth weight and return normalized weights."""
         rosenbluth_i = sum(weights)
+
+        # Deadend
         if rosenbluth_i == 0:
             raise MoveRejection
 
@@ -2111,7 +2113,9 @@ class CBMCMovetype(MCMovetype):
             else:
                 pass
 
-            delta_e += self.trial_system.unassign_domain(staple_index, domain_i)
+            # Do not count energy here because would lead double counting
+            #delta_e += self.trial_system.unassign_domain(staple_index, domain_i)
+            self.trial_system.unassign_domain(staple_index, domain_i)
 
         self._bias *= math.exp(-delta_e / self.trial_system.temp)
 
@@ -2225,6 +2229,7 @@ class ExchangeCBMCMovetype(CBMCMovetype):
             raise MoveRejection
 
         # Select domain to regrow from
+        # Note the unassign method does not add unassigning energy to bias
         bound_domains = self._unassign_staple_and_collect_bound(staple_index)
         self._bias = 1
         staple_domain_i, scaffold_domain_i = random.choice(bound_domains)
@@ -2421,9 +2426,10 @@ class StapleRegrowthCBMCMovetype(RegrowthCBMCMovetype):
 
         # Unassign domains
         for domain_index in range(staple_length):
-            delta_e = self.trial_system.unassign_domain(staple_index,
+            self.trial_system.unassign_domain(staple_index,
                     domain_index)
-            self._bias *= math.exp(-delta_e / self.trial_system.temp)
+            # Do not count as would be double counting
+            #self._bias *= math.exp(-delta_e / self.trial_system.temp)
 
         # Grow staple
         delta_e = self._set_staple_growth_point(staple_index,
@@ -2512,19 +2518,20 @@ class ScaffoldRegrowthCBMCMovetype(RegrowthCBMCMovetype):
     def _unassign_domains(self, scaffold_indices, staples):
         """Unassign scaffold and staple domains in selected region."""
 
+        # Note do not count energies here as would double count
         # Unassign scaffold
-        delta_e = 0
+        #delta_e = 0
         for domain_index in scaffold_indices[1:]:
-            delta_e += self.trial_system.unassign_domain(SCAFFOLD_INDEX,
+            self.trial_system.unassign_domain(SCAFFOLD_INDEX,
                     domain_index)
 
         # Unassign staples
         for staple_index in staples.keys():
             for domain_index in range(self.trial_system.chain_lengths[staple_index]):
-                delta_e += self.trial_system.unassign_domain(staple_index,
+                self.trial_system.unassign_domain(staple_index,
                     domain_index)
 
-        self._bias *= math.exp(-delta_e / self.trial_system.temp)
+        #self._bias *= math.exp(-delta_e / self.trial_system.temp)
 
     def _regrow_staples(self, staples, regrow_old=False):
         for staple_index, comp_domains in staples.items():
@@ -2676,19 +2683,20 @@ class ConservedTopologyCBMCMovetype(RegrowthCBMCMovetype):
     def _unassign_domains(self, scaffold_indices, staples):
         """Unassign all give scaffold and non-externaly bound staple domains."""
 
+        # Note do not count energies here because is double counting
         # Unassign scaffold domains
-        delta_e = 0
+        #delta_e = 0
         for domain_index in scaffold_indices[1:]:
-            delta_e += self.trial_system.unassign_domain(SCAFFOLD_INDEX,
+            self.trial_system.unassign_domain(SCAFFOLD_INDEX,
                     domain_index)
 
         # Unassign staples
         for staple_index in staples.keys():
             for domain_index in range(self.trial_system.chain_lengths[staple_index]):
-                delta_e += self.trial_system.unassign_domain(staple_index,
+                self.trial_system.unassign_domain(staple_index,
                     domain_index)
 
-        self._bias *= math.exp(-delta_e / self.trial_system.temp)
+        #self._bias *= math.exp(-delta_e / self.trial_system.temp)
 
     def _grow_staple_and_update_endpoints(self, scaffold_domain_i, staple_types,
             staples, scaffold_indices, regrow_old=False):
