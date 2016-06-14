@@ -1734,7 +1734,8 @@ class ExchangeMMCMovetype(MMCMovetype):
         T = self.accepted_system.temp
         boltz_factor = math.exp(-self._delta_e / T)
         Ni = self.accepted_system.get_num_staples(identity)
-        ratio = boltz_factor / (Ni + 1)
+        V = self.trial_system.volume
+        ratio = boltz_factor * V / (Ni + 1)
 
         # Correct for overcounts and insertion to subset of volume
         p_accept = min(1, ratio) / overcounts / self.trial_system.volume
@@ -1753,7 +1754,7 @@ class ExchangeMMCMovetype(MMCMovetype):
         T = self.accepted_system.temp
         boltz_factor = math.exp(-self._delta_e / T)
         Ni = self.accepted_system.get_num_staples(identity)
-        return self._test_acceptance(Ni * boltz_factor)
+        return self._test_acceptance(Ni / V * boltz_factor)
 
     def _insert_staple(self):
         """Insert staple at random scaffold domain and grow."""
