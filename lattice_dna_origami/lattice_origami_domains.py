@@ -1754,6 +1754,7 @@ class ExchangeMMCMovetype(MMCMovetype):
         T = self.accepted_system.temp
         boltz_factor = math.exp(-self._delta_e / T)
         Ni = self.accepted_system.get_num_staples(identity)
+        V = self.trial_system.volume
         return self._test_acceptance(Ni / V * boltz_factor)
 
     def _insert_staple(self):
