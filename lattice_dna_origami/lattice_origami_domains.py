@@ -1736,7 +1736,7 @@ class ExchangeMMCMovetype(MMCMovetype):
         Ni = self.accepted_system.get_num_staples(identity)
         ratio = boltz_factor / (Ni + 1)
 
-        # Correct for overcounts and insertint to subset of volume
+        # Correct for overcounts and insertion to subset of volume
         p_accept = min(1, ratio) / overcounts / self.trial_system.volume
         if p_accept == 1:
             accept = True
