@@ -1525,6 +1525,7 @@ class MCMovetype:
         self.accepted_system = origami_system
         self.trial_system = copy.deepcopy(origami_system)
         self._step = step
+        self._modifier = 1
 
         # All position combinations for new domains
         dimensions = [XHAT, YHAT, ZHAT]
@@ -1540,7 +1541,7 @@ class MCMovetype:
 
     def _test_acceptance(self, ratio):
         """Metropolis acceptance test for given ratio."""
-        p_accept = min(1, ratio)
+        p_accept = min(1, ratio) * self._modifier
         if p_accept == 1:
             accept = True
         else:
@@ -1583,6 +1584,32 @@ class MCMovetype:
                 if scaffold_domain_i in scaffold_indices:
                     staples[staple_index].append((staple_domain_i,
                             scaffold_domain_i))
+
+        return staples
+
+    def _find_externally_bound_staples(self, staples):
+        """Find staples bound to scaffold domain outside selected segment."""
+        externally_bound = []
+        for staple_index, domains in staples.items():
+            internally_bound = [pair[0] for pair in domains]
+            staple_length = self.trial_system.chain_lengths[staple_index]
+            for staple_i in range(staple_length):
+                if staple_i in internally_bound:
+                    continue
+                else:
+                    occupancy = self.trial_system.get_domain_occupancy
+                    if occupancy == BOUND:
+                        externally_bound.append((staple_index, staple_length))
+                        break
+                    else:
+                        pass
+
+        # Pick to grow from scaffold segment or leave
+        for staple_index, staple_length in externally_bound:
+            if random.random() < (1 / staple_length):
+                del staples[staple_index]
+            else:
+                pass
 
         return staples
 
@@ -1629,6 +1656,18 @@ class MCMovetype:
         """Select a random position."""
         return p_prev + random.choice(self._vectors)
 
+    def _calc_overcount(self, chain_index, domain_i):
+        bound_domain = self.trial_system.get_bound_domain(chain_index,
+                domain_i)
+        if bound_domain != ():
+            if chain_index == SCAFFOLD_INDEX:
+                staple_l = self.trial_system.chain_lengths[bound_domain[0]]
+            else:
+                staple_l = self.trial_system.chain_lengths[chain_index]
+
+            self._modifier *= (1 / staple_l)
+        else:
+            pass
 
 class IdentityMCMovetype(MCMovetype):
     """Identity movetype."""
@@ -1714,6 +1753,9 @@ class MMCMovetype(MCMovetype):
                         chain_index, domain_i, p_new, o_new)
             except ConstraintViolation:
                 raise MoveRejection
+
+            # Update overcounts
+            self._calc_overcount(chain_index, domain_i)
 
         return
 
@@ -1900,6 +1942,7 @@ class ScaffoldRegrowthMMCMovetype(RegrowthMMCMovetype):
 
         # Find bound staples and all complimentary domains
         staples = self._find_bound_staples_with_compliments(scaffold_indices)
+        staples = self._find_externally_bound_staples(staples)
 
         # Unassign scaffold domains
         for domain_index in scaffold_indices[1:]:
@@ -1993,7 +2036,8 @@ class CBMCMovetype(MCMovetype):
         o_old = self.accepted_system.get_domain_orientation(*domain)
         return (p_old, o_old)
 
-    def _grow_staple(self, staple_i, growth_domain_i, regrow_old=False):
+    def _grow_staple(self, staple_i, growth_domain_i, regrow_old=False,
+            overcount_cor=True):
         """Grow segment of a staple chain with configurational bias."""
 
         staple_length = self.trial_system.chain_lengths[staple_i]
@@ -2011,11 +2055,19 @@ class CBMCMovetype(MCMovetype):
             prev_domain_i = staple_indices[i]
             self._select_position(staple_i, domain_i, prev_domain_i)
 
+            # Update overcounts
+            if overcount_cor:
+                self._calc_overcount(staple_i, domain_i)
+
         # Grow in five-prime direction
         staple_indices = range(growth_domain_i, -1, -1)
         for i, domain_i in enumerate(staple_indices[1:]):
             prev_domain_i = staple_indices[i]
             self._select_position(staple_i, domain_i, prev_domain_i)
+
+            # Update overcounts
+            if overcount_cor:
+                self._calc_overcount(staple_i, domain_i)
 
     def _select_position(self, chain_index, domain_i, prev_domain_i):
         """Select next domain configuration with CB."""
@@ -2558,6 +2610,10 @@ class ScaffoldRegrowthCBMCMovetype(RegrowthCBMCMovetype):
             prev_domain_i = scaffold_indices[i]
             self._select_position(SCAFFOLD_INDEX, domain_i, prev_domain_i)
 
+            # Update overcounts
+            if regrow_old == False:
+                self._calc_overcount(SCAFFOLD_INDEX, domain_i)
+
     def _update_scaffold_endpoint(self, *args):
         self._endpoints['steps'] -= 1
 
@@ -2709,7 +2765,8 @@ class ConservedTopologyCBMCMovetype(RegrowthCBMCMovetype):
             delta_e = self._set_staple_growth_point(staple_i, staple_domain_i,
                     scaffold_domain_i)
             self._bias *= math.exp(-delta_e / self.trial_system.temp)
-            self._grow_staple(staple_i, staple_domain_i, regrow_old=regrow_old)
+            self._grow_staple(staple_i, staple_domain_i, regrow_old=regrow_old,
+                    overcount_cor=False)
             del staple_types['singly_bound'][scaffold_domain_i]
 
         # Grow multiply bound staple and add endpoints if present
@@ -2719,7 +2776,8 @@ class ConservedTopologyCBMCMovetype(RegrowthCBMCMovetype):
             delta_e = self._set_staple_growth_point(staple_i, staple_domain_i,
                     scaffold_domain_i)
             self._bias *= math.exp(-delta_e / self.trial_system.temp)
-            self._grow_staple(staple_i, staple_domain_i, regrow_old=regrow_old)
+            self._grow_staple(staple_i, staple_domain_i, regrow_old=regrow_old,
+                    overcount_cor=False)
             del staple_types['multiply_bound'][scaffold_domain_i]
 
             # Add remaining staple domains to endpoints
