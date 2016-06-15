@@ -1771,33 +1771,34 @@ class ExchangeMMCMovetype(MMCMovetype):
 
         return accepted
 
-    def _staple_insertion_accepted(self, identity, overcounts):
+    def _staple_insertion_accepted(self, identity):
         """Metropolis acceptance test for particle insertion."""
         T = self.accepted_system.temp
         boltz_factor = math.exp(-self._delta_e / T)
         Ni = self.accepted_system.get_num_staples(identity)
-        V = self.trial_system.volume
-        ratio = boltz_factor * V / (Ni + 1)
 
-        # Correct for overcounts and insertion to subset of volume
-        p_accept = min(1, ratio) / overcounts / self.trial_system.volume
-        if p_accept == 1:
-            accept = True
-        else:
-            if p_accept > random.random():
-                accept = True
-            else:
-                accept = False
+        # Correct for extra states from additional staple domains
+        staple_length = len(self.trial_system.identities[identity])
+        extra_states = 6**(2 * staple_length - 2)
+        ratio = extra_states / (Ni + 1) * boltz_factor
 
-        return accept
+        # Correct for insertion to subset of volume
+        V = self.accepted_system.volume
+        self._modifier /= V
+
+        return self._test_acceptance(ratio)
 
     def _staple_deletion_accepted(self, identity):
         """Metropolis acceptance test for particle deletion."""
         T = self.accepted_system.temp
         boltz_factor = math.exp(-self._delta_e / T)
         Ni = self.accepted_system.get_num_staples(identity)
-        V = self.trial_system.volume
-        return self._test_acceptance(Ni / V * boltz_factor)
+
+        # Correct for extra states from additional staple domains
+        staple_length = len(self.trial_system.identities[identity])
+        extra_states = 6**(2 * staple_length - 2)
+        ratio = Ni / extra_states * boltz_factor
+        return self._test_acceptance(ratio)
 
     def _insert_staple(self):
         """Insert staple at random scaffold domain and grow."""
@@ -1817,9 +1818,6 @@ class ExchangeMMCMovetype(MMCMovetype):
         scaffold_domain = self.trial_system.identities[SCAFFOLD_INDEX].index(
                 -domain_identity)
 
-        # Number of bound domains in system (for calculating overcounts)
-        init_num_bound_domains = self.trial_system.num_bound_domains
-
         # Set growth point domain
         self._delta_e += self._set_staple_growth_point(staple_index,
                     staple_domain, scaffold_domain)
@@ -1827,16 +1825,8 @@ class ExchangeMMCMovetype(MMCMovetype):
         # Grow staple
         self._grow_staple(staple_length, staple_index, staple_domain)
 
-        # If the configuration is such that the staple can bind with the other
-        # domain, then there are two ways this can happen, so the ratio should
-        # be halved to prevent overcounting. If staple ends in multiply bound
-        # state, save resulting overcounts.
-        cur_num_bound_domains = self.trial_system.num_bound_domains
-        D_bind_state = cur_num_bound_domains - init_num_bound_domains
-        overcounts = D_bind_state
-
         # Test acceptance
-        if self._staple_insertion_accepted(staple_identity, overcounts):
+        if self._staple_insertion_accepted(staple_identity):
             self.accepted_system = self.trial_system
             accepted = True
         else:
