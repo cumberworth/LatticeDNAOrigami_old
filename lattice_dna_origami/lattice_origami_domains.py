@@ -2056,7 +2056,7 @@ class CBMCMovetype(MCMovetype):
             self._select_position(staple_i, domain_i, prev_domain_i)
 
             # Update overcounts
-            if overcount_cor:
+            if overcount_cor and not regrow_old:
                 self._calc_overcount(staple_i, domain_i)
 
         # Grow in five-prime direction
@@ -2066,7 +2066,7 @@ class CBMCMovetype(MCMovetype):
             self._select_position(staple_i, domain_i, prev_domain_i)
 
             # Update overcounts
-            if overcount_cor:
+            if overcount_cor and not regrow_old:
                 self._calc_overcount(staple_i, domain_i)
 
     def _select_position(self, chain_index, domain_i, prev_domain_i):
@@ -2611,7 +2611,7 @@ class ScaffoldRegrowthCBMCMovetype(RegrowthCBMCMovetype):
             self._select_position(SCAFFOLD_INDEX, domain_i, prev_domain_i)
 
             # Update overcounts
-            if regrow_old == False:
+            if not regrow_old:
                 self._calc_overcount(SCAFFOLD_INDEX, domain_i)
 
     def _update_scaffold_endpoint(self, *args):
