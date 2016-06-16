@@ -1786,6 +1786,9 @@ class ExchangeMMCMovetype(MMCMovetype):
         V = self.accepted_system.volume
         self._modifier /= V
 
+        # Correct for only considering 1 of 2 ways insertion could happen
+        self._modifier *= 2
+
         return self._test_acceptance(ratio)
 
     def _staple_deletion_accepted(self, identity):
