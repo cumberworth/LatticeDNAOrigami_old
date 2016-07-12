@@ -336,11 +336,6 @@ class OrigamiSystem:
         # Keep track of unique chain index
         self._current_chain_index = max(self._working_to_unique)
 
-        # Bookeeping for configuration bias
-        self._checked_list = []
-        self._current_domain = ()
-        self._current_step = 1
-
         # Close input file to prevent corruption
         input_file.close()
 
@@ -509,28 +504,6 @@ class OrigamiSystem:
         domain = (chain_index, domain_index)
         delta_e = 0
 
-        # If checked list empty, set current domain identity
-        #if self._checked_list == []:
-        #    self._current_domain = domain
-        #    self._current_step = step
-        #else:
-
-            # Check if given domain identity matches current
-#            if domain != self._current_domain:
-#                raise OrigamiMisuse
-#            else:
-#                pass
-
-            # Check if step matches current
-#            if step != self._current_step:
-#                raise OrigamiMisuse
-#            else:
-#                pass
-
-        # If already checked, return
-#        if tuple(position) in self._checked_list:
-#            return
-
         # Constraint violation if position in bound state
         occupancy = self.get_position_occupancy(position)
         if occupancy == BOUND:
@@ -542,7 +515,7 @@ class OrigamiSystem:
         self._positions[chain_index][domain_index] = position
         self._orientations[chain_index][domain_index] = orientation
 
-        # Update next domain vectors and check distance constraints
+        # Update next domain vectors
         try:
             self._update_next_domain(*domain)
         except ConstraintViolation:
@@ -550,7 +523,6 @@ class OrigamiSystem:
             # Remove attempted configuration
             self._positions[chain_index][domain_index] = []
             self._orientations[chain_index][domain_index] = []
-            #self._update_next_domain(*domain)
             self._revert_next_domain()
             raise
 
@@ -563,7 +535,6 @@ class OrigamiSystem:
                 # Remove attempted configuration
                 self._positions[chain_index][domain_index] = []
                 self._orientations[chain_index][domain_index] = []
-                #self._update_next_domain(*domain)
                 self._revert_next_domain()
                 raise
         else:
@@ -572,33 +543,14 @@ class OrigamiSystem:
         # Remove checked configuration
         self._positions[chain_index][domain_index] = []
         self._orientations[chain_index][domain_index] = []
-        #self._update_next_domain(*domain)
         self._revert_next_domain()
 
-        # Update checked list
-        self._checked_list.append(tuple(position))
         return delta_e
 
     def set_checked_domain_configuration(self, chain_index, domain_index,
                 position, orientation):
         """Set domain to previously checked configuration."""
         domain = (chain_index, domain_index)
-
-        # Check if give domain identity matches current
-        #if domain != self._current_domain:
-        #    raise OrigamiMisuse
-        #else:
-        #    pass
-
-        # Check if step matches current
-        #if step != self._current_step:
-        #    raise OrigamiMisuse
-        #else:
-        #    pass
-
-        #if tuple(position) in self._checked_list:
-
-        # Set domain configuration without further checks
         self._positions[chain_index][domain_index] = position
         self._orientations[chain_index][domain_index] = orientation
         self._update_next_domain(*domain)
@@ -609,11 +561,6 @@ class OrigamiSystem:
             self._update_occupancies_bound(position, domain_key)
         else:
             self._update_occupancies_unbound(position, domain_key)
-        #else:
-        #    raise OrigamiMisuse
-
-        #self._checked_list = []
-        #self._current_domain = ()
 
     def set_domain_configuration(self, chain_index, domain_index, position,
                 orientation):
@@ -640,7 +587,7 @@ class OrigamiSystem:
         self._positions[chain_index][domain_index] = position
         self._orientations[chain_index][domain_index] = orientation
 
-        # Update next domain vectors and check distance constraints
+        # Update next domain vectors
         try:
             self._update_next_domain(*domain)
         except ConstraintViolation:
@@ -648,7 +595,6 @@ class OrigamiSystem:
             # Remove attempted configuration
             self._positions[chain_index][domain_index] = []
             self._orientations[chain_index][domain_index] = []
-            #self._update_next_domain(*domain)
             self._revert_next_domain()
             raise
 
@@ -661,7 +607,6 @@ class OrigamiSystem:
                 # Remove attempted configuration
                 self._positions[chain_index][domain_index] = []
                 self._orientations[chain_index][domain_index] = []
-                #self._update_next_domain(*domain)
                 self._revert_next_domain()
                 raise
             else:
@@ -895,10 +840,10 @@ class OrigamiSystem:
         for domains_i, domain in enumerate(domains):
             chain_i, domain_i = domain
 
-            # Occupancies and domain indices of the 4 relevant neighbouring domains
+            # Occupancies and domain indices of the 6 relevant neighbouring domains
             occupancies = []
             domain_is = []
-            for i in [-2, -1, 1, 2]:
+            for i in [-3, -2, -1, 1, 2, 3]:
                 domain_j = domain_i + i
                 if self.cyclic and chain_i == SCAFFOLD_INDEX:
                     domain_j = self.wrap_cyclic_scaffold(domain_j)
@@ -916,27 +861,58 @@ class OrigamiSystem:
                 occupancies.append(occupancy)
 
             # Check pairs from left to right
-            if occupancies[1] == BOUND:
-                bound_domain = self.get_bound_domain(chain_i, domain_is[1])
-                self._helical_pair_constraints_obeyed(chain_i, domain_is[1],
-                    domain_i, bound_domain)
-                if occupancies[0] == BOUND:
-                    self._linear_helix(chain_i, domain_is[0], domain_is[1])
-
-            if occupancies[1] == occupancies[2] == BOUND:
-                self._linear_helix(chain_i, domain_is[1], domain_i)
-
             if occupancies[2] == BOUND:
+                bound_domain = self.get_bound_domain(chain_i, domain_is[2])
+                self._helical_pair_constraints_obeyed(chain_i, domain_is[2],
+                    domain_i, bound_domain)
+                if occupancies[1] == BOUND:
+                    self._linear_helix(chain_i, domain_is[1], domain_is[2])
+
+            if occupancies[2] == occupancies[3] == BOUND:
+                self._linear_helix(chain_i, domain_is[2], domain_i)
+
+            if occupancies[3] == BOUND:
                 bound_domain = domains[domains_i - 1]
                 self._helical_pair_constraints_obeyed(chain_i, domain_i,
-                    domain_is[2], bound_domain)
-                if occupancies[3] == BOUND:
-                    self._linear_helix(chain_i, domain_i, domain_is[2])
+                    domain_is[3], bound_domain)
+                if occupancies[4] == BOUND:
+                    self._linear_helix(chain_i, domain_i, domain_is[3])
+
+            # Check doubly contiguous all bound constraint
+            if occupancies[2] == BOUND and occupancies[3] == BOUND and occupancies[4] == BOUND:
+                pdr_bound = self._calc_prev_domain(*bound_domain)
+                self._check_doubly_contiguous_constraint(chain_i, domain_is[2],
+                        trial_domain[1], domain_is[3], domain_is[4], pdr_bound)
+
+            if occupancies[1] == BOUND and occupancies[2] == BOUND and occupancies[3] == BOUND:
+                ndr_bound = self._next_domains[bound_domain[0]][bound_domain[1]]
+                self._check_doubly_contiguous_constraint(chain_i, domain_is[1],
+                        domain_is[2], trial_domain[1], domain_is[4], ndr_bound)
+
+            if occupancies[3] == BOUND and occupancies[4] == BOUND and occupancies[5] == BOUND:
+                b_domain = self.get_bound_domain(chain_i, domain_is[3])
+                pdr_next_bound = self._calc_prev_domain(*b_domain)
+                self._check_doubly_contiguous_constraint(chain_i, trial_domain[1],
+                        domain_is[3], domain_is[4], domain_is[5], pdr_next_bound)
+
+            if occupancies[0] == BOUND and occupancies[1] == BOUND and occupancies[2] == BOUND:
+                pb_domain = self.get_bound_domain(chain_i, domain_is[2])
+                ndr_pb = self._next_domains[pb_domain[0]][pb_domain[1]]
+                self._check_doubly_contiguous_constraint(chain_i, domain_is[0],
+                        domain_is[1], domain_is[2], trial_domain[1], ndr_pb)
 
         # Add new binding energies
         delta_e = self.get_hybridization_energy(*trial_domain)
 
         return delta_e
+
+    def _check_doubly_contiguous_constraint(self, chain_i, d_1, d_2, d_3, d_4, d_b_dr):
+        d_2_ndr = self._next_domains[chain_i][d_2]
+        if all(d_2_ndr != np.zeros(3)) and all(d_2_ndr == d_b_dr):
+            d_1_pos = self._positions[chain_i][d_1]
+            d_4_pos = self._positions[chain_i][d_4]
+            if (d_1_pos - d_4_pos).sum().abs() != 1:
+                raise ConstraintViolation
 
     def _domains_match(self, chain_index_1, domain_index_1,
                 chain_index_2, domain_index_2):
@@ -1006,6 +982,12 @@ class OrigamiSystem:
         else:
             pass
 
+        # Next domain being in opposite direction of orientation vector not allowed
+        if all(next_dr == -o_1):
+            raise ConstraintViolation
+        else:
+            pass
+
         # Check twist constraint if same helix
         constraints_obeyed = self._check_twist_constraint(next_dr, o_1, o_2)
         if not constraints_obeyed:
@@ -1049,17 +1031,19 @@ class OrigamiSystem:
                 if self.cyclic and chain_i == SCAFFOLD_INDEX:
                     d_j = self.wrap_cyclic_scaffold(d_j)
                 else:
-                    #ndr = np.zeros(3)
-                    #self._next_domains[chain_i][d_i] = ndr
+                    prev_ndr = self._next_domains[chain_i][d_i]
+                    self._prev_next_domains.append(((chain_i, d_i), prev_ndr))
+                    ndr = np.zeros(3)
+                    self._next_domains[chain_i][d_i] = ndr
                     continue
 
             p_j = self.get_domain_position(chain_i, d_j)
             if p_i == [] or p_j == []:
                 prev_ndr = self._next_domains[chain_i][d_i]
                 self._prev_next_domains.append(((chain_i, d_i), prev_ndr))
-                #ndr = np.zeros(3)
-                #self._next_domains[chain_i][d_i] = ndr
-                self._next_domains[chain_i][d_i] = []
+                ndr = np.zeros(3)
+                self._next_domains[chain_i][d_i] = ndr
+                #self._next_domains[chain_i][d_i] = []
                 continue
 
             ndr = p_j - p_i
