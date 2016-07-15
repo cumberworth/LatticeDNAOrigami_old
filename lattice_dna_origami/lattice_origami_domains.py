@@ -837,7 +837,7 @@ class OrigamiSystem:
         td_ident = self.identities[tc_ident][td_i]
         oc_ident = self._chain_identities[oc_i]
         od_ident = self.identities[oc_ident][od_i]
-        if tc_ident == -oc_ident:
+        if td_ident == -od_ident:
             state = BOUND
             self._fully_bound_domains += 1
         else:
