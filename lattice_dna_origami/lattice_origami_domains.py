@@ -1048,6 +1048,7 @@ class OrigamiSystem:
         if not constraints_obeyed:
             raise ConstraintViolation
 
+        pdb.set_trace()
         return constraints_obeyed
 
     def _linear_helix(self, chain_i, domain_i_1, domain_i_2):

@@ -76,6 +76,8 @@ def find_longest_contig_complement(seq_1, seq_2):
         seq_3 = seq_1[::-1]
         seq_5 = seq_2
 
+    seq_3 = calc_complementary_sequence(seq_3)
+
     # Iterate through all lengths and starting points
     comp_seqs = []
     for subseq_len in range(len(seq_3), 0, -1):
