@@ -677,17 +677,19 @@ class OrigamiSystem:
         if occupancy in [BOUND, MISBOUND]:
 
             # Collect energy
-            bound_domain = self._bound_domains[domain_key]
+            bound_domain = self.get_bound_domain(*domain)
+            bound_c_ui = self._working_to_unique[bound_domain[0]]
+            bound_domain_key = (bound_c_ui, bound_domain[1])
             delta_e = -self.get_hybridization_energy(*domain, *bound_domain)
             position = tuple(self._positions[chain_index][domain_index])
             self._positions[chain_index][domain_index] = []
             self._orientations[chain_index][domain_index] = []
             del self._bound_domains[domain_key]
-            del self._bound_domains[bound_domain]
+            del self._bound_domains[bound_domain_key]
             del self._domain_occupancies[domain_key]
-            self._unbound_domains[position] = bound_domain
+            self._unbound_domains[position] = bound_domain_key
             self._position_occupancies[position] = UNBOUND
-            self._domain_occupancies[bound_domain] = UNBOUND
+            self._domain_occupancies[bound_domain_key] = UNBOUND
         elif occupancy == UNBOUND:
             position = tuple(self._positions[chain_index][domain_index])
             self._positions[chain_index][domain_index] = []
@@ -1048,7 +1050,6 @@ class OrigamiSystem:
         if not constraints_obeyed:
             raise ConstraintViolation
 
-        pdb.set_trace()
         return constraints_obeyed
 
     def _linear_helix(self, chain_i, domain_i_1, domain_i_2):
