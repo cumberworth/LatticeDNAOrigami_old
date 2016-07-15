@@ -43,7 +43,7 @@ NN_ENTROPY = {
     'TERMINAL_AT_PENALTY': 0.0069,
     'SYMMETRY_CORRECTION': -0.0014}
 
-COMPLIMENTARY_BASE_PAIRS = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G'}
+COMPLEMENTARY_BASE_PAIRS = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G'}
 
 
 def calc_hybridization_energy(sequence, T, cation_M):
@@ -62,6 +62,36 @@ def calc_hybridization_energy(sequence, T, cation_M):
     return DG
 
 
+def find_longest_contig_complement(seq_1, seq_2):
+    """Find longest contiguous complementary sequences between two strands.
+    
+    The sequences are assumed to be 3'-5'.
+    """
+
+    # Find smallest sequence
+    if len(seq_2) < len(seq_1):
+        seq_3 = seq_2[::-1]
+        seq_5 = seq_1
+    else:
+        seq_3 = seq_1[::-1]
+        seq_5 = seq_2
+
+    # Iterate through all lengths and starting points
+    comp_seqs = []
+    for subseq_len in range(len(seq_3), 0, -1):
+        for start_i in range(0, len(seq_3) - subseq_len + 1):
+            subseq = seq_3[start_i:subseq_len + start_i]
+            seq_i = seq_5.find(subseq)
+            if seq_i == -1:
+                continue
+            else:
+                comp_seq = seq_5[seq_i:seq_i + subseq_len]
+                comp_seqs.append(comp_seq)
+        if comp_seqs == []:
+            continue
+        else:
+            return comp_seqs
+
 def calc_melting_point(sequence, strand_M, cation_M):
     """Calculate melting point assuming two state behaviour."""
     DH, DS = calc_hybridization_enthalpy_and_entropy(sequence, cation_M)
@@ -72,7 +102,7 @@ def calc_melting_point(sequence, strand_M, cation_M):
     # Convert to J/mol/K
     DS = DS * J_PER_CAL * 1000
 
-    # Factor dependent on whether sequence is palindrome (non-selfcomplimentary)
+    # Factor dependent on whether sequence is palindrome (non-selfcomplementary)
     if sequence_is_palindromic(sequence):
         x = 1
     else:
@@ -103,7 +133,7 @@ def calc_hybridization_enthalpy_and_entropy(sequence, cation_M):
     Outputs in kcal/mol.
 
     """
-    complimentary_sequence = calc_complimentary_sequence(sequence)
+    complementary_sequence = calc_complementary_sequence(sequence)
 
     # Initiation free energy
     DH_init = NN_ENTHALPY['INITIATION']
@@ -120,7 +150,7 @@ def calc_hybridization_enthalpy_and_entropy(sequence, cation_M):
     DS_stack = 0
     for base_index in range(0, len(sequence) - 1):
         first_pair = sequence[base_index : base_index + 2]
-        second_pair = complimentary_sequence[base_index : base_index + 2]
+        second_pair = complementary_sequence[base_index : base_index + 2]
         key = first_pair + '/' + second_pair
 
         # Not all permutations are included in dict as some reversals have
@@ -155,19 +185,19 @@ def calc_hybridization_enthalpy_and_entropy(sequence, cation_M):
     return DH_hybrid, DS_hybrid
 
 
-def calc_complimentary_sequence(sequence):
-    """Return the complimentary DNA sequence."""
-    complimentary_seq_list = []
+def calc_complementary_sequence(sequence):
+    """Return the complementary DNA sequence."""
+    complementary_seq_list = []
     for base in sequence:
-        complimentary_seq_list.append(COMPLIMENTARY_BASE_PAIRS[base])
+        complementary_seq_list.append(COMPLEMENTARY_BASE_PAIRS[base])
 
-    complimentary_sequence = ''.join(complimentary_seq_list)
-    return complimentary_sequence
+    complementary_sequence = ''.join(complementary_seq_list)
+    return complementary_sequence
 
 
 def sequence_is_palindromic(sequence):
-    """True if reverse complimenet is equal to given sequence."""
-    complimentary_sequence = calc_complimentary_sequence(sequence)
-    reverse_complimentary_sequence = complimentary_sequence[::-1]
-    palindromic = reverse_complimentary_sequence == sequence
+    """True if reverse complemenet is equal to given sequence."""
+    complementary_sequence = calc_complementary_sequence(sequence)
+    reverse_complementary_sequence = complementary_sequence[::-1]
+    palindromic = reverse_complementary_sequence == sequence
     return palindromic
