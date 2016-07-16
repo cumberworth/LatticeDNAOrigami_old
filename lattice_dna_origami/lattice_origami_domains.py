@@ -2041,7 +2041,7 @@ class ExchangeMMCMovetype(MMCMovetype):
         # Correct for extra states from additional staple domains
         staple_length = len(self.origami_system.identities[identity])
         extra_states = 6**(2 * staple_length - 1 - self.preconstrained_df)
-        ratio = (Ni_new - 1) / extra_states * boltz_factor
+        ratio = (Ni_new + 1) / extra_states * boltz_factor
         return self._test_acceptance(ratio)
 
     def _insert_staple(self):
@@ -2102,6 +2102,7 @@ class ExchangeMMCMovetype(MMCMovetype):
         self._deleted_chains.append((staple_identity, unique_index))
 
         # Test acceptance
+        pdb.set_trace()
         if self._staple_deletion_accepted(staple_identity):
             self.origami_system = self.origami_system
             accepted = True
