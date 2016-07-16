@@ -2803,7 +2803,7 @@ class StapleRegrowthCBMCMovetype(RegrowthCBMCMovetype):
 
         # Grow staple
         delta_e = self._set_staple_growth_point(staple_index,
-                staple_domain_i, scaffold_domain_i)
+                staple_domain_i, 0, scaffold_domain_i)
         self._bias *= math.exp(-delta_e / self.origami_system.temp)
         self._grow_staple(staple_index, staple_domain_i)
 
@@ -2826,7 +2826,7 @@ class StapleRegrowthCBMCMovetype(RegrowthCBMCMovetype):
 
         # Grow staple
         delta_e = self._set_staple_growth_point(staple_index, staple_domain_i,
-                scaffold_domain_i)
+                0, scaffold_domain_i)
         self._bias *= math.exp(-delta_e / self.origami_system.temp)
         self._grow_staple(staple_index, staple_domain_i,
                 regrow_old=True)
@@ -2860,13 +2860,13 @@ class ScaffoldRegrowthCBMCMovetype(RegrowthCBMCMovetype):
 
         # Find bound staples and all complementary domains
         staples = self._find_bound_staples_with_complements(scaffold_indices)
-        staples = self._find_and_pick_externally_bound_staples(staples.keys(),
+        staples = self._find_and_pick_externally_bound_staples(staples,
                 scaffold_indices)
 
         # Find bound staples and bound domains
         staples_bound = self._find_bound_staples_with_bound(scaffold_indices)
         staples = self._find_and_pick_externally_bound_staples(
-                staples_bound.keys(), scaffold_indices)
+                staples_bound, scaffold_indices)
 
         # Regrow scaffold
         self._unassign_domains(scaffold_indices, staples)
@@ -2931,7 +2931,7 @@ class ScaffoldRegrowthCBMCMovetype(RegrowthCBMCMovetype):
             staple_domain_i, scaffold_domain_i = random.choice(
                     comp_domains)
             delta_e = self._set_staple_growth_point(staple_index,
-                    staple_domain_i, scaffold_domain_i)
+                    staple_domain_i, 0, scaffold_domain_i)
             self._bias *= math.exp(-delta_e / self.origami_system.temp)
             self._grow_staple(staple_index, staple_domain_i,
                     regrow_old=regrow_old)
@@ -3111,7 +3111,7 @@ class ConservedTopologyCBMCMovetype(RegrowthCBMCMovetype):
             staple_i, staple_domain_i = staple_types['singly_bound'][
                     scaffold_domain_i]
             delta_e = self._set_staple_growth_point(staple_i, staple_domain_i,
-                    scaffold_domain_i)
+                    0, scaffold_domain_i)
             self._bias *= math.exp(-delta_e / self.origami_system.temp)
             self._grow_staple(staple_i, staple_domain_i, regrow_old=regrow_old,
                     overcount_cor=False)
@@ -3122,7 +3122,7 @@ class ConservedTopologyCBMCMovetype(RegrowthCBMCMovetype):
             staple_i, staple_domain_i= staple_types['multiply_bound'][
                      scaffold_domain_i]
             delta_e = self._set_staple_growth_point(staple_i, staple_domain_i,
-                    scaffold_domain_i)
+                    0, scaffold_domain_i)
             self._bias *= math.exp(-delta_e / self.origami_system.temp)
             self._grow_staple(staple_i, staple_domain_i, regrow_old=regrow_old,
                     overcount_cor=False)
