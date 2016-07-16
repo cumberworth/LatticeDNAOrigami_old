@@ -2102,7 +2102,6 @@ class ExchangeMMCMovetype(MMCMovetype):
         self._deleted_chains.append((staple_identity, unique_index))
 
         # Test acceptance
-        pdb.set_trace()
         if self._staple_deletion_accepted(staple_identity):
             self.origami_system = self.origami_system
             accepted = True
