@@ -1081,9 +1081,8 @@ class OrigamiSystem:
                 else:
                     continue
 
-            p_i = self.get_domain_position(chain_i, d_i)
-
-            d_j = d_i + 1
+            p_i = m_position[c_i][d_i];
+            d_j = d_i + 1;
             if d_j < 0 or d_j >= self.chain_lengths[chain_i]:
                 if self.cyclic and chain_i == SCAFFOLD_INDEX:
                     d_j = self.wrap_cyclic_scaffold(d_j)
