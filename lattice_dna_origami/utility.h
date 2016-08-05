@@ -3,43 +3,49 @@
 #ifndef UTILITY_H
 #define UTILITY_H
 
+#include <vector>
+#include <array>
+
+using std::vector;
+using std::array;
+
 namespace Utility {
+    
+    // Find index for given element
     template<typename Container_T, typename Element_T>
     int index(Container_T container, Element_T element);
 
+    // Exception types
     struct NoElement {};
-}
+    struct IndexOutOfRange {};
 
-/* Copied from a stack exchange question (which is copied from the BOOST
-   library) for allowing pairs to be hashed.
-*/
-template <class T>
-inline void hash_combine(std::size_t & seed, const T & v)
-{
-  std::hash<T> hasher;
-  seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-}
-
-namespace std {
-
-    template<typename S, typename T> struct hash<pair<S, T>> {
-        inline size_t operator()(const pair<S, T>& v) const {
-            size_t seed = 0;
-            ::hash_combine(seed, v.first);
-            ::hash_combine(seed, v.second);
-            return seed;
-        }
+    // Container for chain domain indices
+    struct CDPair {
+        int c;
+        int d;
+        bool operator==(const CDPair& cd_j) {return (this->c == cd_j.c and
+                this->d == cd_j.d);};
     };
 
-    template<typename T> struct hash<vector<T>> {
-        inline size_t operator()(const vector<T>& v) const {
-            size_t seed = 0;
-            for (auto i: v) {
-                ::hash_combine(seed, i);
-            }
-            return seed;
-        }
+    bool operator==(const CDPair& cd_i, const CDPair& cd_j) {return (cd_i.c == cd_j.c
+            and cd_i.d == cd_j.d);};
+
+    // Vector for Z3 space
+    class VectorThree: public array<int, 3> {
+        public:
+            VectorThree(int x, int y, int z): array<int, 3> {{x, y, z}} {};
+            VectorThree(): array<int, 3> {{}} {};
+            VectorThree operator+(const VectorThree& v_2);
+            VectorThree operator-(const VectorThree& v_2);
+            VectorThree operator-();
+            VectorThree rotate_half(VectorThree axis);
     };
+
+    // Unit vectors
+    const VectorThree xhat {1, 0, 0};
+    const VectorThree yhat {0, 1, 0};
+    const VectorThree zhat {0, 0, 1};
 }
+
 
 #endif // UTILITY_H

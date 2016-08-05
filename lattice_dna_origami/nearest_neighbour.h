@@ -57,6 +57,7 @@ namespace NearestNeighbour {
     		{'A', 'T'}, {'T', 'A'}, {'G', 'C'}, {'C', 'G'}};
 
 	double calc_hybridization_energy(string seq, double temp, double cation_M);
+	double calc_stacking_energy(string seq_i, string seq_j, double temp, double cation_M);
 	string find_longest_contig_complement(string seq_i, string seq_j);
     pair<double, double> calc_hybridization_H_and_S(string seq, double cation_M);
     string calc_complementary_seq(string seq);
