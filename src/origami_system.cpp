@@ -40,18 +40,16 @@ OrigamiSystem::OrigamiSystem(
 Chains OrigamiSystem::chains() const {
     // Return chains data structure for current config
     Chains chains;
-    for (int c_i {0}; c_i != m_working_to_unique.size(); c_i++) {
-        int uc_i = m_working_to_unique[c_i];
-        int c_i_ident = m_chain_identities[c_i];
-        Chain chain {uc_i, c_i_ident, m_positions[c_i], m_orientations[c_i]};
+    for (auto c_i: m_chain_indices) {
+        int c_i_ident = m_chain_identities.at(c_i);
+        Chain chain {c_i, c_i_ident, m_positions.at(c_i), m_orientations.at(c_i)};
     }
     return chains;
 }
 
 double OrigamiSystem::unassign_domain(CDPair cd_i) {
     // Deletes positions, orientations, and removes/unassigns occupancies.
-    CDPair ucd_i {m_working_to_unique[cd_i.c], cd_i.d};
-    Occupancy occupancy {domain_occupancy(ucd_i)};
+    Occupancy occupancy {domain_occupancy(cd_i)};
     double delta_e {0};
     switch (occupancy) {
         case Occupancy::bound:
@@ -125,21 +123,19 @@ double OrigamiSystem::check_domain_constraints(
 
 int OrigamiSystem::add_chain(int c_i_ident) {
     // Add chain with domains in unassigned state and return chain index.
-    m_current_uc_i += 1;
-    return add_chain(c_i_ident, m_current_uc_i);
+    m_current_c_i += 1;
+    return add_chain(c_i_ident, m_current_c_i);
 }
 
-int OrigamiSystem::add_chain(int c_i_ident, int uc_i) {
-    // Add chain with given unique index
-    auto c_i {m_chain_lengths.size()};
-    m_identity_to_index[c_i_ident].push_back(uc_i);
-    m_working_to_unique.push_back(uc_i);
-    m_unique_to_working[uc_i] = c_i;
-    m_chain_identities.push_back(c_i_ident);
+int OrigamiSystem::add_chain(int c_i_ident, int c_i) {
+    // Add chain with given index
+    m_identity_to_index[c_i_ident].push_back(c_i);
+    m_chain_indices.push_back(c_i);
+    m_chain_identities[c_i] = c_i_ident;
 
     auto chain_length {m_identities[c_i_ident].size()};
-    m_chain_lengths.push_back(chain_length);
-    for (int i {0}; i != chain_length; i++) {
+    m_chain_lengths[c_i] = (chain_length);
+    for (unsigned int i {0}; i != chain_length; i++) {
         m_positions[c_i].push_back(VectorThree {});
         m_orientations[c_i].push_back(VectorThree {});
     }
@@ -148,27 +144,15 @@ int OrigamiSystem::add_chain(int c_i_ident, int uc_i) {
 
 void OrigamiSystem::delete_chain(int c_i) {
     // Delete chain c_i
-    int uc_i {m_working_to_unique[c_i]};
     int c_i_ident {m_chain_identities[c_i]};
     m_identity_to_index[c_i_ident].erase(m_identity_to_index[c_i_ident].begin()
-            + uc_i);
-    m_working_to_unique.erase(m_working_to_unique.begin() + c_i);
-    m_unique_to_working.erase(uc_i);
+            + c_i);
+    m_chain_indices.erase(m_chain_indices.begin() + c_i);
 
-    // Update map from unique to working indices
-    int uc_j;
-    for (int c_j {0}; c_j != m_working_to_unique.size(); c_i++) {
-        if (c_j > c_i) {
-            int uc_j {m_working_to_unique[c_j]};
-            m_unique_to_working[uc_j] = c_j - 1;
-        }
-        else {
-        }
-    }
-    m_chain_identities.erase(m_chain_identities.begin() + c_i);
-    m_positions.erase(m_positions.begin() + c_i);
-    m_orientations.erase(m_orientations.begin() + c_i);
-    m_chain_lengths.erase(m_chain_lengths.begin() + c_i);
+    m_chain_identities.erase(c_i);
+    m_positions.erase(c_i);
+    m_orientations.erase(c_i);
+    m_chain_lengths.erase(c_i);
 }
 
 // Private methods
@@ -177,15 +161,14 @@ void OrigamiSystem::initialize_complementary_associations() {
     // Intialize staple identity to complementary scaffold domains container
     // Staple identities are 1 indexed
     m_staple_ident_to_scaffold_ds[0] = {};
-    for (int i {0}; i != m_identities.size(); ++i) {
+    for (unsigned int i {0}; i != m_identities.size(); ++i) {
         m_identity_to_index.push_back({});
         vector<int> staple {m_identities[i]};
         vector<int> scaffold_d_is {};
-        for (int j {0}; j != staple.size(); ++j) {
-            int staple_d_i {staple[j]};
+        for (auto staple_d_i: staple) {
 
-            // Staple d_is are negatives of scaffold d_is
-            int scaffold_d_i {index(m_identities[scaffold_d_i], -staple_d_i)};
+            // staple_d_i's are negatives of scaffold_d_i's
+            int scaffold_d_i {index(m_identities[c_scaffold], -staple_d_i)};
             scaffold_d_is.push_back(scaffold_d_i);
         }
         m_staple_ident_to_scaffold_ds.push_back(scaffold_d_is);
@@ -194,14 +177,16 @@ void OrigamiSystem::initialize_complementary_associations() {
 
 void OrigamiSystem::initialize_energies() {
     // Calculate and store all energies
-    for (int c_i {0}; c_i != m_sequences.size(); c_i++) {
-        for (int c_j {0}; c_j != m_sequences.size(); c_j++) {
-            for (int d_i {0}; d_i != m_sequences[c_i].size(); d_i++) {
-                for (int d_j {0}; d_j != m_sequences[c_j].size(); d_j++) {
+    for (unsigned int c_i {0}; c_i != m_sequences.size(); c_i++) {
+        for (unsigned int c_j {0}; c_j != m_sequences.size(); c_j++) {
+            for (unsigned int d_i {0}; d_i != m_sequences[c_i].size(); d_i++) {
+                for (unsigned int d_j {0}; d_j != m_sequences[c_j].size(); d_j++) {
                     string seq_i {m_sequences[c_i][d_i]};
                     string seq_j {m_sequences[c_j][d_j]};
-                    CDPair cd_i {c_i, d_i};
-                    CDPair cd_j {c_j, d_j};
+                    
+                    // Stupid ugly bullshit to deal with stupid size bullshit type
+                    CDPair cd_i {(int)c_i, (int)d_i};
+                    CDPair cd_j {(int)c_j, (int)d_j};
                     pair<CDPair, CDPair> key {cd_i, cd_j};
 
                     // Hybridization energies
@@ -230,24 +215,23 @@ void OrigamiSystem::initialize_energies() {
 
 void OrigamiSystem::initialize_config(Chains chains) {
     // Extract configuration from chains
-    for (int c_i {0}; c_i != chains.size(); c_i++) {
-        Chain chain {chains[c_i]};
-        int uc_i {chain.index};
-        m_unique_to_working[uc_i] = c_i;
-        m_working_to_unique.push_back(uc_i);
+    for (unsigned int i {0}; i != chains.size(); i++) {
+        Chain chain {chains[i]};
+        int c_i {chain.index};
+        m_chain_indices.push_back(c_i);
         int c_i_ident {chain.identity};
-        m_identity_to_index[c_i_ident].push_back(uc_i);
-        m_chain_identities.push_back(c_i_ident);
+        m_identity_to_index[c_i_ident].push_back(c_i);
+        m_chain_identities[c_i] = c_i_ident;
         auto num_domains {m_identities[c_i_ident].size()};
-        m_chain_lengths.push_back(num_domains);
-        for (int d_i {0}; d_i != num_domains; d_i++) {
+        m_chain_lengths[c_i] = num_domains;
+        for (unsigned int d_i {0}; d_i != num_domains; d_i++) {
             VectorThree pos = chain.positions[d_i];
             VectorThree ore = chain.orientations[d_i];
-            set_domain_config(CDPair {c_i, d_i}, pos, ore);
+            set_domain_config(CDPair {c_i, (int)d_i}, pos, ore);
         }
     }
-    m_current_uc_i = *max(m_working_to_unique.begin(),
-            m_working_to_unique.end());
+    m_current_c_i = *max(m_chain_indices.begin(),
+            m_chain_indices.end());
 }
 
 double OrigamiSystem::hybridization_energy(CDPair cd_i, CDPair cd_j) const {
@@ -261,25 +245,22 @@ double OrigamiSystem::stacking_energy(CDPair cd_i, CDPair cd_j) const {
 }
 
 double OrigamiSystem::unassign_bound_domain(CDPair cd_i) {
-    CDPair ucd_i {m_working_to_unique[cd_i.c], cd_i.d};
-    CDPair ucd_j {domain_bound_to(ucd_i)};
-    CDPair cd_j {m_unique_to_working[ucd_j.c], ucd_j.d};
-
+    CDPair cd_j {domain_bound_to(cd_i)};
     double delta_e {-hybridization_energy(cd_i, cd_j)};
 
-    m_bound_d_to_bound_d.erase(ucd_i);
-    m_bound_d_to_bound_d.erase(ucd_j);
-    m_domain_occupancies.erase(ucd_i);
+    m_bound_d_to_bound_d.erase(cd_i);
+    m_bound_d_to_bound_d.erase(cd_j);
+    m_domain_occupancies.erase(cd_i);
 
-    VectorThree pos {m_positions[cd_i.c][cd_i.d]};
-    m_pos_to_unbound_d[pos] = ucd_j;
+    VectorThree pos {domain_position(cd_i)};
+    m_pos_to_unbound_d[pos] = cd_j;
     m_position_occupancies[pos] = Occupancy::unbound;
-    m_domain_occupancies[ucd_j] = Occupancy::unbound;
+    m_domain_occupancies[cd_j] = Occupancy::unbound;
     return delta_e;
 }
 
 void OrigamiSystem::unassign_unbound_domain(CDPair cd_i) {
-    VectorThree pos {m_positions[cd_i.c][cd_i.d]};
+    VectorThree pos {domain_position(cd_i)};
     m_pos_to_unbound_d.erase(pos);
     m_position_occupancies.erase(pos);
     m_domain_occupancies[cd_i] = Occupancy::unassigned;
@@ -295,16 +276,14 @@ void OrigamiSystem::update_domain(
 
 void OrigamiSystem::update_occupancies(CDPair cd_i, VectorThree pos) {
     Occupancy occupancy {position_occupancy(pos)};
-    CDPair ucd_i {m_working_to_unique[cd_i.c], cd_i.d};
     Occupancy new_state;
     switch (occupancy) {
         case Occupancy::unbound: {
-            CDPair ucd_j {unbound_domain_at(pos)};
-            CDPair cd_j {m_unique_to_working[ucd_j.c], ucd_j.d};
+            CDPair cd_j {unbound_domain_at(pos)};
             int c_i_ident {m_chain_identities[cd_i.c]};
             int d_i_ident {m_identities[c_i_ident][cd_i.d]};
             int c_j_ident {m_chain_identities[cd_j.c]};
-            int d_j_ident {m_identities[c_i_ident][cd_j.d]};
+            int d_j_ident {m_identities[c_j_ident][cd_j.d]};
             if (d_i_ident == -d_j_ident) {
                 new_state = Occupancy::bound;
                 m_num_fully_bound_domains += 1;
@@ -314,19 +293,21 @@ void OrigamiSystem::update_occupancies(CDPair cd_i, VectorThree pos) {
             }
 
             m_pos_to_unbound_d.erase(pos);
-            m_domain_occupancies[ucd_i] = new_state;
-            m_domain_occupancies[ucd_j] = new_state;
+            m_domain_occupancies[cd_i] = new_state;
+            m_domain_occupancies[cd_j] = new_state;
             m_position_occupancies[pos] = new_state;
-            m_bound_d_to_bound_d[ucd_j] = ucd_i;
-            m_bound_d_to_bound_d[ucd_i] = ucd_j;
+            m_bound_d_to_bound_d[cd_j] = cd_i;
+            m_bound_d_to_bound_d[cd_i] = cd_j;
             break;
         }
         case Occupancy::unassigned:
             new_state = Occupancy::unbound;
-            m_domain_occupancies[ucd_i] = new_state;
+            m_domain_occupancies[cd_i] = new_state;
             m_position_occupancies[pos] = new_state;
-            m_pos_to_unbound_d[pos] = ucd_i;
+            m_pos_to_unbound_d[pos] = cd_i;
             break;
+        default:
+            throw OrigamiMisuse {};
     }
 }
 
@@ -391,13 +372,13 @@ double OrigamiSystem::check_stacking(CDPair cd_new, CDPair cd_old) {
         CDPair cd_i;
         CDPair cd_j;
         try {
-            CDPair cd_i = increment_index(cd_old, i);
-            CDPair cd_j = increment_index(cd_i, 1);
+            cd_i = increment_index(cd_old, i);
+            cd_j = increment_index(cd_i, 1);
         }
         catch (IndexOutOfRange) {
             continue;
         }
-        bool cd_j_bound {m_domain_occupancies[cd_j] == Occupancy::bound};
+        bool cd_j_bound {domain_occupancy(cd_j) == Occupancy::bound};
         if (not cd_j_bound) {
             continue;
         }
@@ -405,10 +386,10 @@ double OrigamiSystem::check_stacking(CDPair cd_new, CDPair cd_old) {
         if (cd_adjacent.c == cd_new.c) {
             continue;
         }
-        VectorThree pos_i = {m_positions[cd_i.c][cd_i.d]};
-        VectorThree pos_j = {m_positions[cd_j.c][cd_j.d]};
+        VectorThree pos_i = {domain_position(cd_i)};
+        VectorThree pos_j = {domain_position(cd_j)};
         VectorThree ndr {pos_j - pos_i};
-        VectorThree ore_i = {m_orientations[cd_i.c][cd_i.d]};
+        VectorThree ore_i = {domain_orientation(cd_i)};
         if (ndr == ore_i) {
             continue;
         }
@@ -423,14 +404,14 @@ void OrigamiSystem::check_domain_pair_constraints(CDPair cd_i) {
         CDPair cd_1;
         CDPair cd_2;
         try {
-            CDPair cd_1 = increment_index(cd_i, i);
-            CDPair cd_2 = increment_index(cd_1, 1);
+            cd_1 = increment_index(cd_i, i);
+            cd_2 = increment_index(cd_1, 1);
         }
         catch (IndexOutOfRange) {
             continue;
         }
-        Occupancy occ_1 {m_domain_occupancies[cd_1]};
-        Occupancy occ_2 {m_domain_occupancies[cd_2]};
+        Occupancy occ_1 {domain_occupancy(cd_1)};
+        Occupancy occ_2 {domain_occupancy(cd_2)};
         if (occ_1 == Occupancy::bound and occ_2 == Occupancy::bound) {
             check_helical_constraints(cd_1, cd_2);
         }
@@ -443,16 +424,16 @@ void OrigamiSystem::check_helical_constraints(CDPair cd_1, CDPair cd_2) {
     // Given that d1 and d2 exist and are bound
 
     // Calculate next domain vector
-    VectorThree pos_1 {m_positions[cd_1.c][cd_1.d]};
-    VectorThree pos_2 {m_positions[cd_2.c][cd_2.d]};
+    VectorThree pos_1 {domain_position(cd_1)};
+    VectorThree pos_2 {domain_position(cd_2)};
     VectorThree ndr {pos_2 - pos_1};
 
     CDPair cd_bound_1 {domain_bound_to(cd_1)};
     CDPair cd_bound_2 {domain_bound_to(cd_2)};
     bool bound_same_chain {cd_bound_1.c == cd_bound_2.c};
 
-    VectorThree ore_1 {m_orientations[cd_1.c][cd_1.d]};
-    VectorThree ore_2 {m_orientations[cd_1.c][cd_1.d]};
+    VectorThree ore_1 {domain_orientation(cd_1)};
+    VectorThree ore_2 {domain_orientation(cd_1)};
 
     // New helix case
     if (ore_1 == ndr) {
@@ -494,26 +475,26 @@ void OrigamiSystem::check_linear_helix_rear(CDPair cd_3) {
     CDPair cd_1;
     CDPair cd_2;
     try {
-        CDPair cd_2 = increment_index(cd_3, -1);
-        CDPair cd_1 = increment_index(cd_2, -1);
+        cd_2 = increment_index(cd_3, -1);
+        cd_1 = increment_index(cd_2, -1);
     }
     catch (IndexOutOfRange) {
         return;
     }
     
     // Domains 1 and 2 not bound
-    bool cd_1_bound {m_domain_occupancies[cd_1] == Occupancy::bound};
-    bool cd_2_bound {m_domain_occupancies[cd_2] == Occupancy::bound};
+    bool cd_1_bound {domain_occupancy(cd_1) == Occupancy::bound};
+    bool cd_2_bound {domain_occupancy(cd_2) == Occupancy::bound};
     if (not (cd_1_bound and cd_2_bound)) {
         return;
     }
-    VectorThree pos_1 {m_positions[cd_1.c][cd_1.d]};
-    VectorThree pos_2 {m_positions[cd_2.c][cd_2.d]};
-    VectorThree pos_3 {m_positions[cd_3.c][cd_3.d]};
+    VectorThree pos_1 {domain_position(cd_1)};
+    VectorThree pos_2 {domain_position(cd_2)};
+    VectorThree pos_3 {domain_position(cd_3)};
     VectorThree ndr_1 {pos_2 - pos_1};
     VectorThree ndr_2 {pos_3 - pos_2};
-    VectorThree ore_1 {m_orientations[cd_1.c][cd_1.d]};
-    VectorThree ore_2 {m_orientations[cd_2.c][cd_2.d]};
+    VectorThree ore_1 {domain_orientation(cd_1)};
+    VectorThree ore_2 {domain_orientation(cd_2)};
     // Domains 1 and 2 are junction
     if (ndr_1 == ore_1) {
         return;
@@ -539,19 +520,19 @@ void OrigamiSystem::check_linear_helix(
         CDPair cd_2) {
     CDPair cd_3;
     try {
-        CDPair cd_3 = increment_index(cd_2, 1);
+        cd_3 = increment_index(cd_2, 1);
     }
     catch (IndexOutOfRange) {
         return;
     }
 
     // Third domain not bound or unasssigned
-    if (m_domain_occupancies[cd_3] != Occupancy::bound) {
+    if (domain_occupancy(cd_3) != Occupancy::bound) {
         return;
     }
 
     // Third domain part of new helix
-    VectorThree pos_3 {m_positions[cd_3.c][cd_3.d]};
+    VectorThree pos_3 {domain_position(cd_3)};
     VectorThree ndr_2 {pos_3 - pos_2};
     if (ndr_2 == ore_2) {
         return;
@@ -571,18 +552,18 @@ void OrigamiSystem::check_junction_front(CDPair cd_1) {
     CDPair cd_3;
     CDPair cd_4;
     try {
-        CDPair cd_2 = increment_index(cd_1, 1);
-        CDPair cd_3 = increment_index(cd_1, 2);
-        CDPair cd_4 = increment_index(cd_1, 3);
+        cd_2 = increment_index(cd_1, 1);
+        cd_3 = increment_index(cd_1, 2);
+        cd_4 = increment_index(cd_1, 3);
     }
     catch (IndexOutOfRange) {
         return;
     }
 
     // Check that all domains in bound state
-    bool cd_2_bound {m_domain_occupancies[cd_2] == Occupancy::bound};
-    bool cd_3_bound {m_domain_occupancies[cd_3] == Occupancy::bound};
-    bool cd_4_bound {m_domain_occupancies[cd_4] == Occupancy::bound};
+    bool cd_2_bound {domain_occupancy(cd_2) == Occupancy::bound};
+    bool cd_3_bound {domain_occupancy(cd_3) == Occupancy::bound};
+    bool cd_4_bound {domain_occupancy(cd_4) == Occupancy::bound};
     if (not (cd_2_bound and cd_3_bound and cd_4_bound)) {
         return;
     }
@@ -600,18 +581,18 @@ void OrigamiSystem::check_junction_rear(CDPair cd_4) {
     CDPair cd_2;
     CDPair cd_3;
     try {
-        CDPair cd_3 = increment_index(cd_4, -1);
-        CDPair cd_2 = increment_index(cd_4, -2);
-        CDPair cd_1 = increment_index(cd_4, -3);
+        cd_3 = increment_index(cd_4, -1);
+        cd_2 = increment_index(cd_4, -2);
+        cd_1 = increment_index(cd_4, -3);
     }
     catch (IndexOutOfRange) {
         return;
     }
 
     // Check that all domains in bound state
-    bool cd_1_bound {m_domain_occupancies[cd_1] == Occupancy::bound};
-    bool cd_2_bound {m_domain_occupancies[cd_2] == Occupancy::bound};
-    bool cd_3_bound {m_domain_occupancies[cd_3] == Occupancy::bound};
+    bool cd_1_bound {domain_occupancy(cd_1) == Occupancy::bound};
+    bool cd_2_bound {domain_occupancy(cd_2) == Occupancy::bound};
+    bool cd_3_bound {domain_occupancy(cd_3) == Occupancy::bound};
     if (not (cd_1_bound and cd_2_bound and cd_3_bound)) {
         return;
     }
@@ -629,19 +610,19 @@ bool OrigamiSystem::doubly_contiguous_junction(CDPair cd_1, CDPair cd_2) {
     // Check doubly contiguous
     CDPair cd_bound_1 {domain_bound_to(cd_1)};
     CDPair cd_bound_2 {domain_bound_to(cd_2)};
-    if (not cd_bound_1.c == cd_bound_2.c) {
+    if (cd_bound_1.c != cd_bound_2.c) {
         return false;
     }
 
-    if (not cd_bound_1.d == cd_bound_2.d - 1) {
+    if (cd_bound_1.d != cd_bound_2.d - 1) {
         return false;
     }
 
     // Check junction
-    VectorThree pos_1 {m_positions[cd_1.c][cd_1.d]};
-    VectorThree pos_2 {m_positions[cd_1.c][cd_1.d]};
+    VectorThree pos_1 {domain_position(cd_1)};
+    VectorThree pos_2 {domain_position(cd_1)};
     VectorThree ndr {pos_2 - pos_1};
-    VectorThree ore_1 {m_orientations[cd_1.c][cd_1.d]};
+    VectorThree ore_1 {domain_orientation(cd_1)};
     if (ndr != ore_1) {
         return false;
     }
@@ -654,15 +635,15 @@ void OrigamiSystem::check_doubly_contiguous_junction(CDPair cd_2, CDPair cd_3) {
     CDPair cd_1;
     CDPair cd_4;
     try {
-        CDPair cd_1 {increment_index(cd_2, -1)};
-        CDPair cd_4 {increment_index(cd_3, 1)};
+        cd_1 = increment_index(cd_2, -1);
+        cd_4 =increment_index(cd_3, 1);
     }
     catch (IndexOutOfRange) {
         return;
     }
 
-    bool cd_1_bound {m_domain_occupancies[cd_1] == Occupancy::bound};
-    bool cd_4_bound {m_domain_occupancies[cd_4] == Occupancy::bound};
+    bool cd_1_bound {domain_occupancy(cd_1) == Occupancy::bound};
+    bool cd_4_bound {domain_occupancy(cd_4) == Occupancy::bound};
     if (not (cd_1_bound and cd_4_bound)) {
         return;
     }
@@ -675,10 +656,10 @@ void OrigamiSystem::check_doubly_contiguous_junction(
         CDPair cd_3,
         CDPair cd_4) {
     // Calling functions already check for existance and boundeness of d1-4.
-    VectorThree pos_1 {m_positions[cd_1.c][cd_1.d]};
-    VectorThree pos_2 {m_positions[cd_2.c][cd_2.d]};
-    VectorThree pos_3 {m_positions[cd_3.c][cd_3.d]};
-    VectorThree pos_4 {m_positions[cd_4.c][cd_4.d]};
+    VectorThree pos_1 {domain_position(cd_1)};
+    VectorThree pos_2 {domain_position(cd_2)};
+    VectorThree pos_3 {domain_position(cd_3)};
+    VectorThree pos_4 {domain_position(cd_4)};
     VectorThree ndr_1 {pos_2 - pos_1};
     VectorThree ndr_3 {pos_4 - pos_3};
     if (ndr_1 == -ndr_3) {
@@ -688,8 +669,8 @@ void OrigamiSystem::check_doubly_contiguous_junction(
 }
 
 void OrigamiSystem::check_domain_orientations_opposing(CDPair cd_i, CDPair cd_j) {
-    VectorThree ore_i {m_orientations[cd_i.c][cd_i.d]};
-    VectorThree ore_j {m_orientations[cd_j.c][cd_j.d]};
+    VectorThree ore_i {domain_orientation(cd_i)};
+    VectorThree ore_j {domain_orientation(cd_j)};
     if (ore_i != -ore_j) {
         throw ConstraintViolation {};
     }
@@ -740,7 +721,7 @@ void OrigamiSystemSixteen<Origami_T>::check_twist_constraint(
         VectorThree ore_1,
         VectorThree ore_2) {
     VectorThree ore_1_rotated {ore_1.rotate_half(ndr)};
-    if (ore_1 == ore_2) {
+    if (ore_1_rotated == ore_2) {
         return;
     }
     else {

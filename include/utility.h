@@ -12,22 +12,24 @@ using std::array;
 namespace Utility {
     
     // Find index for given element
-    template<typename Container_T, typename Element_T>
-    int index(Container_T container, Element_T element);
+//    template<typename Element_T>
+//    int index(vector<Element_T> container, Element_T element);
+    int index(vector<int> container, int element);
 
     // Exception types
     struct NoElement {};
     struct IndexOutOfRange {};
+    struct OrigamiMisuse {};
 
     // Container for chain domain indices
     struct CDPair {
         int c;
         int d;
         bool operator==(const CDPair& cd_j) {return (this->c == cd_j.c and
-                this->d == cd_j.d);};
+               this->d == cd_j.d);};
     };
 
-    bool operator==(const CDPair& cd_i, const CDPair& cd_j) {return (cd_i.c == cd_j.c
+    inline bool operator==(const CDPair& cd_i, const CDPair& cd_j) {return (cd_i.c == cd_j.c
             and cd_i.d == cd_j.d);};
 
     // Vector for Z3 space
