@@ -94,6 +94,13 @@ def find_longest_contig_complement(seq_1, seq_2):
         else:
             return comp_seqs
 
+    # WRONG JUST FOR BENCHMARKING
+    print('WARNING WRONG WRONG WRONG')
+    if comp_seqs == []:
+        comp_seqs = ['A']
+
+    return comp_seqs
+
 def calc_melting_point(sequence, strand_M, cation_M):
     """Calculate melting point assuming two state behaviour."""
     DH, DS = calc_hybridization_enthalpy_and_entropy(sequence, cation_M)
