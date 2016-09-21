@@ -1,4 +1,4 @@
-#!/usr/env python
+#!/usr/bin/env python
 
 """Generates tikz scripts for configurations of the origami model.
 
@@ -6,16 +6,16 @@ Takes template tikz scripts for geneting configuration diagrams and outputs a
 script for configurations at specified steps in the specified intput file.
 """
 
-from lattice_origami_domains import JSONInputFile, HDF5InputFile
+import argparse
 import sys
 import string
 
+sys.path.insert(0, '../../../../lib/lattice_origami_domains')
 
-INPUT_FILENAME = sys.argv[1]
-OUTPUT_FILENAME = sys.argv[2]
-STEP = int(sys.argv[3])
+from lattice_dna_origami.lattice_origami_domains import JSONInputFile, HDF5InputFile
 
-TEMPLATE_FILENAME = 'tikz_template.tex'
+
+TEMPLATE_FILENAME = '../../../../share/tikz_template.tex'
 
 
 def open_inputfile(filename):
@@ -32,7 +32,8 @@ def open_inputfile(filename):
 
 
 def make_tikz_position_bond_orientation_list(chains):
-    tikz_list = ''
+    scaffold_list = ''
+    staple_list = ''
     for chain in chains:
         for domain_index in range(len(chain['positions'])):
             rix = chain['positions'][domain_index][0]
@@ -50,33 +51,69 @@ def make_tikz_position_bond_orientation_list(chains):
                 aiy = 0
                 aiz = 0
 
-            bix = chain['orientations'][domain_index][0]
-            biy = chain['orientations'][domain_index][1]
-            biz = chain['orientations'][domain_index][2]
+            bix = chain['orientations'][domain_index][0] * 0.5
+            biy = chain['orientations'][domain_index][1] * 0.5
+            biz = chain['orientations'][domain_index][2] * 0.5
 
-            tikz_list = tikz_list + '{} / {} / {} / {} / {} / {} / {} / {} / {}, '.format(
-                    rix, riy, riz, aix, aiy, aiz, bix, biy, biz)
+            if chain['identity'] == 0:
+                scaffold_list = scaffold_list + '{} / {} / {} / {} / {} / {} / {} / {} / {}, '.format(
+                        rix, riy, riz, aix, aiy, aiz, bix, biy, biz)
+            else:
+                staple_list = staple_list + '{} / {} / {} / {} / {} / {} / {} / {} / {}, '.format(
+                        rix, riy, riz, aix, aiy, aiz, bix, biy, biz)
 
     # Remove last comma and space
-    tikz_list = tikz_list[:-2]
+    scaffold_list = scaffold_list[:-2]
+    staple_list = staple_list[:-2]
 
-    return tikz_list
+    return scaffold_list, staple_list
 
 
-def insert_list_and_write(tikz_list, output_filename):
+def insert_list_and_write(scaffold_list, staple_list, output_filename, coor1,
+        coor2, axis):
     with open(TEMPLATE_FILENAME) as input:
         template = string.Template(input.read())
 
-    template = template.substitute(tikz_list=tikz_list)
+    template = template.substitute(scaffold_list=scaffold_list,
+            staple_list=staple_list, coor1=coor1, coor2=coor2, axis=axis)
     with open(output_filename, 'w') as output:
         output.write(template)
 
 
 def main():
-    input_file = open_inputfile(INPUT_FILENAME)
-    chains = input_file.chains(STEP)
-    tikz_list = make_tikz_position_bond_orientation_list(chains)
-    insert_list_and_write(tikz_list, OUTPUT_FILENAME)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('input_filename',
+            help='Configuration filename')
+    parser.add_argument('output_filename',
+            help='Tex filename')
+    parser.add_argument('step', type=int,
+            help='Step in configuration file to draw')
+    parser.add_argument('--coor1', dest='coor1', default=40,
+            help='First perspective coordinate (default 40)')
+    parser.add_argument('--coor2', dest='coor2', default=110,
+            help='First perspective coordinate (default 110)')
+    parser.add_argument('--noaxis', dest='noaxis', action='store_true',
+            default=False,
+            help='Switch off axis')
+
+    args = parser.parse_args()
+    input_filename = args.input_filename
+    output_filename = args.output_filename
+    step = args.step
+    coor1 = args.coor1
+    coor2 = args.coor2
+    noaxis = args.noaxis
+    if noaxis:
+        axis = '%'
+    else:
+        axis = ''
+        
+
+    input_file = open_inputfile(input_filename)
+    chains = input_file.chains(step)
+    scaffold_list, staple_list = make_tikz_position_bond_orientation_list(chains)
+    insert_list_and_write(scaffold_list, staple_list, output_filename, coor1,
+            coor2, axis)
 
 if __name__ == '__main__':
     main()

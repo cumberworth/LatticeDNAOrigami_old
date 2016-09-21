@@ -12,6 +12,7 @@ import numpy as np
 
 from lattice_dna_origami.origami_io import *
 from lattice_dna_origami.utility import *
+from lattice_dna_origami.origami_system import *
 
 class MOVETYPE(Enum):
     IDENTITY = 0

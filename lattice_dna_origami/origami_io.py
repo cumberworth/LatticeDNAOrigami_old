@@ -340,3 +340,64 @@ class HDF5InputFile:
 
 
 
+class PlainTextTrajFile:
+    """Custom plain text trajectory file for cpp version.
+    
+    Requires system information be provided through an input file."""
+
+    def __init__(self, traj_filename, input_file):
+        self._input_file = input_file
+        self._traj_filename = input_filename
+
+        # Interval that configurations have been written to file
+        self._write_interval = 1
+
+        # List of chains at each steps
+        self._steps = []
+        self._parse()
+
+    @property
+    def cyclic(self):
+        return self._input_file.cyclic
+
+    @property
+    def sequences(self):
+        return self._input_file.sequences
+
+    @property
+    def identities(self):
+        return self._input_file.identities
+
+    def chains(self, step):
+        """Standard format for passing chain configuration."""
+        return self._steps[step]
+
+    def _parse(self):
+        """ Parse trajectory file."""
+        with open(self._traj_filename) as inp:
+            lines = inp.readlines()
+
+        # File will start with step number
+        self._write_interval = int(lines[0])
+        line_i = 1
+        eof = False
+        while not eof:
+            eoc = False
+            self._steps.append([])
+            while not eoc:
+                line_i = _parse_chain(lines, line_i)
+                if lines[line_i] == '\n':
+                    eoc = True
+
+    def _parse_chain(lines, line_i):
+        chain = {}
+        chain_ids = [int(i) for i in lines[line_i].split()]
+        chain['index'] = chain_ids[0]
+        chain['indentity'] = chain_ids[1]
+        line_i += 1
+        pos_row_major = np.array(lines[line_i]).astype(int)
+        chain['positions'] = pos_row_major.reshape(len(pos_row_major) // 3, 3)
+        line_i += 1
+        ore_row_major = np.array(lines[line_i]).astype(int)
+        chain['orientations'] = ore_row_major.reshape(len(ore_row_major) // 3, 3)
+        return line_i += 1
