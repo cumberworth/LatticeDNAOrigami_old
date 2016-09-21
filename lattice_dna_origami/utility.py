@@ -4,6 +4,7 @@
 
 import math
 import itertools
+import scipy.constants
 
 import numpy as np
 

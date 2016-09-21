@@ -7,7 +7,7 @@ import json
 import h5py
 import numpy as np
 
-from origami_system.py import *
+from lattice_dna_origami.origami_system import *
 
 class OutputFile:
     """Base output file class to allow check_and_write to be shared."""
@@ -347,7 +347,7 @@ class PlainTextTrajFile:
 
     def __init__(self, traj_filename, input_file):
         self._input_file = input_file
-        self._traj_filename = input_filename
+        self._traj_filename = traj_filename
 
         # Interval that configurations have been written to file
         self._write_interval = 1
@@ -375,7 +375,7 @@ class PlainTextTrajFile:
     def _parse(self):
         """ Parse trajectory file."""
         with open(self._traj_filename) as inp:
-            lines = inp.readlines()
+            lines = inp.read().split('\n')
 
         # File will start with step number
         self._write_interval = int(lines[0])
@@ -384,20 +384,25 @@ class PlainTextTrajFile:
         while not eof:
             eoc = False
             self._steps.append([])
-            while not eoc:
-                line_i = _parse_chain(lines, line_i)
-                if lines[line_i] == '\n':
+            while not (eoc or eof):
+                line_i = self._parse_chain(lines, line_i)
+                if line_i == len(lines) - 2:
+                    eof = True
+                elif lines[line_i] == '':
                     eoc = True
+            line_i += 2
 
-    def _parse_chain(lines, line_i):
+    def _parse_chain(self, lines, line_i):
         chain = {}
         chain_ids = [int(i) for i in lines[line_i].split()]
         chain['index'] = chain_ids[0]
         chain['indentity'] = chain_ids[1]
         line_i += 1
-        pos_row_major = np.array(lines[line_i]).astype(int)
+        pos_row_major = np.array(lines[line_i].split()).astype(int)
         chain['positions'] = pos_row_major.reshape(len(pos_row_major) // 3, 3)
         line_i += 1
-        ore_row_major = np.array(lines[line_i]).astype(int)
+        ore_row_major = np.array(lines[line_i].split()).astype(int)
         chain['orientations'] = ore_row_major.reshape(len(ore_row_major) // 3, 3)
-        return line_i += 1
+        line_i += 1
+        self._steps[-1].append(chain)
+        return  line_i
