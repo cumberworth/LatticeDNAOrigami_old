@@ -396,7 +396,7 @@ class PlainTextTrajFile:
         chain = {}
         chain_ids = [int(i) for i in lines[line_i].split()]
         chain['index'] = chain_ids[0]
-        chain['indentity'] = chain_ids[1]
+        chain['identity'] = chain_ids[1]
         line_i += 1
         pos_row_major = np.array(lines[line_i].split()).astype(int)
         chain['positions'] = pos_row_major.reshape(len(pos_row_major) // 3, 3)

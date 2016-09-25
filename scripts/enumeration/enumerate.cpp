@@ -30,11 +30,9 @@ int main(int argc, char* argv[]) {
             input_parameters.m_lattice_site_volume,
             input_parameters.m_cyclic};
 
-	// Enumerate configurations
+    // Enumerate configurations
     ConformationalEnumerator conf_enumerator {origami};
-
-    // Hack for staples
-    vector<pair<int, int>> staples {{1, 1}, {1, 1}};
+    vector<pair<int, int>> staples {{1, 1}};
     GrowthpointEnumerator growthpoint_enumerator {conf_enumerator, staples, origami};
     growthpoint_enumerator.enumerate();
     print_matrix(conf_enumerator.bound_state_weights());
@@ -58,6 +56,7 @@ GrowthpointEnumerator::GrowthpointEnumerator(
         m_origami_system {origami_system} {
 
     m_conformational_enumerator.set_staples(staples);
+    m_unbound_system_domains = m_origami_system.m_domains[0];
 }
 
 void GrowthpointEnumerator::enumerate() {
@@ -98,7 +97,6 @@ void GrowthpointEnumerator::enumerate() {
                     enumerate();
 
                     // Revert unbound domain list
-                    m_conformational_enumerator.remove_growthpoint(old_domain);
                     for (size_t k {0}; k != staple_length - 1; k++) {
                         m_unbound_system_domains.pop_back();
                     }
@@ -113,6 +111,7 @@ void GrowthpointEnumerator::enumerate() {
                         m_enumerated_growthpoints.push_back(m_growthpoints);
                     }
                 }
+                m_conformational_enumerator.remove_growthpoint(old_domain);
                 m_growthpoints.pop_back();
             }
 
@@ -153,9 +152,6 @@ ConformationalEnumerator::ConformationalEnumerator(OrigamiSystem& origami_system
         }
     }
 
-    // Set first domain to origin
-	m_origami_system.set_domain_config(*m_origami_system.m_domains[0][0], {0, 0, 0}, {1, 0, 0});
-
     // Delete all staple chains
     if (m_origami_system.num_staples() > 0) {
         for (size_t i {1}; i != m_origami_system.m_domains.size(); i ++) {
@@ -167,8 +163,20 @@ ConformationalEnumerator::ConformationalEnumerator(OrigamiSystem& origami_system
 void ConformationalEnumerator::enumerate() {
     create_domains_stack();
     Domain* starting_domain {m_domains.back()};
-    VectorThree origin {0, 0, 0};
-    enumerate_domain(starting_domain, origin);
+    m_domains.pop_back();
+    VectorThree p_new {0, 0, 0};
+    VectorThree o_new {1, 0, 0};
+    bool is_growthpoint {m_growthpoints.count(starting_domain) > 0};
+    if (is_growthpoint) {
+        set_growthpoint_domains(starting_domain, p_new);
+    }
+    else {
+        m_origami_system.set_domain_config(*starting_domain, p_new, o_new);
+        Domain* next_domain {m_domains.back()};
+        m_domains.pop_back();
+        enumerate_domain(next_domain, p_new);
+        m_origami_system.unassign_domain(*starting_domain);
+    }
 }
 
 void ConformationalEnumerator::set_staples(vector<pair<int, int>> staples) {
@@ -180,15 +188,15 @@ void ConformationalEnumerator::set_staples(vector<pair<int, int>> staples) {
         for (int i {0}; i != staple.second; i++) {
             int c_i {m_origami_system.add_chain(staple.first)};
             m_identity_to_indices[staple.first].push_back(c_i);
+        }
+    }
 
-            // Update bound states matrix to correct size
-            m_bound_state_weights.push_back({});
-            size_t staple_length {m_origami_system.m_identities[staple.first].size()};
-            for (size_t j {0}; j != m_bound_state_weights.size(); j++) {
-                for (size_t k {0}; k != staple_length; k++) {
-                    m_bound_state_weights[j].push_back(0);
-                }
-            }
+    // Update bound states matrix to correct size
+    size_t max_fully_bound_domain_pairs {m_origami_system.m_identities[0].size() + 1};
+    for (int i {0}; i != m_origami_system.num_staples() + 1; i++) {
+        m_bound_state_weights.push_back({});
+        for (size_t j {0}; j != max_fully_bound_domain_pairs; j++) {
+            m_bound_state_weights[i].push_back(0);
         }
     }
 }
@@ -233,81 +241,159 @@ vector<vector<double>> ConformationalEnumerator::bound_state_weights() {
 }
 
 void ConformationalEnumerator::enumerate_domain(Domain* domain, VectorThree p_prev) {
-    int multiplier {1};
+    int pos_multiplier {1};
 
     // Iterate through all positions
     for (auto p_vec: vectors) {
+        pos_multiplier = 1;
         VectorThree p_new = p_prev + p_vec;
 
         // Check if domain will be entering a bound state
         bool is_growthpoint {m_growthpoints.count(domain) > 0};
         Occupancy p_occ {m_origami_system.position_occupancy(p_new)};
-        bool is_occupied {p_occ == Occupancy::bound or p_occ == Occupancy::misbound};
+        bool is_occupied {p_occ == Occupancy::unbound};
+        bool is_bound {p_occ == Occupancy::bound or p_occ == Occupancy::misbound};
 
         // Cannot have more than two domains bound at a given position
-        if (is_growthpoint and is_occupied) {
+        if ((is_growthpoint and is_occupied) or is_bound) {
             continue;
         }
-        else if (is_growthpoint or is_occupied) {
-            Domain* other_domain;
-            if (is_growthpoint) {
-
-                // Store position for terminal domains
-                m_prev_growthpoint_p = p_new;
-                other_domain = m_growthpoints[domain];
-            }
-            else {
-                other_domain = m_origami_system.unbound_domain_at(p_new);
-                multiplier *= calculate_multiplier(domain, other_domain);
-            }
-
-            bool domains_complementary {m_origami_system.check_domains_complementary(
-                    *domain, *other_domain)};
-            if (domains_complementary) {
-                for (auto o_new: vectors) {
-                    m_energy += m_origami_system.set_domain_config(*domain, p_new, o_new);
-                }
-            }
-
-            // Can skip iteration over orientations if not complementary
-            else {
-                multiplier *= 6;
-                m_energy += m_origami_system.set_domain_config(*domain, p_new, {0, 0, 0});
-            }
+        else if (is_growthpoint) {
+            set_growthpoint_domains(domain, p_new);
         }
-
-        // Continue growing next domain
-        m_multiplier *= multiplier;
-        if (not m_domains.empty()) {
-            Domain* next_domain {m_domains.back()};
-            m_domains.pop_back();
-            VectorThree new_p_prev;
-
-            // Previous domain is last growthpoint if end-of-staple reached
-            bool domain_is_terminal {domain->m_c != next_domain->m_c};
-            if (domain_is_terminal) {
-                new_p_prev = m_prev_growthpoint_p;
-            }
-            else {
-                new_p_prev = p_new;
-            }
-            enumerate_domain(domain, new_p_prev);
+        else if (is_occupied) {
+            set_bound_domain(domain, p_new);
         }
-
-        // Save relevant values if system fully grown
+        // May be able to introduce some tricks to skip iterations over orientations
         else {
-            calc_and_save_weights();
+            set_unbound_domain(domain, p_new);
         }
-        m_multiplier /= multiplier;
-        m_origami_system.unassign_domain(*domain);
-        m_domains.push_back(domain);
+    }
+    m_domains.push_back(domain);
+}
+
+void ConformationalEnumerator::set_growthpoint_domains(
+        Domain* domain,
+        VectorThree p_new) {
+
+    // Store position for terminal domains
+    VectorThree prev_prev_growthpoint_p = m_prev_growthpoint_p;
+    m_prev_growthpoint_p = p_new;
+
+    // Should always be next in stack
+    Domain* bound_domain {m_domains.back()};
+    m_domains.pop_back();
+    bool domains_complementary {m_origami_system.check_domains_complementary(
+            *domain, *bound_domain)};
+    if (domains_complementary) {
+        for (auto o_new: vectors) {
+
+            m_energy += m_origami_system.set_domain_config(*domain, p_new, o_new);
+            try {
+                o_new = -o_new;
+                m_energy += m_origami_system.set_domain_config(*bound_domain, p_new, o_new);
+            }
+            catch (ConstraintViolation) {
+                continue;
+            }
+            grow_next_domain(bound_domain, p_new);
+            m_energy += m_origami_system.unassign_domain(*domain);
+        }
+    }
+    else {
+        double pos_multiplier {36};
+        VectorThree o_new {0, 0, 0};
+        m_energy += m_origami_system.set_domain_config(*domain, p_new, o_new);
+        m_energy += m_origami_system.set_domain_config(*bound_domain, p_new, o_new);
+        m_multiplier *= pos_multiplier;
+        grow_next_domain(bound_domain, p_new);
+        m_energy += m_origami_system.unassign_domain(*domain);
+        m_multiplier /= pos_multiplier;
+    }
+    m_domains.push_back(bound_domain);
+
+    // Revert position for terminal domains
+    m_prev_growthpoint_p = prev_prev_growthpoint_p;
+}
+
+void ConformationalEnumerator::set_bound_domain(
+        Domain* domain,
+        VectorThree p_new) {
+
+    Domain* occ_domain = m_origami_system.unbound_domain_at(p_new);
+    bool domains_complementary {m_origami_system.check_domains_complementary(
+            *domain, *occ_domain)};
+    if (domains_complementary) {
+        VectorThree o_new {-occ_domain->m_ore};
+        try {
+            m_energy += m_origami_system.set_domain_config(*domain, p_new, o_new);
+        }
+        catch (ConstraintViolation) {
+            return;
+        }
+        double pos_multiplier {calc_multiplier(domain, occ_domain)};
+        m_multiplier *= pos_multiplier;
+        grow_next_domain(domain, p_new);
+        m_multiplier /= pos_multiplier;
+    }
+    else {
+        VectorThree o_new {0, 0, 0};
+        m_energy += m_origami_system.set_domain_config(*domain, p_new, o_new);
+        double pos_multiplier {6 * calc_multiplier(domain, occ_domain)};
+        m_multiplier *= pos_multiplier;
+        grow_next_domain(domain, p_new);
+        m_multiplier /= pos_multiplier;
+    }
+}
+
+void ConformationalEnumerator::set_unbound_domain(
+        Domain* domain,
+        VectorThree p_new) {
+
+    for (auto o_new: vectors) {
+        try {
+            m_energy += m_origami_system.set_domain_config(*domain, p_new, o_new);
+        }
+        catch (ConstraintViolation) {
+            continue;
+        }
+        grow_next_domain(domain, p_new);
+    }
+}
+
+void ConformationalEnumerator::grow_next_domain(Domain* domain, VectorThree p_new) {
+
+    // Continue growing next domain
+    if (not m_domains.empty()) {
+        Domain* next_domain {m_domains.back()};
+        m_domains.pop_back();
+        VectorThree new_p_prev;
+
+        // Previous domain is last growthpoint if end-of-staple reached
+        bool domain_is_terminal {domain->m_c != next_domain->m_c};
+        if (domain_is_terminal) {
+            new_p_prev = m_prev_growthpoint_p;
+        }
+        else {
+            new_p_prev = p_new;
+        }
+        enumerate_domain(next_domain, new_p_prev);
     }
 
-    return;
+    // Save relevant values if system fully grown
+    else {
+        calc_and_save_weights();
+    }
+    m_energy += m_origami_system.unassign_domain(*domain);
 }
 
 void ConformationalEnumerator::create_domains_stack() {
-    for (size_t i {1}; i != m_origami_system.m_domains[0].size(); i++) {
+
+    // Reset stack
+    m_domains.clear();
+
+    // Iterate through scaffold domains and grow out staples if growthpoint
+    for (size_t i {0}; i != m_origami_system.m_domains[0].size(); i++) {
         Domain* domain {m_origami_system.m_domains[0][i]};
         bool is_growthpoint {m_growthpoints.count(domain) > 0};
         m_domains.push_back(domain);
@@ -316,22 +402,23 @@ void ConformationalEnumerator::create_domains_stack() {
             create_staple_stack(new_domain);
         }
     }
-	m_domains.erase(m_domains.begin());
+
+    // Growing domains at the end of the vector first
     std::reverse(m_domains.begin(), m_domains.end());
 }
 
 void ConformationalEnumerator::create_staple_stack(Domain* domain) {
 
-	// Add growth domain
-	m_domains.push_back(domain);
+    // Add growth domain
+    m_domains.push_back(domain);
 
-	int c_i_index {index(m_origami_system.m_chain_indices, domain->m_c)};
-	vector<Domain*> staple {m_origami_system.m_domains[c_i_index]};
+    int c_i_index {index(m_origami_system.m_chain_indices, domain->m_c)};
+    vector<Domain*> staple {m_origami_system.m_domains[c_i_index]};
 
     // Add domains in three prime direction (staple domains increase in 3' direction)
     auto first_iter3 {staple.begin() + domain->m_d + 1};
     auto last_iter3 {staple.end()};
-	m_domains.insert(m_domains.end(), first_iter3, last_iter3);
+    m_domains.insert(m_domains.end(), first_iter3, last_iter3);
 
     // Add domains in five prime direction
     auto first_iter5 {staple.begin()};
@@ -340,72 +427,56 @@ void ConformationalEnumerator::create_staple_stack(Domain* domain) {
     std::reverse(domains_five_prime.begin(), domains_five_prime.end());
     auto first_iter5_reverse {domains_five_prime.begin()};
     auto last_iter5_reverse {domains_five_prime.end()};
-	m_domains.insert(m_domains.end(), first_iter5_reverse, last_iter5_reverse);
+    m_domains.insert(m_domains.end(), first_iter5_reverse, last_iter5_reverse);
 
     return;
 }
 
-double ConformationalEnumerator::calculate_multiplier(Domain* domain, Domain* other_domain) {
+double ConformationalEnumerator::calc_multiplier(Domain* domain, Domain* other_domain) {
     // This only works for staples that are only 2 domains
 
-    int multiplier {1};
+    double multiplier {1};
     //  No overcounting if binding to self
     if (domain->m_c == other_domain->m_c) {
         multiplier = 1;
     }
     else {
         int involved_staples {0};
-
-        // Count staples associated with domain
-        bool domain_on_scaffold {false};
-        if (domain->m_c == 0) {
-            domain_on_scaffold = true;
-        }
-        else {
-            involved_staples++;
-        }
-        Domain* next_domain {domain};
-        while (not domain_on_scaffold) {
-            if (next_domain->m_forward_domain == nullptr) {
-                next_domain = next_domain->m_backward_domain;
-            }
-            else {
-                next_domain = next_domain->m_forward_domain;
-            }
-            if (next_domain->m_c == 0) {
-                domain_on_scaffold = true;
-            }
-            else {
-                involved_staples++;
-            }
-        }
-
-        // Count staples associated with other domain
-        domain_on_scaffold = false;
-        if (other_domain->m_c == 0) {
-            domain_on_scaffold = true;
-        }
-        else {
-            involved_staples++;
-        }
-        next_domain = other_domain;
-        while (not domain_on_scaffold) {
-            if (next_domain->m_forward_domain == nullptr) {
-                next_domain = next_domain->m_backward_domain;
-            }
-            else {
-                next_domain = next_domain->m_forward_domain;
-            }
-            if (next_domain->m_c == 0) {
-                domain_on_scaffold = true;
-            }
-            else {
-                involved_staples++;
-            }
-        }
-        multiplier = 1 / (involved_staples + 1);
+        involved_staples += count_involved_staples(domain);
+        involved_staples += count_involved_staples(other_domain);
+        multiplier /= (involved_staples + 1);
     }
     return multiplier;
+}
+
+int ConformationalEnumerator::count_involved_staples(Domain* domain) {
+    int involved_staples {0};
+
+    // Count staples associated with domain
+    bool domain_on_scaffold {false};
+    if (domain->m_c == 0) {
+        domain_on_scaffold = true;
+    }
+    else {
+        involved_staples++;
+    }
+    Domain* next_domain {domain};
+    while (not domain_on_scaffold) {
+        if (next_domain->m_forward_domain == nullptr) {
+            next_domain = next_domain->m_backward_domain;
+        }
+        else {
+            next_domain = next_domain->m_forward_domain;
+        }
+        next_domain = next_domain->m_bound_domain;
+        if (next_domain->m_c == 0) {
+            domain_on_scaffold = true;
+        }
+        else {
+            involved_staples++;
+        }
+    }
+    return involved_staples;
 }
 
 void ConformationalEnumerator::calc_and_save_weights() {

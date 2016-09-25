@@ -10,25 +10,13 @@ import argparse
 import sys
 import string
 
-sys.path.insert(0, '../../../../lib/lattice_origami_domains')
+#sys.path.insert(0, '../../../../lib/lattice_origami_domains')
+sys.path.insert(0, '../../../lattice_origami_domains')
 
-from lattice_dna_origami.lattice_origami_domains import JSONInputFile, HDF5InputFile
+from lattice_dna_origami.origami_io import JSONInputFile, PlainTextTrajFile
 
 
 TEMPLATE_FILENAME = '../../../../share/tikz_template.tex'
-
-
-def open_inputfile(filename):
-    filename_extension = filename.split('.')[1]
-    if filename_extension == 'json':
-        input_file = JSONInputFile(filename)
-    elif filename_extension == 'hdf5':
-        input_file = HDF5InputFile(filename)
-    else:
-        print('Filetype {} not supported.'.format(filename_extension))
-        sys.exit()
-
-    return input_file
 
 
 def make_tikz_position_bond_orientation_list(chains):
@@ -82,8 +70,10 @@ def insert_list_and_write(scaffold_list, staple_list, output_filename, coor1,
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('input_filename',
-            help='Configuration filename')
+    parser.add_argument('system_filename',
+            help='System filename')
+    parser.add_argument('traj_filename',
+            help='Trajectory filename')
     parser.add_argument('output_filename',
             help='Tex filename')
     parser.add_argument('step', type=int,
@@ -97,7 +87,8 @@ def main():
             help='Switch off axis')
 
     args = parser.parse_args()
-    input_filename = args.input_filename
+    system_filename = args.system_filename
+    traj_filename = args.traj_filename
     output_filename = args.output_filename
     step = args.step
     coor1 = args.coor1
@@ -109,8 +100,9 @@ def main():
         axis = ''
         
 
-    input_file = open_inputfile(input_filename)
-    chains = input_file.chains(step)
+    system_file = JSONInputFile(system_filename)
+    traj_file = PlainTextTrajFile(traj_filename, system_file)
+    chains = traj_file.chains(step)
     scaffold_list, staple_list = make_tikz_position_bond_orientation_list(chains)
     insert_list_and_write(scaffold_list, staple_list, output_filename, coor1,
             coor2, axis)

@@ -36,9 +36,14 @@ class ConformationalEnumerator {
 
     private:
         void enumerate_domain(Domain* domain, VectorThree p_prev);
+        void set_growthpoint_domains(Domain* domain, VectorThree p_new);
+        void set_bound_domain(Domain* domain, VectorThree p_new);
+        void set_unbound_domain(Domain* domain, VectorThree p_new);
+        void grow_next_domain(Domain* domain, VectorThree p_new);
         void create_domains_stack();
         void create_staple_stack(Domain* domain);
-        double calculate_multiplier(Domain* domain, Domain* other_domain);
+        double calc_multiplier(Domain* domain, Domain* other_domain);
+        int count_involved_staples(Domain* domain);
         void calc_and_save_weights();
   
         OrigamiSystem m_origami_system;
@@ -74,7 +79,7 @@ class GrowthpointEnumerator {
     private:
         bool growthpoints_repeated();
 
-        ConformationalEnumerator m_conformational_enumerator;
+        ConformationalEnumerator& m_conformational_enumerator;
   
         // Pairs of identity, number of copies
         vector<pair<int, int>> m_staples {};
