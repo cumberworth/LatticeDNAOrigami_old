@@ -403,10 +403,10 @@ class PlainTextTrajFile:
         chain['identity'] = chain_ids[1]
         line_i += 1
         pos_row_major = np.array(lines[line_i].split()).astype(int)
-        chain['positions'] = pos_row_major.reshape(len(pos_row_major) // 3, 3)
+        chain['positions'] = pos_row_major.reshape(len(pos_row_major) // 3, 3).tolist()
         line_i += 1
         ore_row_major = np.array(lines[line_i].split()).astype(int)
-        chain['orientations'] = ore_row_major.reshape(len(ore_row_major) // 3, 3)
+        chain['orientations'] = ore_row_major.reshape(len(ore_row_major) // 3, 3).tolist()
         line_i += 1
         self._steps[-1].append(chain)
         return  line_i
