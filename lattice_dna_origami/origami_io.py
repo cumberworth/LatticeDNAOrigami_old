@@ -368,6 +368,10 @@ class PlainTextTrajFile:
     def identities(self):
         return self._input_file.identities
 
+    @property
+    def steps(self):
+        return len(self._steps)
+
     def chains(self, step):
         """Standard format for passing chain configuration."""
         return self._steps[step]

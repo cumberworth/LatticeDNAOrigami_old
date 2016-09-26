@@ -27,12 +27,15 @@ class ConformationalEnumerator {
         void remove_growthpoint(
                 Domain* old_domain);
         vector<vector<double>> bound_state_weights();
+        double average_energy();
 
         unordered_map<Domain*, Domain*> m_growthpoints {};
   
         // Weights of states defined by number of staples (x) and number of
         // fully bound domain pairs (Y)
         vector<vector<double>> m_bound_state_weights {};
+        double m_average_energy {0};
+        double m_num_configs {0};
 
     private:
         void enumerate_domain(Domain* domain, VectorThree p_prev);
