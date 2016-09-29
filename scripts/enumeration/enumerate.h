@@ -13,7 +13,7 @@ using namespace DomainContainer;
 using namespace Origami;
 using namespace Files;
 
-void print_matrix(vector<vector<double>> matrix);
+void print_matrix(vector<vector<double>> matrix, string filename);
 
 class ConformationalEnumerator {
     public:
@@ -68,6 +68,9 @@ class ConformationalEnumerator {
 
         double m_multiplier {1};
         double m_prefix {1};
+
+        // Number of unassigned domains indexed by domain identity
+        unordered_map<int, int> m_identities_to_num_unassigned {};
 };
   
 class GrowthpointEnumerator {
