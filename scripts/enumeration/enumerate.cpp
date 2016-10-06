@@ -61,7 +61,7 @@ GrowthpointEnumerator::GrowthpointEnumerator(
         m_origami_system {origami_system} {
 
     m_conformational_enumerator.set_staples(staples);
-    m_unbound_system_domains = m_origami_system.m_domains[0];
+    m_unbound_system_domains = m_origami_system.get_chain(0);
 }
 
 void GrowthpointEnumerator::enumerate() {
@@ -152,7 +152,8 @@ ConformationalEnumerator::ConformationalEnumerator(OrigamiSystem& origami_system
         m_origami_system {origami_system} {
 
     // Unassign all domains
-    for (auto chain: m_origami_system.m_domains) {
+    auto all_chains {m_origami_system.get_chains()};
+    for (auto chain: all_chains) {
         for (auto domain: chain) {
             m_origami_system.unassign_domain(*domain);
         }
@@ -160,8 +161,8 @@ ConformationalEnumerator::ConformationalEnumerator(OrigamiSystem& origami_system
 
     // Delete all staple chains
     if (m_origami_system.num_staples() > 0) {
-        for (size_t i {1}; i != m_origami_system.m_domains.size(); i ++) {
-            m_origami_system.delete_chain(m_origami_system.m_chain_indices[i]);
+        for (size_t i {1}; i != all_chains.size() + 1; i ++) {
+            m_origami_system.delete_chain(all_chains[i][0]->m_c);
         }
     }
 }
@@ -245,8 +246,7 @@ vector<Domain*> ConformationalEnumerator::add_growthpoint(
     int new_c_i {m_identity_to_indices[new_c_ident].back()};
     m_identity_to_indices[new_c_ident].pop_back();
 
-    int new_c_i_index {index(m_origami_system.m_chain_indices, new_c_i)};
-    vector<Domain*> staple {m_origami_system.m_domains[new_c_i_index]};
+    vector<Domain*> staple {m_origami_system.get_chain(new_c_i)};
     Domain* new_domain {staple[new_d_i]};
     m_growthpoints[old_domain] = new_domain;
 
@@ -459,8 +459,7 @@ void ConformationalEnumerator::create_domains_stack() {
     m_domains.clear();
 
     // Iterate through scaffold domains and grow out staples if growthpoint
-    for (size_t i {0}; i != m_origami_system.m_domains[0].size(); i++) {
-        Domain* domain {m_origami_system.m_domains[0][i]};
+    for (auto domain: m_origami_system.get_chain(0)) {
         bool is_growthpoint {m_growthpoints.count(domain) > 0};
         m_domains.push_back(domain);
         if (is_growthpoint) {
@@ -478,8 +477,7 @@ void ConformationalEnumerator::create_staple_stack(Domain* domain) {
     // Add growth domain
     m_domains.push_back(domain);
 
-    int c_i_index {index(m_origami_system.m_chain_indices, domain->m_c)};
-    vector<Domain*> staple {m_origami_system.m_domains[c_i_index]};
+    vector<Domain*> staple {m_origami_system.get_chain(domain->m_c)};
 
     // Iterate through domains in three prime direction
     for (size_t d_i = domain->m_d + 1; d_i != staple.size(); d_i++) {
