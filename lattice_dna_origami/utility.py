@@ -151,7 +151,7 @@ class IdealRandomWalks:
     def num_walks(self, start, end, N):
         """Calculate number of walks between two positions."""
 
-        # Only work with one permutation of abs(DR)
+        # Check stored values
         DR = tuple(end - start)
         walk = (DR, N)
         try:

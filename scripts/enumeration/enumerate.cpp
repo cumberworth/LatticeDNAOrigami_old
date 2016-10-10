@@ -328,11 +328,10 @@ void ConformationalEnumerator::set_growthpoint_domains(
         for (auto o_new: vectors) {
 
             m_energy += m_origami_system.set_domain_config(*domain, p_new, o_new);
-            try {
-                o_new = -o_new;
-                m_energy += m_origami_system.set_domain_config(*bound_domain, p_new, o_new);
-            }
-            catch (ConstraintViolation) {
+            o_new = -o_new;
+            m_energy += m_origami_system.set_domain_config(*bound_domain, p_new, o_new);
+            if (m_origami_system.m_constraints_violated == true) {
+                m_origami_system.m_constraints_violated = false;
                 m_energy += m_origami_system.unassign_domain(*domain);
                 continue;
             }
@@ -373,18 +372,19 @@ void ConformationalEnumerator::set_bound_domain(
             *domain, *occ_domain)};
     if (domains_complementary) {
         VectorThree o_new {-occ_domain->m_ore};
-        try {
-            m_energy += m_origami_system.set_domain_config(*domain, p_new, o_new);
-        }
-        catch (ConstraintViolation) {
+        m_energy += m_origami_system.set_domain_config(*domain, p_new, o_new);
+        if (m_origami_system.m_constraints_violated == true) {
+            m_origami_system.m_constraints_violated = false;
             return;
         }
-        double pos_multiplier {calc_multiplier(domain, occ_domain)};
-        m_multiplier *= pos_multiplier;
-        m_identities_to_num_unassigned[domain->m_d_ident] -= 1;
-        grow_next_domain(domain, p_new);
-        m_identities_to_num_unassigned[domain->m_d_ident] += 1;
-        m_multiplier /= pos_multiplier;
+        else {
+            double pos_multiplier {calc_multiplier(domain, occ_domain)};
+            m_multiplier *= pos_multiplier;
+            m_identities_to_num_unassigned[domain->m_d_ident] -= 1;
+            grow_next_domain(domain, p_new);
+            m_identities_to_num_unassigned[domain->m_d_ident] += 1;
+            m_multiplier /= pos_multiplier;
+        }
     }
     else {
         VectorThree o_new {0, 0, 0};
@@ -414,15 +414,15 @@ void ConformationalEnumerator::set_unbound_domain(
     }
     else {
         for (auto o_new: vectors) {
-            try {
-                m_energy += m_origami_system.set_domain_config(*domain, p_new, o_new);
+            m_energy += m_origami_system.set_domain_config(*domain, p_new, o_new);
+            if (m_origami_system.m_constraints_violated) {
+                m_origami_system.m_constraints_violated = false;
             }
-            catch (ConstraintViolation) {
-                continue;
+            else {
+                m_identities_to_num_unassigned[domain->m_d_ident] -= 1;
+                grow_next_domain(domain, p_new);
+                m_identities_to_num_unassigned[domain->m_d_ident] += 1;
             }
-            m_identities_to_num_unassigned[domain->m_d_ident] -= 1;
-            grow_next_domain(domain, p_new);
-            m_identities_to_num_unassigned[domain->m_d_ident] += 1;
         }
     }
 }
