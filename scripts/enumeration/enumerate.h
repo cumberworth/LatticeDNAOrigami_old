@@ -49,7 +49,7 @@ class ConformationalEnumerator {
         int count_involved_staples(Domain* domain);
         void calc_and_save_weights();
   
-        OrigamiSystem m_origami_system;
+        OrigamiSystem& m_origami_system;
   
         // Identity to unique indices
         unordered_map<int, vector<int>> m_identity_to_indices {};
@@ -90,7 +90,7 @@ class GrowthpointEnumerator {
         // Pairs of identity, number of copies
         vector<pair<int, int>> m_staples {};
         vector<Domain*> m_unbound_system_domains {};
-        OrigamiSystem m_origami_system;
+        OrigamiSystem& m_origami_system;
 
         // Chain identity, domain index
         vector<pair<pair<int, int>, pair<int, int>>> m_growthpoints {};

@@ -32,6 +32,7 @@ int main(int argc, char* argv[]) {
 
     // Enumerate configurations
     ConformationalEnumerator conf_enumerator {origami};
+    //vector<pair<int, int>> staples {{1, 1}, {2, 1}};
     vector<pair<int, int>> staples {{1, 1}, {2, 1}};
     GrowthpointEnumerator growthpoint_enumerator {conf_enumerator, staples, origami};
     growthpoint_enumerator.enumerate();
@@ -161,9 +162,14 @@ ConformationalEnumerator::ConformationalEnumerator(OrigamiSystem& origami_system
 
     // Delete all staple chains
     if (m_origami_system.num_staples() > 0) {
-        for (size_t i {1}; i != all_chains.size() + 1; i ++) {
+        for (size_t i {1}; i != all_chains.size(); i ++) {
             m_origami_system.delete_chain(all_chains[i][0]->m_c);
         }
+    }
+
+    // Setup the scaffold count for skipping orientations
+    for (auto d_ident: m_origami_system.m_identities[0]) {
+        m_identities_to_num_unassigned[d_ident] = 1;
     }
 }
 
