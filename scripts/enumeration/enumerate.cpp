@@ -33,7 +33,7 @@ int main(int argc, char* argv[]) {
     // Enumerate configurations
     ConformationalEnumerator conf_enumerator {origami};
     //vector<pair<int, int>> staples {{1, 1}, {2, 1}};
-    vector<pair<int, int>> staples {{1, 1}, {2, 1}};
+    vector<pair<int, int>> staples {{1, 1}};
     GrowthpointEnumerator growthpoint_enumerator {conf_enumerator, staples, origami};
     growthpoint_enumerator.enumerate();
     print_matrix(conf_enumerator.bound_state_weights(), input_parameters.m_counts_output_filename);
