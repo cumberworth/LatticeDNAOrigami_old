@@ -19,14 +19,14 @@ class ConformationalEnumerator {
     public:
         ConformationalEnumerator(OrigamiSystem& origami_system);
         void enumerate();
-        void set_staples(vector<pair<int, int>>);
+        void add_staple(int staple);
         vector<Domain*> add_growthpoint(
                 int new_c_ident,
                 int new_d_i,
                 Domain* old_domain);
         void remove_growthpoint(
                 Domain* old_domain);
-        vector<vector<double>> bound_state_weights();
+        vector<vector<double>> normalize_weights(vector<vector<double>> weights);
         double average_energy();
 
         unordered_map<Domain*, Domain*> m_growthpoints {};
@@ -34,6 +34,7 @@ class ConformationalEnumerator {
         // Weights of states defined by number of staples (x) and number of
         // fully bound domain pairs (Y)
         vector<vector<double>> m_bound_state_weights {};
+        vector<vector<double>> m_misbound_state_weights {};
         double m_average_energy {0};
         double m_num_configs {0};
 
@@ -48,6 +49,7 @@ class ConformationalEnumerator {
         double calc_multiplier(Domain* domain, Domain* other_domain);
         int count_involved_staples(Domain* domain);
         void calc_and_save_weights();
+        void add_weight_matrix_entry();
   
         OrigamiSystem& m_origami_system;
   

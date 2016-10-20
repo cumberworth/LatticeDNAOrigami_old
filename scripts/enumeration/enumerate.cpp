@@ -32,10 +32,14 @@ int main(int argc, char* argv[]) {
 
     // Enumerate configurations
     ConformationalEnumerator conf_enumerator {origami};
-    vector<pair<int, int>> staples {};
-    GrowthpointEnumerator growthpoint_enumerator {conf_enumerator, staples, origami};
-    growthpoint_enumerator.enumerate();
-    print_matrix(conf_enumerator.bound_state_weights(), input_parameters.m_counts_output_filename);
+    conf_enumerator.add_staple(1);
+    conf_enumerator.add_staple(2);
+    conf_enumerator.add_growthpoint(1, 0, origami.get_domain(0, 0));
+    conf_enumerator.add_growthpoint(2, 0, origami.get_domain(3, 1));
+    conf_enumerator.enumerate();
+    print_matrix(conf_enumerator.normalize_weights(
+                    conf_enumerator.m_misbound_state_weights),
+            input_parameters.m_counts_output_filename);
     cout << conf_enumerator.m_num_configs << "\n";
     cout << "\n";
     cout << conf_enumerator.average_energy() << "\n";
@@ -60,7 +64,6 @@ GrowthpointEnumerator::GrowthpointEnumerator(
         m_staples {staples},
         m_origami_system {origami_system} {
 
-    m_conformational_enumerator.set_staples(staples);
     m_unbound_system_domains = m_origami_system.get_chain(0);
 }
 
@@ -170,6 +173,7 @@ ConformationalEnumerator::ConformationalEnumerator(OrigamiSystem& origami_system
     for (auto d_ident: m_origami_system.m_identities[0]) {
         m_identities_to_num_unassigned[d_ident] = 1;
     }
+    add_weight_matrix_entry();
 }
 
 void ConformationalEnumerator::enumerate() {
@@ -212,33 +216,32 @@ void ConformationalEnumerator::enumerate() {
     m_origami_system.unassign_domain(*starting_domain);
 }
 
-void ConformationalEnumerator::set_staples(vector<pair<int, int>> staples) {
-    for (auto staple: staples) {
+void ConformationalEnumerator::add_staple(int staple) {
 
-        // Only one of the N! combos is calculated, so don't divide by N!
-        m_prefix *= pow(1 / m_origami_system.m_volume, staple.second);
+    // Only one of the N! combos is calculated, so don't divide by N!
+    m_prefix /= m_origami_system.m_volume;
 
-        for (int i {0}; i != staple.second; i++) {
-            int c_i {m_origami_system.add_chain(staple.first)};
-            m_identity_to_indices[staple.first].push_back(c_i);
-            for (auto d_ident: m_origami_system.m_identities[staple.first]) {
-                if (m_identities_to_num_unassigned.count(d_ident) == 0) {
-                    m_identities_to_num_unassigned[d_ident] = 1;
-                }
-                else {
-                    m_identities_to_num_unassigned[d_ident]++;
-                }
-            }
+    int c_i {m_origami_system.add_chain(staple)};
+    m_identity_to_indices[staple].push_back(c_i);
+    for (auto d_ident: m_origami_system.m_identities[staple]) {
+        if (m_identities_to_num_unassigned.count(d_ident) == 0) {
+            m_identities_to_num_unassigned[d_ident] = 1;
+        }
+        else {
+            m_identities_to_num_unassigned[d_ident]++;
         }
     }
+    add_weight_matrix_entry();
+}
 
+void ConformationalEnumerator::add_weight_matrix_entry() {
     // Update bound states matrix to correct size
     size_t max_fully_bound_domain_pairs {m_origami_system.m_identities[0].size() + 1};
-    for (int i {0}; i != m_origami_system.num_staples() + 1; i++) {
-        m_bound_state_weights.push_back({});
-        for (size_t j {0}; j != max_fully_bound_domain_pairs; j++) {
-            m_bound_state_weights[i].push_back(0);
-        }
+    m_bound_state_weights.push_back({});
+    m_misbound_state_weights.push_back({});
+    for (size_t i {0}; i != max_fully_bound_domain_pairs; i++) {
+        m_bound_state_weights.back().push_back(0);
+        m_misbound_state_weights.back().push_back(0);
     }
 }
 
@@ -270,10 +273,11 @@ void ConformationalEnumerator::remove_growthpoint(
     m_identity_to_indices[new_domain->m_c_ident].push_back(new_domain->m_c);
 }
 
-vector<vector<double>> ConformationalEnumerator::bound_state_weights() {
-    auto normalized_weights {m_bound_state_weights};
-    for (size_t i {0}; i != m_bound_state_weights.size(); i++) {
-        for (size_t j {0}; j != m_bound_state_weights[i].size(); j++) {
+vector<vector<double>> ConformationalEnumerator::normalize_weights(
+        vector<vector<double>> weights) {
+    auto normalized_weights {weights};
+    for (size_t i {0}; i != weights.size(); i++) {
+        for (size_t j {0}; j != weights[i].size(); j++) {
             normalized_weights[i][j] /= m_partition_f;
         }
     }
@@ -306,6 +310,10 @@ void ConformationalEnumerator::enumerate_domain(Domain* domain, VectorThree p_pr
             set_growthpoint_domains(domain, p_new);
         }
         else if (is_occupied) {
+            //DEBUG
+            if (m_origami_system.unbound_domain_at(p_new)->m_c != domain->m_c) {
+                continue;
+            }
             set_bound_domain(domain, p_new);
         }
         // May be able to introduce some tricks to skip iterations over orientations
@@ -563,4 +571,6 @@ void ConformationalEnumerator::calc_and_save_weights() {
     m_partition_f += weight;
     m_bound_state_weights[m_origami_system.num_staples()][
             m_origami_system.num_fully_bound_domain_pairs()] += weight;
+    m_misbound_state_weights[m_origami_system.num_staples()][
+            m_origami_system.num_misbound_domain_pairs()] += weight;
 }
