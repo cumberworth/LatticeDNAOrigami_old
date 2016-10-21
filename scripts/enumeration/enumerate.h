@@ -80,7 +80,6 @@ class GrowthpointEnumerator {
         GrowthpointEnumerator(
                 ConformationalEnumerator& conformational_enumerator,
                 // Pairs of identity, number of copies
-                vector<pair<int, int>> staples,
                 OrigamiSystem& origami_system);
         void enumerate();
 
