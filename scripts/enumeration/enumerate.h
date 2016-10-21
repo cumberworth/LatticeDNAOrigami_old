@@ -17,9 +17,10 @@ void print_matrix(vector<vector<double>> matrix, string filename);
 
 class ConformationalEnumerator {
     public:
-        ConformationalEnumerator(OrigamiSystem& origami_system);
+        ConformationalEnumerator(OrigamiSystem& origami_system, int max_num_staples);
         void enumerate();
         void add_staple(int staple);
+        void remove_staple(int staple);
         vector<Domain*> add_growthpoint(
                 int new_c_ident,
                 int new_d_i,

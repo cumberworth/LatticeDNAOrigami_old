@@ -31,16 +31,20 @@ int main(int argc, char* argv[]) {
             input_parameters.m_cyclic};
 
     // Enumerate configurations
-    ConformationalEnumerator conf_enumerator {origami};
+    ConformationalEnumerator conf_enumerator {origami, 2};
     conf_enumerator.enumerate();
     conf_enumerator.add_staple(1);
-    GrowthpointEnumerator growthpoint_enumerator1 {conf_enumerator, origami};
-    growthpoint_enumerator1.enumerate();
+    GrowthpointEnumerator growthpoint_enumerator10 {conf_enumerator, origami};
+    growthpoint_enumerator10.enumerate();
+    conf_enumerator.remove_staple(1);
     conf_enumerator.add_staple(2);
-    GrowthpointEnumerator growthpoint_enumerator2 {conf_enumerator, origami};
-    growthpoint_enumerator2.enumerate();
+    GrowthpointEnumerator growthpoint_enumerator01 {conf_enumerator, origami};
+    growthpoint_enumerator01.enumerate();
+    conf_enumerator.add_staple(1);
+    GrowthpointEnumerator growthpoint_enumerator11 {conf_enumerator, origami};
+    growthpoint_enumerator11.enumerate();
     print_matrix(conf_enumerator.normalize_weights(
-                    conf_enumerator.m_misbound_state_weights),
+                    conf_enumerator.m_bound_state_weights),
             input_parameters.m_counts_output_filename);
     cout << conf_enumerator.m_num_configs << "\n";
     cout << "\n";
@@ -65,6 +69,12 @@ GrowthpointEnumerator::GrowthpointEnumerator(
         m_origami_system {origami_system} {
 
     m_unbound_system_domains = m_origami_system.get_chain(0);
+    for (size_t c_ident {1}; c_ident != m_origami_system.m_identities.size(); c_ident++) {
+        int num_staples_c_i {m_origami_system.num_staples_of_ident(c_ident)};
+        if (num_staples_c_i != 0) {
+            m_staples.push_back({c_ident, num_staples_c_i});
+        }
+    }
 }
 
 void GrowthpointEnumerator::enumerate() {
@@ -151,7 +161,8 @@ bool GrowthpointEnumerator::growthpoints_repeated() {
     return repeated;
 }
 
-ConformationalEnumerator::ConformationalEnumerator(OrigamiSystem& origami_system) :
+ConformationalEnumerator::ConformationalEnumerator(OrigamiSystem& origami_system,
+        int max_num_staples ) :
         m_origami_system {origami_system} {
 
     // Unassign all domains
@@ -173,7 +184,9 @@ ConformationalEnumerator::ConformationalEnumerator(OrigamiSystem& origami_system
     for (auto d_ident: m_origami_system.m_identities[0]) {
         m_identities_to_num_unassigned[d_ident] = 1;
     }
-    add_weight_matrix_entry();
+    for (int i {0}; i != max_num_staples + 1; i++) {
+        add_weight_matrix_entry();
+    }
 }
 
 void ConformationalEnumerator::enumerate() {
@@ -231,7 +244,6 @@ void ConformationalEnumerator::add_staple(int staple) {
             m_identities_to_num_unassigned[d_ident]++;
         }
     }
-    add_weight_matrix_entry();
 }
 
 void ConformationalEnumerator::remove_staple(int staple) {
@@ -239,17 +251,12 @@ void ConformationalEnumerator::remove_staple(int staple) {
     // Only one of the N! combos is calculated, so don't divide by N!
     m_prefix *= m_origami_system.m_volume;
 
-    m_origami_system.delete_chain(staple);
-    int c_i_index index(m_identity_to_indices, staple);
+    int c_i {m_identity_to_indices[staple].back()};
+    m_identity_to_indices[staple].pop_back();
+    m_origami_system.delete_chain(c_i);
     for (auto d_ident: m_origami_system.m_identities[staple]) {
-        if (m_identities_to_num_unassigned.count(d_ident) == 0) {
-            m_identities_to_num_unassigned[d_ident] = 1;
-        }
-        else {
-            m_identities_to_num_unassigned[d_ident]++;
-        }
+        m_identities_to_num_unassigned[d_ident]--;
     }
-    add_weight_matrix_entry();
 }
 
 void ConformationalEnumerator::add_weight_matrix_entry() {
