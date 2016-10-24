@@ -32,17 +32,39 @@ int main(int argc, char* argv[]) {
 
     // Enumerate configurations
     ConformationalEnumerator conf_enumerator {origami, 2};
+    //conf_enumerator.add_staple(1);
+    //conf_enumerator.add_staple(2);
+    //GrowthpointEnumerator growthpoint_enumerator {conf_enumerator, origami};
+    //growthpoint_enumerator.enumerate();
     conf_enumerator.enumerate();
     conf_enumerator.add_staple(1);
     GrowthpointEnumerator growthpoint_enumerator10 {conf_enumerator, origami};
     growthpoint_enumerator10.enumerate();
+    conf_enumerator.add_staple(1);
+    GrowthpointEnumerator growthpoint_enumerator20 {conf_enumerator, origami};
+    growthpoint_enumerator20.enumerate();
+    conf_enumerator.remove_staple(1);
     conf_enumerator.remove_staple(1);
     conf_enumerator.add_staple(2);
     GrowthpointEnumerator growthpoint_enumerator01 {conf_enumerator, origami};
     growthpoint_enumerator01.enumerate();
+    conf_enumerator.add_staple(2);
+    GrowthpointEnumerator growthpoint_enumerator02 {conf_enumerator, origami};
+    growthpoint_enumerator02.enumerate();
+    conf_enumerator.remove_staple(2);
     conf_enumerator.add_staple(1);
     GrowthpointEnumerator growthpoint_enumerator11 {conf_enumerator, origami};
     growthpoint_enumerator11.enumerate();
+    //conf_enumerator.add_staple(1);
+    //GrowthpointEnumerator growthpoint_enumerator21 {conf_enumerator, origami};
+    //growthpoint_enumerator21.enumerate();
+    //conf_enumerator.remove_staple(1);
+    //conf_enumerator.add_staple(2);
+    //GrowthpointEnumerator growthpoint_enumerator12 {conf_enumerator, origami};
+    //growthpoint_enumerator12.enumerate();
+    //conf_enumerator.add_staple(1);
+    //GrowthpointEnumerator growthpoint_enumerator22 {conf_enumerator, origami};
+    //growthpoint_enumerator22.enumerate();
     print_matrix(conf_enumerator.normalize_weights(
                     conf_enumerator.m_bound_state_weights),
             input_parameters.m_counts_output_filename);
@@ -149,6 +171,10 @@ bool GrowthpointEnumerator::growthpoints_repeated() {
     size_t i {0};
     while (not repeated and i != m_enumerated_growthpoints.size()) {
         auto growthpoints {m_enumerated_growthpoints[i]};
+        if (growthpoints.size() != m_growthpoints.size()) {
+            i++;
+            continue;
+        }
         repeated = true;
         for (auto growthpoint: growthpoints) {
             if (count(m_growthpoints.begin(), m_growthpoints.end(), growthpoint) == 0) {
@@ -314,11 +340,9 @@ double ConformationalEnumerator::average_energy() {
 }
 
 void ConformationalEnumerator::enumerate_domain(Domain* domain, VectorThree p_prev) {
-    int pos_multiplier {1};
 
     // Iterate through all positions
     for (auto p_vec: vectors) {
-        pos_multiplier = 1;
         VectorThree p_new = p_prev + p_vec;
 
         // Check if domain will be entering a bound state
@@ -350,8 +374,12 @@ void ConformationalEnumerator::set_growthpoint_domains(
         VectorThree p_new) {
 
     // Store position for terminal domains
-    VectorThree prev_prev_growthpoint_p = m_prev_growthpoint_p;
-    m_prev_growthpoint_p = p_new;
+    // Only for two domain staples
+    VectorThree prev_prev_growthpoint_p;
+    if (domain->m_c == 0) {
+        prev_prev_growthpoint_p = m_prev_growthpoint_p;
+        m_prev_growthpoint_p = p_new;
+    }
 
     // Should always be next in stack
     Domain* bound_domain {m_domains.back()};
@@ -394,7 +422,9 @@ void ConformationalEnumerator::set_growthpoint_domains(
     m_domains.push_back(bound_domain);
 
     // Revert position for terminal domains
-    m_prev_growthpoint_p = prev_prev_growthpoint_p;
+    if (domain->m_c == 0) {
+        m_prev_growthpoint_p = prev_prev_growthpoint_p;
+    }
 }
 
 void ConformationalEnumerator::set_bound_domain(
@@ -470,6 +500,8 @@ void ConformationalEnumerator::grow_next_domain(Domain* domain, VectorThree p_ne
         VectorThree new_p_prev;
 
         // Previous domain is last growthpoint if end-of-staple reached
+        // Note this assumes that growtpoints are done together
+        // Another place where only correct for two domain staples
         bool domain_is_terminal {domain->m_c != next_domain->m_c};
         if (domain_is_terminal) {
             new_p_prev = m_prev_growthpoint_p;
@@ -586,6 +618,14 @@ int ConformationalEnumerator::count_involved_staples(Domain* domain) {
 }
 
 void ConformationalEnumerator::calc_and_save_weights() {
+    //DEBUG
+    //VectorThree p2 {1, 0, 0};
+    //VectorThree p3 {2, 0, 0};
+    //VectorThree p4 {3, 0, 0};
+    //if (m_origami_system.get_domain(0, 1)->m_pos != p2 and m_origami_system.get_domain(0, 2)->m_pos != p3 and m_origami_system.get_domain(0, 3)->m_pos != p4) {
+    //    return;
+    //}
+    //m_origami_system.check_all_constraints();
     m_num_configs += m_multiplier;
     double weight {m_prefix * exp(-m_energy) * m_multiplier};
     m_average_energy += m_energy * weight;
