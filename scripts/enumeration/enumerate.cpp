@@ -36,25 +36,25 @@ int main(int argc, char* argv[]) {
     //conf_enumerator.add_staple(2);
     //GrowthpointEnumerator growthpoint_enumerator {conf_enumerator, origami};
     //growthpoint_enumerator.enumerate();
-    conf_enumerator.enumerate();
+    //conf_enumerator.enumerate();
     conf_enumerator.add_staple(1);
-    GrowthpointEnumerator growthpoint_enumerator10 {conf_enumerator, origami};
-    growthpoint_enumerator10.enumerate();
+    //GrowthpointEnumerator growthpoint_enumerator10 {conf_enumerator, origami};
+    //growthpoint_enumerator10.enumerate();
     conf_enumerator.add_staple(1);
     GrowthpointEnumerator growthpoint_enumerator20 {conf_enumerator, origami};
     growthpoint_enumerator20.enumerate();
-    conf_enumerator.remove_staple(1);
-    conf_enumerator.remove_staple(1);
-    conf_enumerator.add_staple(2);
-    GrowthpointEnumerator growthpoint_enumerator01 {conf_enumerator, origami};
-    growthpoint_enumerator01.enumerate();
-    conf_enumerator.add_staple(2);
-    GrowthpointEnumerator growthpoint_enumerator02 {conf_enumerator, origami};
-    growthpoint_enumerator02.enumerate();
-    conf_enumerator.remove_staple(2);
-    conf_enumerator.add_staple(1);
-    GrowthpointEnumerator growthpoint_enumerator11 {conf_enumerator, origami};
-    growthpoint_enumerator11.enumerate();
+    //conf_enumerator.remove_staple(1);
+    //conf_enumerator.remove_staple(1);
+    //conf_enumerator.add_staple(2);
+    //GrowthpointEnumerator growthpoint_enumerator01 {conf_enumerator, origami};
+    //growthpoint_enumerator01.enumerate();
+    //conf_enumerator.add_staple(2);
+    //GrowthpointEnumerator growthpoint_enumerator02 {conf_enumerator, origami};
+    //growthpoint_enumerator02.enumerate();
+    //conf_enumerator.remove_staple(2);
+    //conf_enumerator.add_staple(1);
+    //GrowthpointEnumerator growthpoint_enumerator11 {conf_enumerator, origami};
+    //growthpoint_enumerator11.enumerate();
     //conf_enumerator.add_staple(1);
     //GrowthpointEnumerator growthpoint_enumerator21 {conf_enumerator, origami};
     //growthpoint_enumerator21.enumerate();
@@ -628,14 +628,6 @@ int ConformationalEnumerator::count_involved_staples(Domain* domain) {
 }
 
 void ConformationalEnumerator::calc_and_save_weights() {
-    //DEBUG
-    //VectorThree p2 {1, 0, 0};
-    //VectorThree p3 {2, 0, 0};
-    //VectorThree p4 {3, 0, 0};
-    //if (m_origami_system.get_domain(0, 1)->m_pos != p2 and m_origami_system.get_domain(0, 2)->m_pos != p3 and m_origami_system.get_domain(0, 3)->m_pos != p4) {
-    //    return;
-    //}
-    //m_origami_system.check_all_constraints();
     m_num_configs += m_multiplier;
     double weight {m_prefix * exp(-m_energy) * m_multiplier};
     m_average_energy += m_energy * weight;
