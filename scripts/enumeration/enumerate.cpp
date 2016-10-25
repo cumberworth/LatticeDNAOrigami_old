@@ -162,7 +162,17 @@ void GrowthpointEnumerator::enumerate() {
         }
         
         // Revert staple identity list
-        m_staples.insert(m_staples.begin() + i, {staple_ident, num_remaining + 1});
+        bool staple_remain {false};
+        for (size_t staple_ident_i {0}; staple_ident_i != m_staples.size(); staple_ident_i++) {
+            if (m_staples[staple_ident_i].first == staple_ident) {
+                m_staples[staple_ident_i].second++;
+                staple_remain = true;
+                break;
+            }
+        }
+        if (not staple_remain) {
+            m_staples.insert(m_staples.begin() + i, {staple_ident, num_remaining + 1});
+        }
     }
 }
 
