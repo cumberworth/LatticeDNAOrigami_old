@@ -410,3 +410,24 @@ class PlainTextTrajFile:
         line_i += 1
         self._steps[-1].append(chain)
         return  line_i
+
+
+class PlainTextTrajOutFile:
+
+    def __init__(self, filename):
+        self.file = open(filename, 'w')
+
+    def write_config(self, chains, step):
+        self.file.write('{}\n'.format(step))
+        for chain in chains:
+            self.file.write('{} '.format(chain['index']))
+            self.file.write('{}\n'.format(chain['identity']))
+            for pos in chain['positions']:
+                for comp in pos:
+                    self.file.write('{} '.format(comp))
+            self.file.write('\n')
+            for ore in chain['orientations']:
+                for comp in ore:
+                    self.file.write('{} '.format(comp))
+            self.file.write('\n')
+        self.file.write('\n')
