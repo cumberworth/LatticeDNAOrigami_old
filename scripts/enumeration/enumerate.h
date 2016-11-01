@@ -13,7 +13,7 @@ using namespace DomainContainer;
 using namespace Origami;
 using namespace Files;
 
-void print_matrix(vector<vector<double>> matrix, string filename);
+void print_matrix(vector<vector<long double>> matrix, string filename);
 
 class ConformationalEnumerator {
     public:
@@ -27,17 +27,17 @@ class ConformationalEnumerator {
                 Domain* old_domain);
         void remove_growthpoint(
                 Domain* old_domain);
-        vector<vector<double>> normalize_weights(vector<vector<double>> weights);
-        double average_energy();
+        vector<vector<long double>> normalize_weights(vector<vector<long double>> weights);
+        long double average_energy();
 
         unordered_map<Domain*, Domain*> m_growthpoints {};
   
         // Weights of states defined by number of staples (x) and number of
         // fully bound domain pairs (Y)
-        vector<vector<double>> m_bound_state_weights {};
-        vector<vector<double>> m_misbound_state_weights {};
-        double m_average_energy {0};
-        double m_num_configs {0};
+        vector<vector<long double>> m_bound_state_weights {};
+        vector<vector<long double>> m_misbound_state_weights {};
+        long double m_average_energy {0};
+        long double m_num_configs {0};
 
     private:
         void enumerate_domain(Domain* domain, VectorThree p_prev);
@@ -64,13 +64,13 @@ class ConformationalEnumerator {
         VectorThree m_prev_growthpoint_p;
 
         // Total system energy
-        double m_energy {0};
+        long double m_energy {0};
 
         // Partition function
-        double m_partition_f {0};
+        long double m_partition_f {0};
 
-        double m_multiplier {1};
-        double m_prefix {1};
+        long double m_multiplier {1};
+        long double m_prefix {1};
 
         // Number of unassigned domains indexed by domain identity
         unordered_map<int, int> m_identities_to_num_unassigned {};

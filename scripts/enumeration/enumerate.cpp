@@ -32,29 +32,25 @@ int main(int argc, char* argv[]) {
 
     // Enumerate configurations
     ConformationalEnumerator conf_enumerator {origami, 2};
-    //conf_enumerator.add_staple(1);
-    //conf_enumerator.add_staple(2);
-    //GrowthpointEnumerator growthpoint_enumerator {conf_enumerator, origami};
-    //growthpoint_enumerator.enumerate();
-    //conf_enumerator.enumerate();
+    conf_enumerator.enumerate();
     conf_enumerator.add_staple(1);
-    //GrowthpointEnumerator growthpoint_enumerator10 {conf_enumerator, origami};
-    //growthpoint_enumerator10.enumerate();
+    GrowthpointEnumerator growthpoint_enumerator10 {conf_enumerator, origami};
+    growthpoint_enumerator10.enumerate();
     conf_enumerator.add_staple(1);
     GrowthpointEnumerator growthpoint_enumerator20 {conf_enumerator, origami};
     growthpoint_enumerator20.enumerate();
-    //conf_enumerator.remove_staple(1);
-    //conf_enumerator.remove_staple(1);
-    //conf_enumerator.add_staple(2);
-    //GrowthpointEnumerator growthpoint_enumerator01 {conf_enumerator, origami};
-    //growthpoint_enumerator01.enumerate();
-    //conf_enumerator.add_staple(2);
-    //GrowthpointEnumerator growthpoint_enumerator02 {conf_enumerator, origami};
-    //growthpoint_enumerator02.enumerate();
-    //conf_enumerator.remove_staple(2);
-    //conf_enumerator.add_staple(1);
-    //GrowthpointEnumerator growthpoint_enumerator11 {conf_enumerator, origami};
-    //growthpoint_enumerator11.enumerate();
+    conf_enumerator.remove_staple(1);
+    conf_enumerator.remove_staple(1);
+    conf_enumerator.add_staple(2);
+    GrowthpointEnumerator growthpoint_enumerator01 {conf_enumerator, origami};
+    growthpoint_enumerator01.enumerate();
+    conf_enumerator.add_staple(2);
+    GrowthpointEnumerator growthpoint_enumerator02 {conf_enumerator, origami};
+    growthpoint_enumerator02.enumerate();
+    conf_enumerator.remove_staple(2);
+    conf_enumerator.add_staple(1);
+    GrowthpointEnumerator growthpoint_enumerator11 {conf_enumerator, origami};
+    growthpoint_enumerator11.enumerate();
     //conf_enumerator.add_staple(1);
     //GrowthpointEnumerator growthpoint_enumerator21 {conf_enumerator, origami};
     //growthpoint_enumerator21.enumerate();
@@ -67,13 +63,13 @@ int main(int argc, char* argv[]) {
     //growthpoint_enumerator22.enumerate();
     print_matrix(conf_enumerator.normalize_weights(
                     conf_enumerator.m_bound_state_weights),
-            input_parameters.m_counts_output_filename);
+            input_parameters.m_output_filebase + ".counts");
     cout << conf_enumerator.m_num_configs << "\n";
     cout << "\n";
     cout << conf_enumerator.average_energy() << "\n";
 }
 
-void print_matrix(vector<vector<double>> matrix, string filename) {
+void print_matrix(vector<vector<long double>> matrix, string filename) {
     ofstream output {filename};
     //cout << "Staples vs number of fully bound domains\n";
     for (auto row: matrix) {
@@ -334,8 +330,8 @@ void ConformationalEnumerator::remove_growthpoint(
     m_identity_to_indices[new_domain->m_c_ident].push_back(new_domain->m_c);
 }
 
-vector<vector<double>> ConformationalEnumerator::normalize_weights(
-        vector<vector<double>> weights) {
+vector<vector<long double>> ConformationalEnumerator::normalize_weights(
+        vector<vector<long double>> weights) {
     auto normalized_weights {weights};
     for (size_t i {0}; i != weights.size(); i++) {
         for (size_t j {0}; j != weights[i].size(); j++) {
@@ -345,7 +341,7 @@ vector<vector<double>> ConformationalEnumerator::normalize_weights(
     return normalized_weights;
 }
 
-double ConformationalEnumerator::average_energy() {
+long double ConformationalEnumerator::average_energy() {
     return m_average_energy / m_partition_f;
 }
 
@@ -629,7 +625,7 @@ int ConformationalEnumerator::count_involved_staples(Domain* domain) {
 
 void ConformationalEnumerator::calc_and_save_weights() {
     m_num_configs += m_multiplier;
-    double weight {m_prefix * exp(-m_energy) * m_multiplier};
+    long double weight {m_prefix * exp(-m_energy) * m_multiplier};
     m_average_energy += m_energy * weight;
     m_partition_f += weight;
     m_bound_state_weights[m_origami_system.num_staples()][
