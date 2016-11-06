@@ -24,9 +24,12 @@ input_file = JSONInputFile(config_filename)
 
 # Calculate melting points of individual fully bound domains
 melting_points = []
-for seq in input_file.sequences[0]:
-    melting_point = calc_melting_point(seq, strand_M, cation_M)
-    melting_points.append(melting_point)
+for staple in input_file.sequences[1:]:
+    for seq in staple:
+        melting_point = calc_melting_point(seq, strand_M, cation_M)
+        melting_points.append(melting_point)
+        print('{:.1f} K'.format(melting_point), end=" ")
+    print()
 
 # Averages
 mean_T = np.mean(melting_points)
