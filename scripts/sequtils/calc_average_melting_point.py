@@ -30,6 +30,7 @@ for staple in input_file.sequences[1:]:
         melting_points.append(melting_point)
         print('{:.1f} K'.format(melting_point), end=" ")
     print()
+print()
 
 # Averages
 mean_T = np.mean(melting_points)
