@@ -31,6 +31,19 @@ int main(int argc, char* argv[]) {
             input_parameters.m_cyclic};
 
     // Enumerate configurations
+
+    // Two domain scaffold
+    ConformationalEnumerator conf_enumerator {origami, 2};
+    //conf_enumerator.enumerate();
+    conf_enumerator.add_staple(1);
+    GrowthpointEnumerator growthpoint_enumerator1 {conf_enumerator, origami};
+    growthpoint_enumerator1.enumerate();
+    //conf_enumerator.add_staple(1);
+    //GrowthpointEnumerator growthpoint_enumerator2 {conf_enumerator, origami};
+    //growthpoint_enumerator2.enumerate();
+
+    // Four domain scaffold
+    /*
     ConformationalEnumerator conf_enumerator {origami, 2};
     conf_enumerator.enumerate();
     conf_enumerator.add_staple(1);
@@ -51,6 +64,7 @@ int main(int argc, char* argv[]) {
     conf_enumerator.add_staple(1);
     GrowthpointEnumerator growthpoint_enumerator11 {conf_enumerator, origami};
     growthpoint_enumerator11.enumerate();
+    */
     //conf_enumerator.add_staple(1);
     //GrowthpointEnumerator growthpoint_enumerator21 {conf_enumerator, origami};
     //growthpoint_enumerator21.enumerate();
@@ -143,7 +157,9 @@ void GrowthpointEnumerator::enumerate() {
 
                     // Skip if growthpoint set already enumerated
                     if (not growthpoints_repeated()) {
-                        m_conformational_enumerator.enumerate();
+                        if (m_enumerated_growthpoints.size() == 1) {
+                            m_conformational_enumerator.enumerate();
+                        }
                         cout << "Growthpoint set " << m_enumerated_growthpoints.size() + 1 << "\n";
                         m_enumerated_growthpoints.push_back(m_growthpoints);
                     }
@@ -237,13 +253,14 @@ void ConformationalEnumerator::enumerate() {
         bool domains_complementary {m_origami_system.check_domains_complementary(
                 *starting_domain, *next_domain)};
         double pos_multiplier {1};
-        if (domains_complementary) {
-            o_new = -o_new;
-        }
-        else {
-            pos_multiplier = 6;
-            VectorThree o_new {0, 0, 0};
-        }
+        o_new = -o_new;
+        //if (domains_complementary) {
+        //    o_new = -o_new;
+        //}
+        //else {
+        //    pos_multiplier = 6;
+        //    VectorThree o_new {0, 0, 0};
+        //}
         m_multiplier *= pos_multiplier;
         m_identities_to_num_unassigned[next_domain->m_d_ident] -= 1;
         m_energy += m_origami_system.set_domain_config(*next_domain, p_new, o_new);
@@ -412,10 +429,10 @@ void ConformationalEnumerator::set_growthpoint_domains(
         }
     }
     else {
-        double pos_multiplier {36};
-        VectorThree o_new {0, 0, 0};
+        double pos_multiplier {6};
+        VectorThree o_new {1, 0, 0};
         m_energy += m_origami_system.set_domain_config(*domain, p_new, o_new);
-        m_energy += m_origami_system.set_domain_config(*bound_domain, p_new, o_new);
+        m_energy += m_origami_system.set_domain_config(*bound_domain, p_new, -o_new);
         m_multiplier *= pos_multiplier;
         m_identities_to_num_unassigned[domain->m_d_ident] -= 1;
         m_identities_to_num_unassigned[bound_domain->m_d_ident] -= 1;
@@ -438,28 +455,14 @@ void ConformationalEnumerator::set_bound_domain(
         VectorThree p_new) {
 
     Domain* occ_domain = m_origami_system.unbound_domain_at(p_new);
-    bool domains_complementary {m_origami_system.check_domains_complementary(
-            *domain, *occ_domain)};
-    if (domains_complementary) {
-        VectorThree o_new {-occ_domain->m_ore};
-        m_energy += m_origami_system.set_domain_config(*domain, p_new, o_new);
-        if (m_origami_system.m_constraints_violated == true) {
-            m_origami_system.m_constraints_violated = false;
-            return;
-        }
-        else {
-            double pos_multiplier {calc_multiplier(domain, occ_domain)};
-            m_multiplier *= pos_multiplier;
-            m_identities_to_num_unassigned[domain->m_d_ident] -= 1;
-            grow_next_domain(domain, p_new);
-            m_identities_to_num_unassigned[domain->m_d_ident] += 1;
-            m_multiplier /= pos_multiplier;
-        }
+    VectorThree o_new {-occ_domain->m_ore};
+    m_energy += m_origami_system.set_domain_config(*domain, p_new, o_new);
+    if (m_origami_system.m_constraints_violated == true) {
+        m_origami_system.m_constraints_violated = false;
+        return;
     }
     else {
-        VectorThree o_new {0, 0, 0};
-        m_energy += m_origami_system.set_domain_config(*domain, p_new, o_new);
-        double pos_multiplier {6 * calc_multiplier(domain, occ_domain)};
+        double pos_multiplier {calc_multiplier(domain, occ_domain)};
         m_multiplier *= pos_multiplier;
         m_identities_to_num_unassigned[domain->m_d_ident] -= 1;
         grow_next_domain(domain, p_new);
