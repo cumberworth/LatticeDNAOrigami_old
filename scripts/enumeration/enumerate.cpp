@@ -13,22 +13,25 @@ using namespace Files;
 
 int main(int argc, char* argv[]) {
     cout << "\nWARNING: Not for staples other than length 2.\n\n";
-    InputParameters input_parameters {argc, argv};
+    InputParameters params {argc, argv};
 
     // Create origami object
-    OrigamiInputFile origami_input {input_parameters.m_origami_input_filename};
+    OrigamiInputFile origami_input {params.m_origami_input_filename};
     vector<vector<int>> identities {origami_input.m_identities};
     vector<vector<string>> sequences {origami_input.m_sequences};
     vector<Chain> configs {origami_input.m_chains};
+    double staple_u {molarity_to_chempot(staple_u, params.m_temp_for_staple_u,
+            params.m_lattice_site_volume)};
+    double volume {chempot_to_volume(staple_u, params.m_temp)};
     OrigamiSystem origami {
             identities,
             sequences,
             configs,
-            input_parameters.m_temp,
-            input_parameters.m_staple_M,
-            input_parameters.m_cation_M,
-            input_parameters.m_lattice_site_volume,
-            input_parameters.m_cyclic};
+            params.m_temp,
+            volume,
+            params.m_cation_M,
+            staple_u,
+            params.m_cyclic};
 
     // Enumerate configurations
 
