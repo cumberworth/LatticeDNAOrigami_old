@@ -20,8 +20,8 @@ int main(int argc, char* argv[]) {
     vector<vector<int>> identities {origami_input.m_identities};
     vector<vector<string>> sequences {origami_input.m_sequences};
     vector<Chain> configs {origami_input.m_chains};
-    double staple_u {molarity_to_chempot(staple_u, params.m_temp_for_staple_u,
-            params.m_lattice_site_volume)};
+    double staple_u {molarity_to_chempot(params.m_staple_M,
+            params.m_temp_for_staple_u, params.m_lattice_site_volume)};
     double volume {chempot_to_volume(staple_u, params.m_temp)};
     OrigamiSystem origami {
             identities,
@@ -253,8 +253,8 @@ void ConformationalEnumerator::enumerate() {
     m_domains.pop_back();
     if (is_growthpoint) {
         m_prev_growthpoint_p = p_new;
-        bool domains_complementary {m_origami_system.check_domains_complementary(
-                *starting_domain, *next_domain)};
+        //bool domains_complementary {m_origami_system.check_domains_complementary(
+        //        *starting_domain, *next_domain)};
         double pos_multiplier {1};
         o_new = -o_new;
         //if (domains_complementary) {
