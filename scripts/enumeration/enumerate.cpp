@@ -80,7 +80,7 @@ int main(int argc, char* argv[]) {
     //growthpoint_enumerator22.enumerate();
     print_matrix(conf_enumerator.normalize_weights(
                     conf_enumerator.m_bound_state_weights),
-            input_parameters.m_output_filebase + ".counts");
+            params.m_output_filebase + ".counts");
     cout << conf_enumerator.m_num_configs << "\n";
     cout << "\n";
     cout << conf_enumerator.average_energy() << "\n";
