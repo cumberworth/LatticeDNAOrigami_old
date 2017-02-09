@@ -36,18 +36,17 @@ int main(int argc, char* argv[]) {
     // Enumerate configurations
 
     // Two domain scaffold
-    ConformationalEnumerator conf_enumerator {origami, 2};
+    //ConformationalEnumerator conf_enumerator {origami, 2};
     //conf_enumerator.enumerate();
-    conf_enumerator.add_staple(1);
-    GrowthpointEnumerator growthpoint_enumerator1 {conf_enumerator, origami};
-    growthpoint_enumerator1.enumerate();
+    //conf_enumerator.add_staple(1);
+    //GrowthpointEnumerator growthpoint_enumerator1 {conf_enumerator, origami};
+    //growthpoint_enumerator1.enumerate();
     //conf_enumerator.add_staple(1);
     //GrowthpointEnumerator growthpoint_enumerator2 {conf_enumerator, origami};
     //growthpoint_enumerator2.enumerate();
 
     // Four domain scaffold
-    /*
-    ConformationalEnumerator conf_enumerator {origami, 2};
+    ConformationalEnumerator conf_enumerator {origami, 4};
     conf_enumerator.enumerate();
     conf_enumerator.add_staple(1);
     GrowthpointEnumerator growthpoint_enumerator10 {conf_enumerator, origami};
@@ -67,17 +66,18 @@ int main(int argc, char* argv[]) {
     conf_enumerator.add_staple(1);
     GrowthpointEnumerator growthpoint_enumerator11 {conf_enumerator, origami};
     growthpoint_enumerator11.enumerate();
-    */
-    //conf_enumerator.add_staple(1);
-    //GrowthpointEnumerator growthpoint_enumerator21 {conf_enumerator, origami};
-    //growthpoint_enumerator21.enumerate();
-    //conf_enumerator.remove_staple(1);
-    //conf_enumerator.add_staple(2);
-    //GrowthpointEnumerator growthpoint_enumerator12 {conf_enumerator, origami};
-    //growthpoint_enumerator12.enumerate();
-    //conf_enumerator.add_staple(1);
-    //GrowthpointEnumerator growthpoint_enumerator22 {conf_enumerator, origami};
-    //growthpoint_enumerator22.enumerate();
+
+    conf_enumerator.add_staple(1);
+    GrowthpointEnumerator growthpoint_enumerator21 {conf_enumerator, origami};
+    growthpoint_enumerator21.enumerate();
+    conf_enumerator.remove_staple(1);
+    conf_enumerator.add_staple(2);
+    GrowthpointEnumerator growthpoint_enumerator12 {conf_enumerator, origami};
+    growthpoint_enumerator12.enumerate();
+    conf_enumerator.add_staple(1);
+    GrowthpointEnumerator growthpoint_enumerator22 {conf_enumerator, origami};
+    growthpoint_enumerator22.enumerate();
+
     print_matrix(conf_enumerator.normalize_weights(
                     conf_enumerator.m_bound_state_weights),
             params.m_output_filebase + ".counts");
@@ -253,6 +253,7 @@ void ConformationalEnumerator::enumerate() {
     m_domains.pop_back();
     if (is_growthpoint) {
         m_prev_growthpoint_p = p_new;
+        // Model now requires all bound domains to be complementary
         //bool domains_complementary {m_origami_system.check_domains_complementary(
         //        *starting_domain, *next_domain)};
         double pos_multiplier {1};
