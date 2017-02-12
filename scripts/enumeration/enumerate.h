@@ -80,23 +80,31 @@ class GrowthpointEnumerator {
     public:
         GrowthpointEnumerator(
                 ConformationalEnumerator& conformational_enumerator,
-                // Pairs of identity, number of copies
                 OrigamiSystem& origami_system);
         void enumerate();
 
     private:
+        void recurse_or_enumerate_conf(
+                int staple_ident,
+                int d_i,
+                size_t staple_length,
+                Domain* old_domain);
         bool growthpoints_repeated();
 
         ConformationalEnumerator& m_conformational_enumerator;
   
-        // Pairs of identity, number of copies
-        vector<pair<int, int>> m_staples {};
-        vector<Domain*> m_unbound_system_domains {};
+        vector<pair<int, int>> m_staples {}; // identity, number copies
+        vector<Domain*> m_unbound_system_domains {}; // keep track of available domains
         OrigamiSystem& m_origami_system;
 
-        // Chain identity, domain index
+        // Current set of growthpoints (each growthpoint is a chain id and a domain index)
         vector<pair<pair<int, int>, pair<int, int>>> m_growthpoints {};
+
+        // Set of all previously enumerated set of growthpoints
         vector<vector<pair<pair<int, int>, pair<int, int>>>> m_enumerated_growthpoints {};
 };
   
+ConformationalEnumerator enumerate_two_domain_scaffold(OrigamiSystem& origami);
+ConformationalEnumerator enumerate_four_domain_scaffold(OrigamiSystem& origami);
+
 #endif // ENUMERATOR_H
