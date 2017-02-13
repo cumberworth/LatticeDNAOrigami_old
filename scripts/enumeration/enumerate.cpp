@@ -22,6 +22,7 @@ int main(int argc, char* argv[]) {
     vector<Chain> configs {origami_input.m_chains};
     double staple_u {molarity_to_chempot(params.m_staple_M,
             params.m_temp_for_staple_u, params.m_lattice_site_volume)};
+    staple_u *= params.m_staple_u_mult;
     double volume {chempot_to_volume(staple_u, params.m_temp)};
     OrigamiSystem origami {
             identities,
