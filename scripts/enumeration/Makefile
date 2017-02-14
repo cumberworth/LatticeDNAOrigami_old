@@ -14,7 +14,7 @@ all: $(TARGET)
 
 testing: $(TESTTARGET)
 
-$(TARGET): enumerate.o $(BUILD)origami_system.o $(BUILD)utility.o $(BUILD)nearest_neighbour.o $(BUILD)files.o $(BUILD)json.o $(BUILD)domain.o $(BUILD)simulation.o $(BUILD)parser.o $(BUILD)random_gens.o $(BUILD)movetypes.o $(BUILD)ideal_random_walk.o
+$(TARGET): enumerate.o $(BUILD)origami_system.o $(BUILD)utility.o $(BUILD)nearest_neighbour.o $(BUILD)files.o $(BUILD)json.o $(BUILD)domain.o $(BUILD)simulation.o $(BUILD)parser.o $(BUILD)random_gens.o $(BUILD)movetypes.o $(BUILD)ideal_random_walk.o $(BUILD)order_params.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 $(BUILD)enumerate.o: enumerate.cpp

@@ -7,17 +7,22 @@
 #include "domain.h"
 #include "origami_system.h"
 #include "files.h"
+#include "order_params.h"
   
 using namespace Parser;
 using namespace DomainContainer;
 using namespace Origami;
 using namespace Files;
+using namespace OrderParams;
 
 void print_matrix(vector<vector<long double>> matrix, string filename);
 
 class ConformationalEnumerator {
     public:
-        ConformationalEnumerator(OrigamiSystem& origami_system, int max_num_staples);
+        ConformationalEnumerator(
+                OrigamiSystem& origami_system,
+                SystemBias& system_bias,
+                int max_num_staples);
         void enumerate();
         void add_staple(int staple);
         void remove_staple(int staple);
@@ -29,6 +34,7 @@ class ConformationalEnumerator {
                 Domain* old_domain);
         vector<vector<long double>> normalize_weights(vector<vector<long double>> weights);
         long double average_energy();
+        long double average_bias();
 
         unordered_map<Domain*, Domain*> m_growthpoints {};
   
@@ -37,11 +43,14 @@ class ConformationalEnumerator {
         vector<vector<long double>> m_bound_state_weights {};
         vector<vector<long double>> m_misbound_state_weights {};
         long double m_average_energy {0};
+        long double m_average_bias {0};
         long double m_num_configs {0};
 
     private:
         void enumerate_domain(Domain* domain, VectorThree p_prev);
         void set_growthpoint_domains(Domain* domain, VectorThree p_new);
+        void set_comp_growthpoint_domains(Domain* domain, Domain* bound_domain, VectorThree p_new);
+        void set_mis_growthpoint_domains(Domain* domain, Domain* bound_domain, VectorThree p_new);
         void set_bound_domain(Domain* domain, VectorThree p_new);
         void set_unbound_domain(Domain* domain, VectorThree p_new);
         void grow_next_domain(Domain* domain, VectorThree p_new);
@@ -53,6 +62,7 @@ class ConformationalEnumerator {
         void add_weight_matrix_entry();
   
         OrigamiSystem& m_origami_system;
+        SystemBias& m_system_bias;
   
         // Identity to unique indices
         unordered_map<int, vector<int>> m_identity_to_indices {};
@@ -104,7 +114,9 @@ class GrowthpointEnumerator {
         vector<vector<pair<pair<int, int>, pair<int, int>>>> m_enumerated_growthpoints {};
 };
   
-ConformationalEnumerator enumerate_two_domain_scaffold(OrigamiSystem& origami);
-ConformationalEnumerator enumerate_four_domain_scaffold(OrigamiSystem& origami);
+ConformationalEnumerator enumerate_two_domain_scaffold(OrigamiSystem& origami,
+        SystemBias& system_bias);
+ConformationalEnumerator enumerate_four_domain_scaffold(OrigamiSystem& origami,
+        SystemBias& system_bias);
 
 #endif // ENUMERATOR_H
