@@ -12,52 +12,29 @@ using namespace DomainContainer;
 using namespace Origami;
 using namespace Files;
 using namespace OrderParams;
+using namespace Enumerator;
 
-int main(int argc, char* argv[]) {
+void Enumerator::enumerate_main(OrigamiSystem& origami,
+        InputParameters& params) {
     cout << "\nWARNING: Not for staples other than length 2.\n\n";
-    InputParameters params {argc, argv};
-
-    // Create origami object
-    OrigamiInputFile origami_input {params.m_origami_input_filename};
-    vector<vector<int>> identities {origami_input.m_identities};
-    vector<vector<string>> sequences {origami_input.m_sequences};
-    vector<Chain> configs {origami_input.m_chains};
-    double staple_u {molarity_to_chempot(params.m_staple_M,
-            params.m_temp_for_staple_u, params.m_lattice_site_volume)};
-    staple_u *= params.m_staple_u_mult;
-    double volume {chempot_to_volume(staple_u, params.m_temp)};
-    OrigamiSystem origami {
-            identities,
-            sequences,
-            configs,
-            params.m_temp,
-            volume,
-            params.m_cation_M,
-            staple_u,
-            params.m_cyclic};
-    SystemBias system_bias {params, origami};
 
     // Enumerate configurations
     /* This requires changes to match every system. I should pobably come up
        with a more robust way to do this */
     ConformationalEnumerator conf_enumerator {enumerate_four_domain_scaffold(
-            origami, system_bias)};
+            origami)};
 
-    print_matrix(conf_enumerator.normalize_weights(
-                    conf_enumerator.m_bound_state_weights),
-            params.m_output_filebase + ".counts");
-    print_matrix(conf_enumerator.normalize_weights(
-                    conf_enumerator.m_misbound_state_weights),
-            params.m_output_filebase + ".miscounts");
-    cout << conf_enumerator.m_num_configs << "\n";
+    conf_enumerator.normalize_weights();
+    conf_enumerator.print_weights(params.m_output_filebase + ".weights");
+    cout << conf_enumerator.num_configs() << "\n";
     cout << "\n";
     cout << conf_enumerator.average_energy() << "\n";
     cout << conf_enumerator.average_bias() << "\n";
 }
 
-ConformationalEnumerator enumerate_two_domain_scaffold(OrigamiSystem& origami,
-        SystemBias& system_bias) {
-    ConformationalEnumerator conf_enumerator {origami, system_bias, 2};
+ConformationalEnumerator Enumerator::enumerate_two_domain_scaffold(
+        OrigamiSystem& origami) {
+    ConformationalEnumerator conf_enumerator {origami};
     conf_enumerator.enumerate();
     conf_enumerator.add_staple(1);
     GrowthpointEnumerator growthpoint_enumerator1 {conf_enumerator, origami};
@@ -69,10 +46,10 @@ ConformationalEnumerator enumerate_two_domain_scaffold(OrigamiSystem& origami,
     return conf_enumerator;
 }
 
-ConformationalEnumerator enumerate_four_domain_scaffold(OrigamiSystem& origami,
-        SystemBias& system_bias) {
+ConformationalEnumerator Enumerator::enumerate_four_domain_scaffold(
+        OrigamiSystem& origami) {
 
-    ConformationalEnumerator conf_enumerator {origami, system_bias, 4};
+    ConformationalEnumerator conf_enumerator {origami};
     conf_enumerator.enumerate();
     conf_enumerator.add_staple(1);
     GrowthpointEnumerator growthpoint_enumerator10 {conf_enumerator, origami};
@@ -107,7 +84,7 @@ ConformationalEnumerator enumerate_four_domain_scaffold(OrigamiSystem& origami,
     return conf_enumerator;
 }
 
-void print_matrix(vector<vector<long double>> matrix, string filename) {
+void Enumerator::print_matrix(vector<vector<long double>> matrix, string filename) {
     // Print in full matrix format
     ofstream output {filename};
     //cout << "Staples vs number of fully bound domains\n";
@@ -244,10 +221,8 @@ bool GrowthpointEnumerator::growthpoints_repeated() {
     return repeated;
 }
 
-ConformationalEnumerator::ConformationalEnumerator(OrigamiSystem& origami_system,
-        SystemBias& system_bias, int max_num_staples ) :
-        m_origami_system {origami_system},
-        m_system_bias {system_bias} {
+ConformationalEnumerator::ConformationalEnumerator(OrigamiSystem& origami_system) :
+        m_origami_system {origami_system} {
 
     // Unassign all domains
     auto all_chains {m_origami_system.get_chains()};
@@ -267,9 +242,6 @@ ConformationalEnumerator::ConformationalEnumerator(OrigamiSystem& origami_system
     // Setup the scaffold count for skipping orientations
     for (auto d_ident: m_origami_system.m_identities[0]) {
         m_identities_to_num_unassigned[d_ident] = 1;
-    }
-    for (int i {0}; i != max_num_staples + 1; i++) {
-        add_weight_matrix_entry();
     }
 }
 
@@ -376,15 +348,11 @@ void ConformationalEnumerator::remove_growthpoint(
     m_identity_to_indices[new_domain->m_c_ident].push_back(new_domain->m_c);
 }
 
-vector<vector<long double>> ConformationalEnumerator::normalize_weights(
-        vector<vector<long double>> weights) {
-    auto normalized_weights {weights};
-    for (size_t i {0}; i != weights.size(); i++) {
-        for (size_t j {0}; j != weights[i].size(); j++) {
-            normalized_weights[i][j] /= m_partition_f;
-        }
+void ConformationalEnumerator::normalize_weights() {
+    for (auto ele: m_state_weights) {
+        long double normalized_weight {ele.second / m_partition_f};
+            m_normalized_weights[ele.first] = normalized_weight;
     }
-    return normalized_weights;
 }
 
 long double ConformationalEnumerator::average_energy() {
@@ -393,6 +361,23 @@ long double ConformationalEnumerator::average_energy() {
 
 long double ConformationalEnumerator::average_bias() {
     return m_average_bias / m_partition_f;
+}
+
+long double ConformationalEnumerator::num_configs() {
+    return m_num_configs;
+}
+
+void ConformationalEnumerator::print_weights(string filename) {
+    ofstream output {filename};
+    output << "staples domain dist\n";
+    for (auto ele: m_normalized_weights) {
+        output << "(" << ele.first[0];
+        for (size_t i {1}; i != ele.first.size(); i++) {
+            output << " " << ele.first[i];
+        }
+        output << ") " << ele.second << "\n";;
+    }
+    output << "\n";
 }
 
 void ConformationalEnumerator::enumerate_domain(Domain* domain, VectorThree p_prev) {
@@ -675,24 +660,21 @@ void ConformationalEnumerator::calc_and_save_weights() {
     m_num_configs += m_multiplier;
 
     // Calculate bias contribution
-    double bias {m_system_bias.calc_bias()};
-    long double weight {m_prefix * exp(-m_energy - bias) * m_multiplier};
+    double conf_bias {m_origami_system.bias()};
+    long double weight {m_prefix * exp(-m_energy - conf_bias) * m_multiplier};
     m_average_energy += m_energy * weight;
-    m_average_bias += bias * weight;
+    m_average_bias += conf_bias * weight;
     m_partition_f += weight;
-    m_bound_state_weights[m_origami_system.num_staples()][
-            m_origami_system.num_fully_bound_domain_pairs()] += weight;
-    m_misbound_state_weights[m_origami_system.num_staples()][
-            m_origami_system.num_misbound_domain_pairs()] += weight;
-}
 
-void ConformationalEnumerator::add_weight_matrix_entry() {
-    // Update bound states matrix to correct size
-    size_t max_fully_bound_domain_pairs {m_origami_system.m_identities[0].size() + 1};
-    m_bound_state_weights.push_back({});
-    m_misbound_state_weights.push_back({});
-    for (size_t i {0}; i != max_fully_bound_domain_pairs; i++) {
-        m_bound_state_weights.back().push_back(0);
-        m_misbound_state_weights.back().push_back(0);
+    // Add entry
+    int staples {m_origami_system.num_staples()};
+    int domains {m_origami_system.num_fully_bound_domain_pairs()};
+    int dist {m_origami_system.get_system_order_params()->get_dist_sums()[0]->get_param()};
+    vector<int> key = {staples, domains, dist};
+    if (m_state_weights.find(key) != m_state_weights.end()) {
+        m_state_weights[key] += weight;
+    }
+    else {
+        m_state_weights[key] = weight;
     }
 }
