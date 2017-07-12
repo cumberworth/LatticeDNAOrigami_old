@@ -1,16 +1,45 @@
 # Functions for visualizing lattice DNA origami simulations
 #
+# origami must be set to the relevant mol id
 # Note this assumes throughout all staples are two domains
 
-# Color scheme 
+# Color scheme and labels
+set labels(scaffold_domain) "Unbound scaffold domain"
 set colors(scaffold_domain) 10
-set colors(staple_domain) 0
-set colors(bound_domain) 0
-set colors(misbound_domain) 0
-set colors(scaffold_next_domain) 0
-set colors(staple_next_domain) 0
-set colors(scaffold_ore) 0
-set colors(staple_ore) 0
+set labels(staple_domain) "Unbound staple domain"
+set colors(staple_domain) 31
+set labels(bound_domain) "Bound domain"
+set colors(bound_domain) 19
+set labels(misbound_domain) "Misbound domain"
+set colors(misbound_domain) 8
+set labels(scaffold_next_domain) "Scaffold next domain vector"
+set colors(scaffold_next_domain) 10
+set labels(staple_next_domain) "Staple next domain vector"
+set colors(staple_next_domain) 31
+set labels(scaffold_ore) "Scaffold orientation vector"
+set colors(scaffold_ore) 29
+set labels(staple_ore) "Staple orientation vector"
+set colors(staple_ore) 4
+
+proc create_legend {} {
+    # Create legend
+    global colors
+    global labels
+    global legend
+    if {[info exists legend]} {
+        mol delrep 0 $legend
+    }
+    set legend [mol new]
+    mol fix $legend
+    set cur_pos 1.3
+    set incr 0.15
+    foreach index {scaffold_domain staple_domain bound_domain misbound_domain \
+            scaffold_next_domain staple_next_domain scaffold_ore staple_ore} {
+        graphics $legend color $colors($index)
+        graphics $legend text "1 $cur_pos 0" $labels($index) size 1.5
+        set cur_pos [expr $cur_pos - $incr]
+    }
+}
 
 proc load_matrix_as_lists {filename} {
     # Load a matrix as a list of lists
@@ -43,10 +72,11 @@ proc unpack_ores {raw_mat} {
 
 proc calc_num_scaffold_domains {} {
     # Calculate number of scaffold domains
-    set numatoms [molinfo top get numatoms]
+    global origami
+    set numatoms [molinfo $origami get numatoms]
     set num_scaffolds 0
     for {set atom_i 0} {$atom_i != $numatoms} {incr atom_i} {
-        set atom [atomselect top "index $atom_i"]
+        set atom [atomselect $origami "index $atom_i"]
         if {[$atom get type] != "staple"} {
             incr num_scaffolds
         } else {
@@ -61,7 +91,8 @@ proc calc_num_staples {frame} {
     # Calculate number of staples for given frame
     global num_scaffold_domains
     global states
-    set numatoms [molinfo top get numatoms]
+    global origami
+    set numatoms [molinfo $origami get numatoms]
     set num_staple_domains 0
     for {set i $num_scaffold_domains} {$i != $numatoms} {incr i} {
         set state [lindex [lindex $states $frame] $i]
@@ -75,33 +106,43 @@ proc calc_num_staples {frame} {
     return [expr $num_staple_domains / 2]
 }
 
-proc color_states {states} {
-    # Fill the user2 attribute for all atoms at all frames
+proc create_domain_reps {} {
+    global origami
+    mol rep vdw
+    set numatoms [molinfo $origami get numatoms]
+    for {set i 0} {$i != $numatoms} {incr i} {
+        mol addrep $origami
+        mol modselect $i $origami "index $i"
+    }
+}
+
+proc update_colors {} {
+    # Color the domains based on their binding states (and type)
     global colors
-    set numatoms [molinfo top get numatoms]
-    set numframes [molinfo top get numframes]
-    for {set frame 0} {$frame != $numframes} {incr frame} {
-        for {set atom_i 0} {$atom_i != $numatoms} {incr atom_i} {
-            set atom [atomselect top "index $atom_i" frame $frame]
-            set state [lindex [lindex $states $frame] $atom_i]
+    global states
+    global origami
+    set numatoms [molinfo $origami get numatoms]
+    set frame [molinfo $origami get frame]
+    for {set i 0} {$i != $numatoms} {incr i} {
+        set state [lindex [lindex $states $frame] $i]
+        set atom [atomselect $origami "index $i" frame $frame]
 
-            # Unbound domains
-            if {$state == 1} {
-                set type [$atom get type]
-                if {$type == "scaffold"} {
-                    $atom set user2 $colors(scaffold_domain)
-                } elseif {$type == "staple"} {
-                    $atom set user2 $colors(staple_domain)
-                }
-
-            # Fully bound domains
-            } elseif {$state == 2} {
-                $atom set user2 $colors(bound_domain)
-
-            # Misbound domains
-            } elseif {$state == 3} {
-                $atom set user2 $colors(misbound_domain)
+        # Unbound domains
+        if {$state == 1} {
+            set type [$atom get type]
+            if {$type == "scaffold"} {
+                mol modcolor $i $origami ColorID $colors(scaffold_domain)
+            } elseif {$type == "staple"} {
+                mol modcolor $i $origami ColorID $colors(staple_domain)
             }
+
+        # Fully bound domains
+        } elseif {$state == 2} {
+            mol modcolor $i $origami ColorID $colors(bound_domain)
+
+        # Misbound domains
+        } elseif {$state == 3} {
+            mol modcolor $i $origami ColorID $colors(misbound_domain)
         }
     }
 }
@@ -112,10 +153,11 @@ proc color_states {states} {
 proc update_radii {} {
     # Set undefined domains' radii to 0 for current frame
     global states
-    set frame [molinfo top get frame]
-    set numatoms [molinfo top get numatoms]
+    global origami
+    set frame [molinfo $origami get frame]
+    set numatoms [molinfo $origami get numatoms]
     for {set atom_i 0} {$atom_i != $numatoms} {incr atom_i} {
-        set atom [atomselect top "index $atom_i" frame $frame]
+        set atom [atomselect $origami "index $atom_i" frame $frame]
         set state [lindex [lindex $states $frame] $atom_i]
         if {$state == 0} {
             $atom set radius 0
@@ -127,11 +169,12 @@ proc update_radii {} {
 
 proc draw_3d_vector {origin vector color} {
     # Draw vector from origin
-    graphics top color $color
+    global origami
+    graphics $origami color $color
     set end [vecadd $origin $vector]
     set middle [vecadd $origin [vecscale 0.8 [vecsub $end $origin]]]
-    graphics top cylinder $origin $middle radius 0.05 resolution 10
-    graphics top cone $middle $end radius 0.15 resolution 10
+    graphics $origami cylinder $origin $middle radius 0.05 resolution 10
+    graphics $origami cone $middle $end radius 0.15 resolution 10
 }
 
 proc draw_next_domain_vectors {} {
@@ -139,15 +182,16 @@ proc draw_next_domain_vectors {} {
     # Must clear previous first
     global colors
     global num_scaffold_domains
-    set frame [molinfo top get frame]
+    global origami
+    set frame [molinfo $origami get frame]
     set num_staples [calc_num_staples $frame]
 
     # Draw scaffold vectors
-    set d1 [atomselect top "index 0" frame $frame]
+    set d1 [atomselect $origami "index 0" frame $frame]
     set d1_coors [lindex [$d1 get {x y z}] 0]
     for {set i 0} {$i != $num_scaffold_domains - 1} {incr i} {
         set d2_i [expr $i + 1]
-        set d2 [atomselect top "index $d2_i" frame $frame]
+        set d2 [atomselect $origami "index $d2_i" frame $frame]
         set d2_coors [lindex [$d2 get {x y z}] 0]
         set diff [vecsub $d2_coors $d1_coors]
         set vector [vecscale $diff 0.75]
@@ -159,9 +203,9 @@ proc draw_next_domain_vectors {} {
     for {set i 0} {$i != $num_staples} {incr i} {
         set d1_i [expr 2*$i + $num_scaffold_domains]
         set d2_i [expr $d1_i + 1]
-        set d1 [atomselect top "index $d1_i" frame $frame]
+        set d1 [atomselect $origami "index $d1_i" frame $frame]
         set d1_coors [lindex [$d1 get {x y z}] 0]
-        set d2 [atomselect top "index $d2_i" frame $frame]
+        set d2 [atomselect $origami "index $d2_i" frame $frame]
         set d2_coors [lindex [$d2 get {x y z}] 0]
         set diff [vecsub $d2_coors $d1_coors]
         set vector [vecscale $diff 0.75]
@@ -175,12 +219,13 @@ proc draw_ore_vectors {} {
     global colors
     global ores
     global num_scaffold_domains
-    set frame [molinfo top get frame]
+    global origami
+    set frame [molinfo $origami get frame]
     set num_staples [calc_num_staples $frame]
 
     # Draw scaffold vectors
     for {set i 0} {$i != $num_scaffold_domains} {incr i} {
-        set d [atomselect top "index $i" frame $frame]
+        set d [atomselect $origami "index $i" frame $frame]
         set d_coors [lindex [$d get {x y z}] 0]
         set d_ore [lindex [lindex $ores $frame] $i]
         set vector [vecscale $d_ore 0.5]
@@ -191,7 +236,7 @@ proc draw_ore_vectors {} {
     set num_staple_domains [expr 2*$num_staples]
     set num_domains [expr $num_scaffold_domains + $num_staple_domains]
     for {set i $num_scaffold_domains} {$i != $num_domains} {incr i} {
-        set d [atomselect top "index $i" frame $frame]
+        set d [atomselect $origami "index $i" frame $frame]
         set d_coors [lindex [$d get {x y z}] 0]
         set d_ore [lindex [lindex $ores $frame] $i]
         set vector [vecscale $d_ore 0.5]
@@ -201,13 +246,17 @@ proc draw_ore_vectors {} {
 
 proc draw_all_vectors {} {
     # Clear all previous graphics and draw vectors for current frame
-    graphics top delete all
+    global origami
+    graphics $origami delete all
     draw_next_domain_vectors
     draw_ore_vectors
 }
 
+proc update_colors_trace {args} {
+    update_colors
+}
+
 proc update_radii_trace {args} {
-    # For vmd callback
     update_radii
 }
 
