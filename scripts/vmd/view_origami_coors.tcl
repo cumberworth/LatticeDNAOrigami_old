@@ -13,9 +13,6 @@ set states [load_matrix_as_lists $filebase.states]
 mol delrep 0 0
 create_domain_reps
 animate goto start
-animate goto end
-mol modcolor 0 0 user
-animate goto start
 
 # For some reason if I put this earlier it won't load the script properly
 display projection orthographic

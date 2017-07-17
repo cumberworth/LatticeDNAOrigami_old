@@ -45,6 +45,7 @@ proc load_matrix_as_lists {filename} {
     # Load a matrix as a list of lists
     set f [open $filename r]
     set raw [read $f]
+    close $f
     set lines [split $raw "\n"]
     set last_index [expr [llength $lines] - 1]
     set lines [lreplace $lines $last_index $last_index]
@@ -242,6 +243,45 @@ proc draw_ore_vectors {} {
         set vector [vecscale $d_ore 0.5]
         draw_3d_vector $d_coors $vector $colors(staple_ore)
     }
+}
+
+proc update_frame {} {
+    # Load new configuration and delete previous
+    global origami
+    global filebase
+    global states
+    global ores
+    animate delete beg 0 $origami
+
+    # Save visulation state
+    foreach mol [molinfo list] {
+        set viewpoints($mol) [molinfo $mol get {
+            center_matrix rotate_matrix scale_matrix global_matrix}]
+    }
+    animate read vcf $filebase.vcf waitfor all $origami
+    animate read vcf $filebase.vcf waitfor all $origami
+
+    # Return to previous visulation state
+    foreach mol [molinfo list] {
+        molinfo $mol set {center_matrix rotate_matrix scale_matrix
+            global_matrix} $viewpoints($mol)
+    }
+
+    set states [load_matrix_as_lists $filebase.states]
+    lappend states [lindex $states 0]
+    set ores_raw [load_matrix_as_lists $filebase.ores]
+    set ores [unpack_ores $ores_raw]
+    lappend ores [lindex $ores 0]
+
+    graphics $origami delete all
+    update_colors
+    update_radii
+    draw_next_domain_vectors
+    draw_ore_vectors
+}
+
+proc update_frame_trace {args} {
+    update_frame
 }
 
 proc draw_all_vectors {} {
