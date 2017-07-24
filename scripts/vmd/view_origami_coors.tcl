@@ -1,18 +1,21 @@
-# Requires that the structure and coordinates be loaded before sourcing
-# Requires the variable filebase has been set (for loading states and ores)
+# Requires the variable filebase has been set
 
+source $vmd_file_dir/liborigami.tcl
+
+#set origami [mol new $filebase.vsf]
 set ores_raw [load_matrix_as_lists $filebase.ores]
 set ores [unpack_ores $ores_raw]
 set num_scaffold_domains [calc_num_scaffold_domains]
+mol delrep 0 0
+create_domain_reps
+mol addfile $filebase.vcf type vcf waitfor all
+create_legend
+axes location off
+display projection orthographic
+mol top $origami
+set states [load_matrix_as_lists $filebase.states]
 trace variable vmd_frame(0) w update_colors_trace
 trace variable vmd_frame(0) w draw_graphics_trace
 trace variable vmd_frame(0) w update_radii_trace
 
-create_legend
-set states [load_matrix_as_lists $filebase.states]
-mol delrep 0 0
-create_domain_reps
 animate goto start
-
-# For some reason if I put this earlier it won't load the script properly
-display projection orthographic

@@ -27,17 +27,18 @@ proc create_legend {} {
     global labels
     global legend
     if {[info exists legend]} {
-        mol delrep 0 $legend
+        mol delrep all $legend
     }
     set legend [mol new]
     mol fix $legend
-    set cur_pos 1.3
-    set incr 0.15
+    set x 0.5
+    set cur_y 1.3
+    set incr 0.1
     foreach index {scaffold_domain staple_domain bound_domain misbound_domain \
             scaffold_next_domain staple_next_domain scaffold_ore staple_ore} {
         graphics $legend color $colors($index)
-        graphics $legend text "1 $cur_pos 0" $labels($index) size 1.5
-        set cur_pos [expr $cur_pos - $incr]
+        graphics $legend text "$x $cur_y 0" $labels($index) size 1
+        set cur_y [expr $cur_y - $incr]
     }
 }
 
@@ -184,6 +185,7 @@ proc draw_next_domain_vectors {} {
     global colors
     global num_scaffold_domains
     global origami
+    global states
     set frame [molinfo $origami get frame]
     set num_staples [calc_num_staples $frame]
 
@@ -196,7 +198,11 @@ proc draw_next_domain_vectors {} {
         set d2_coors [lindex [$d2 get {x y z}] 0]
         set diff [vecsub $d2_coors $d1_coors]
         set vector [vecscale $diff 0.75]
-        draw_3d_vector $d1_coors $vector $colors(scaffold_next_domain)
+        set state1 [lindex [lindex $states $frame] $i]
+        set state2 [lindex [lindex $states $frame] $d2_i]
+        if {$state1 != 0 && $state2 != 0} {
+            draw_3d_vector $d1_coors $vector $colors(scaffold_next_domain)
+        }
         set d1_coors $d2_coors
     }
 
@@ -210,7 +216,11 @@ proc draw_next_domain_vectors {} {
         set d2_coors [lindex [$d2 get {x y z}] 0]
         set diff [vecsub $d2_coors $d1_coors]
         set vector [vecscale $diff 0.75]
-        draw_3d_vector $d1_coors $vector $colors(staple_next_domain)
+        set state1 [lindex [lindex $states $frame] $d1_i]
+        set state2 [lindex [lindex $states $frame] $d2_i]
+        if {$state1 != 0 && $state2 != 0} {
+            draw_3d_vector $d1_coors $vector $colors(staple_next_domain)
+        }
     }
 }
 
@@ -221,11 +231,16 @@ proc draw_ore_vectors {} {
     global ores
     global num_scaffold_domains
     global origami
+    global states
     set frame [molinfo $origami get frame]
     set num_staples [calc_num_staples $frame]
 
     # Draw scaffold vectors
     for {set i 0} {$i != $num_scaffold_domains} {incr i} {
+        set state [lindex [lindex $states $frame] $i]
+        if {$state == 0} {
+            continue
+        }
         set d [atomselect $origami "index $i" frame $frame]
         set d_coors [lindex [$d get {x y z}] 0]
         set d_ore [lindex [lindex $ores $frame] $i]
@@ -237,6 +252,10 @@ proc draw_ore_vectors {} {
     set num_staple_domains [expr 2*$num_staples]
     set num_domains [expr $num_scaffold_domains + $num_staple_domains]
     for {set i $num_scaffold_domains} {$i != $num_domains} {incr i} {
+        set state [lindex [lindex $states $frame] $i]
+        if {$state == 0} {
+            continue
+        }
         set d [atomselect $origami "index $i" frame $frame]
         set d_coors [lindex [$d get {x y z}] 0]
         set d_ore [lindex [lindex $ores $frame] $i]
