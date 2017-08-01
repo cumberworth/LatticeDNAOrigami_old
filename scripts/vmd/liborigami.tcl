@@ -98,7 +98,7 @@ proc calc_num_staples {frame} {
     set num_staple_domains 0
     for {set i $num_scaffold_domains} {$i != $numatoms} {incr i} {
         set state [lindex [lindex $states $frame] $i]
-        if {$state != 0} {
+        if {$state != -1} {
             incr num_staple_domains
         } else {
             break
@@ -161,7 +161,7 @@ proc update_radii {} {
     for {set atom_i 0} {$atom_i != $numatoms} {incr atom_i} {
         set atom [atomselect $origami "index $atom_i" frame $frame]
         set state [lindex [lindex $states $frame] $atom_i]
-        if {$state == 0} {
+        if {$state == 0 || $state == -1} {
             $atom set radius 0
         } else {
             $atom set radius 0.25
