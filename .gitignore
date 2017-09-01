@@ -14,6 +14,5 @@ tests/bin/
 tests/build/
 tests/src/.ycm_extra_conf.py*
 scripts/analysis/outs/
-scripts/mbar/tests
-scripts/mbar/notes.txt
+scripts/analysis/notes.txt
 scripts/ideal_random_walks/num_walks.arch

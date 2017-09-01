@@ -8,19 +8,6 @@ import scipy.constants
 
 import numpy as np
 
-# Scaffold domain index
-SCAFFOLD_INDEX = 0
-
-# Occupancy states
-UNASSIGNED = 0
-UNBOUND = 1
-BOUND = 2
-MISBOUND = 2
-
-# Move outcomes
-REJECTED = 0
-ACCEPTED = 1
-
 # Units vectors for euclidean space
 XHAT = np.array([1, 0, 0])
 YHAT = np.array([0, 1, 0])
@@ -33,21 +20,6 @@ VECTORS = [np.array(j * i) for i in dimensions for j in directions]
 
 # Avogadro's number
 AN = scipy.constants.N_A
-
-
-# Exceptions
-class MoveRejection(Exception):
-    """Used for early move rejection."""
-    pass
-
-class ConstraintViolation(Exception):
-    """Used for constraint violations in OrigamiSystem."""
-    pass
-
-
-class OrigamiMisuse(Exception):
-    """Used for miscellaneous misuse of the origami objects."""
-    pass
 
 
 # Usefull general functions
@@ -140,79 +112,3 @@ def rotate_vector_quarter(vector, rotation_axis, direction):
         vector[1] = direction * -x
 
     return vector
-
-
-class IdealRandomWalks:
-
-    def __init__(self):
-        # Number of random walks indexed by tuple of end - start
-        self._num_walks = {}
-
-    def num_walks(self, start, end, N):
-        """Calculate number of walks between two positions."""
-
-        # Check stored values
-        DR = tuple(end - start)
-        walk = (DR, N)
-        try:
-            num_walks = self._num_walks[walk]
-        except KeyError:
-            pass
-        else:
-            return num_walks
-
-        # Calculate num walks (see dijkstra1994)
-        DX = DR[0]
-        DY = DR[1]
-        DZ = DR[2]
-        Nminus = (N - DX - DY - DZ) // 2
-        Nplus = (N - DX - DY + DZ) // 2
-        num_walks = 0
-
-        # Need some negative steps to reach a negative location
-        for ybar in range(0, Nminus + 1):
-            for xbar in range(0, Nminus + 1 - ybar):
-                f1 = math.factorial(N)
-                f2 = math.factorial(xbar)
-                if (xbar + DX) < 0:
-                    continue
-
-                f3 = math.factorial(xbar + DX)
-                f4 = math.factorial(ybar)
-                if (ybar + DY) < 0:
-                    continue
-
-                f5 = math.factorial(ybar + DY)
-                f6 = math.factorial(Nminus - xbar - ybar)
-                if (Nplus - xbar - ybar) < 0:
-                    continue
-
-                f7 = math.factorial(Nplus - xbar - ybar)
-                num_walks += f1 // (f2 * f3 * f4 * f5 * f6 * f7)
-
-        # Add entries
-        for perm in itertools.permutations((DX, DY, DZ)):
-            self._num_walks[(perm, N)] = num_walks
-
-        for perm in itertools.permutations((-DX, DY, DZ)):
-            self._num_walks[(perm, N)] = num_walks
-
-        for perm in itertools.permutations((DX, -DY, DZ)):
-            self._num_walks[(perm, N)] = num_walks
-
-        for perm in itertools.permutations((DX, DY, -DZ)):
-            self._num_walks[(perm, N)] = num_walks
-
-        for perm in itertools.permutations((-DX, -DY, DZ)):
-            self._num_walks[(perm, N)] = num_walks
-
-        for perm in itertools.permutations((DX, -DY, -DZ)):
-            self._num_walks[(perm, N)] = num_walks
-
-        for perm in itertools.permutations((-DX, DY, -DZ)):
-            self._num_walks[(perm, N)] = num_walks
-
-        for perm in itertools.permutations((-DX, -DY, -DZ)):
-            self._num_walks[(perm, N)] = num_walks
-
-        return num_walks
