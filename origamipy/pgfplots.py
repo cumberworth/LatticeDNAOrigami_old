@@ -1,11 +1,17 @@
 """Functions for output data in PGF compatable format"""
 
+import numpy as np
+
 
 def write_pgf(filename, xdata, ydata):
     with open(filename, 'w') as inp:
         inp.write('x y\n')
         for x, y in zip(xdata, ydata):
             inp.write('{} {}\n'.format(x, y))
+
+
+def read_pgf(filename):
+    return np.loadtxt(filename, skiprows=1)
 
 
 def write_pgf_with_errors(filename, xdata, ydata, errors):

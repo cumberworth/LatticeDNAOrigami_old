@@ -3,6 +3,7 @@
 import numpy as np
 from operator import itemgetter
 
+from origamipy.op_process import read_ops_from_file
 
 def normalize(weights):
     """Normalize given weights"""
@@ -71,53 +72,42 @@ def calc_rep_op_weights(tags, filebase_run, temp):
 
 def calc_mean_ops(tags, ops):
     """Calculate specified mean order parameters"""
-    mean_ops = {}
-    for tag in tags:
-        mean_ops[tag] = ops[tag].mean() 
+    mean_ops = {tag: ops[tag].mean() for tag in tags}
 
     return mean_ops
 
 
-def marginalize_single(weights, marginalized_weights, index):
-    """Marginalize over all other indices in weights"""
+def calc_mean_ops_from_weights(weights):
+    """Average over the weights of an order parameters values
+
+    Assumes that weights is a dictionary from a single op value to its weight.
+    Also assumes that the op values are stored in a tuple.
+    """
+    mean_op = 0
+    for op, weight in weights.items():
+        mean_op += op[0] * weight
+
+    return mean_op
+
+
+def marginalize_ops(weights, header_tags, sel_tags):
+    """Marginalize over all other order parameters in weights"""
+    if type(sel_tags) == str:
+        sel_tags = [sel_tags]
+
+    marg_weights = {}
+    indices = [header_tags.index(tag) for tag in sel_tags]
     for point, value in weights.items():
-        comp = point[index]
-        if comp in marginalized_weights:
-            marginalized_weights[comp] += value
+        comps = tuple(point[i] for i in indices)
+        if comps in marg_weights:
+            marg_weights[comps] += value
         else:
-            marginalized_weights[comp] = value
+            marg_weights[comps] = value
 
-    return marginalized_weights
-
-
-def marginalize_2d_single(weights, marginalized_weights, indices):
-    """DIFFERENCE TO ABOVE?"""
-    for point, value in weights.items():
-        comps = (point[indices[0]], point[indices[1]])
-        if comps in marginalized_weights.keys():
-            marginalized_weights[comps] += value
-        else:
-            marginalized_weights[comps] = value
-
-    return marginalized_weights
+    return marg_weights
 
 
-def marginalize_2d_multiple(weights, marginalized_weights, rep, indices):
-    """DIFFERENCE TO ABOVE?"""
-    for comps in marginalized_weights.keys():
-        marginalized_weights[comps].append(0)
-
-    for point, value in weights.items():
-        comps = (point[indices[0]], point[indices[1]])
-        if comps in marginalized_weights:
-            marginalized_weights[comps][rep] += value
-        else:
-            marginalized_weights[comps] = [0]*(rep) + [value]
-
-    return marginalized_weights
-
-
-def marginalize_multiple(weights, marginalized_weights, rep, index):
+def marginalize_ops_over_reps(weights, marginalized_weights, rep, index):
     """Marginalize over all other indices in weights"""
     for comp in marginalized_weights.keys():
         marginalized_weights[comp].append(0)

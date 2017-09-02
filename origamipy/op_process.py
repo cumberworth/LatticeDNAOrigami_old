@@ -1,5 +1,7 @@
 """Functions for processing order parameter files"""
 
+import numpy as np
+
 
 def read_ops_from_file(filename, tags):
     """Read specified order parameters from file
@@ -7,7 +9,7 @@ def read_ops_from_file(filename, tags):
     Returns a dictionary of tags to values.
     """
     with open(filename) as inp:
-        header = inp.readline().split()
+        header = inp.readline().split(', ')
 
     all_ops = np.loadtxt(filename, skiprows=1)
     ops = {}
@@ -18,6 +20,30 @@ def read_ops_from_file(filename, tags):
             ops[tag] = all_ops[:, i + 1]
 
     return ops
+
+
+def read_weights_from_file(filename):
+    """Read order parameter weights from enumeration output file
+
+    The order parameters are stored in the first column in parantheses.
+    """
+    with open(filename) as inp:
+        tags = inp.readline().split()
+        lines = inp.readlines()
+
+    points_weights = {}
+    for line in lines:
+        if line == '\n':
+            continue
+
+        start_p = line.find('(')
+        end_p = line.find(')')
+        point = tuple(int(i) for i in line[start_p + 1:end_p].split())
+        weight = float(line.split()[-1])
+        points_weights[point] = weight
+
+    return tags, points_weights
+
 
 
 def read_counts_file(filename):
