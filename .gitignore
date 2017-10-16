@@ -1,4 +1,5 @@
 *.swp
+*.tags
 .prereqs.txt
 LICENSE.old
 .ycm_extra_conf.py*
@@ -7,7 +8,7 @@ LICENSE.old
 .d/
 bin/
 build/
-lattice_dna_origami/__pycache__/
+*__pycache__/
 localtests/
 prereqs.txt
 tests/bin/
