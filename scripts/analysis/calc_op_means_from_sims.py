@@ -45,7 +45,7 @@ def main():
         for rep in range(reps):
             filename = '{}/{}_run-{}_rep-{}-{}.ops'.format(input_dir, filebase,
                     run, rep, temp)
-            ops = read_ops_from_file(filename, tags)
+            ops = read_ops_from_file(filename, tags, burn_in)
             mean_ops = calc_mean_ops(tags, ops)
             for tag, mean in mean_ops.items():
                 op_reps[tag][rep] = mean

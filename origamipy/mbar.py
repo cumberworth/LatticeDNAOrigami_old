@@ -1,5 +1,7 @@
 """Functions for carrying out Multi Bennet Acceptance Ration (MBAR) analysis"""
 
+from pymbar import timeseries
+
 
 def calc_rstaple_u(staple_M, lattice_site_volume):
     """Calculate reduced staple chemical potential"""

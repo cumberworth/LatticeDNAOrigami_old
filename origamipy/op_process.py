@@ -3,7 +3,7 @@
 import numpy as np
 
 
-def read_ops_from_file(filename, tags):
+def read_ops_from_file(filename, tags, burn_in):
     """Read specified order parameters from file
 
     Returns a dictionary of tags to values.
@@ -17,7 +17,7 @@ def read_ops_from_file(filename, tags):
         if tag in tags:
 
             # First index is step, not in header
-            ops[tag] = all_ops[:, i + 1]
+            ops[tag] = all_ops[:, i + 1][burn_in:]
 
     return ops
 
@@ -94,11 +94,12 @@ def get_all_points(win, point, points, comp):
     return points
 
 
-def sort_by_ops(ops):
-    """Return ???"""
+def sort_by_ops(ops, tags):
+    """Return dictionary of ops to original indices"""
+    configs = len(ops[tags[0]])
     op_to_config = {}
-    for i, op in enumerate(ops):
-        op_key = tuple(op.tolist())
+    for i in range(configs):
+        op_key = tuple([ops[tag][i] for tag in tags])
         if op_key in op_to_config:
             op_to_config[op_key].append(i)
         else:

@@ -8,7 +8,6 @@ import math
 
 import scipy.constants
 import numpy as np
-import pymbar.timeseries as timeseries
 import pymbar.mbar as mbar
 from operator import itemgetter
 

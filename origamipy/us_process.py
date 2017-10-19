@@ -1,5 +1,9 @@
 """Functions for preparing and processing US simulations"""
 
+import copy
+import random
+
+from origamipy.op_process import find_closest_ops
 
 def create_win_filename(win, filebase, ext):
     """Create filename for given window."""
@@ -42,8 +46,9 @@ def read_windows_file(filename):
     with open(filename) as inp:
         lines = inp.readlines()
 
+    tags = [tag for tag in lines[0].split()]
     wins = []
-    for line in lines:
+    for line in lines[1:]:
         mins_raw, maxs_raw = line.split(',')
         mins = tuple(map(int, mins_raw.split()))
         maxs = tuple(map(int, maxs_raw.split()))
@@ -51,7 +56,7 @@ def read_windows_file(filename):
         wins.append(win)
 
 
-    return wins
+    return tags, wins
 
 
 def read_win_energies(win_filebases):

@@ -3,6 +3,8 @@
 import numpy as np
 from operator import itemgetter
 
+from pymbar import timeseries
+
 from origamipy.op_process import read_ops_from_file
 
 def normalize(weights):
@@ -75,6 +77,17 @@ def calc_mean_ops(tags, ops):
     mean_ops = {tag: ops[tag].mean() for tag in tags}
 
     return mean_ops
+
+
+def calc_effN_ops(tags, ops):
+    """Calculate effective sample sizes for given order parameters"""
+    effN_ops = {}
+    for tag in tags:
+        t, g, Neff = timeseries.detectEquilibration(ops[tag])
+        t /= len(ops[tag])
+        effN_ops[tag] = (t, g, Neff)
+
+    return effN_ops
 
 
 def calc_mean_ops_from_weights(weights):

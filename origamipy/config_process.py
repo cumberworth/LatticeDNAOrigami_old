@@ -1,5 +1,7 @@
 """Functions for processing configuration files"""
 
+import numpy as np
+
 
 def calc_dist_matrices(traj_file, skip, skipo):
     """WRITE"""
