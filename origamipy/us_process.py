@@ -1,9 +1,13 @@
 """Functions for preparing and processing US simulations"""
 
 import copy
+import json
+from operator import itemgetter
 import random
 
-from origamipy.op_process import find_closest_ops
+import numpy as np
+
+from origamipy.op_process import *
 
 def create_win_filename(win, filebase, ext):
     """Create filename for given window."""
@@ -70,15 +74,42 @@ def read_win_energies(win_filebases):
     return win_enes
 
 
-def read_win_order_params(win_filebases):
+def read_win_energies_from_log(win_filebases):
+    """Read in origami energies for given windows from log file (without bias)"""
+    win_enes = []
+    for filebase in win_filebases:
+        filename = filebase + '_iter-prod.out'
+        with open(filename) as inp:
+            lines = inp.readlines()
+
+        enes =[]
+        for line in lines:
+            words = line.split()
+            if len(words) == 0:
+                pass
+            else:
+                if words[0] == 'System':
+                    ene = float(words[-1])
+                    enes.append(ene)
+
+        enes = np.array(enes)
+        win_enes.append(enes)
+
+    return win_enes
+
+
+def read_win_order_params(win_filebases, tags):
     """Read in order parameters for given windows"""
+    tags.append('numstaples')
+    #win_ops = {tag: [] for tag in tags}
     win_ops = []
     for filebase in win_filebases:
-        filename = filebase + '_iter-prod.order_params'
-        ops = np.loadtxt(filename, skiprows=1)
+        filename = filebase + '_iter-prod.ops'
+        ops = read_ops_from_file(filename, tags, 0)
+        win_ops.append(ops)
 
-        # Exclude step number
-        win_ops.append(ops[:,1:])
+        #for tag in tags:
+        #    win_ops[tag].append(ops[tag])
 
     return win_ops
 

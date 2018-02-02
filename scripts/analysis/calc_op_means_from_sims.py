@@ -35,8 +35,8 @@ def main():
     burn_in = args.burn_in
     input_dir = args.input_dir
     output_dir = args.output_dir
-    tags = args.tags
     temps = args.temps
+    tags = args.tags
 
     op_means = {tag: [] for tag in tags}
     op_stds = {tag: [] for tag in tags}

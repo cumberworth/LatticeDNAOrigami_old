@@ -2,10 +2,11 @@
 
 import numpy as np
 from operator import itemgetter
+import os.path
 
 from pymbar import timeseries
 
-from origamipy.op_process import read_ops_from_file
+from origamipy.op_process import *
 
 def normalize(weights):
     """Normalize given weights"""
@@ -19,15 +20,32 @@ def normalize(weights):
     return weights
 
 
+def calc_weights(ops, tags):
+    """Return weights for ops in given steps"""
+    weights = {}
+    for i in range(len(ops[tags[0]])):
+        points = [ops[tag][i] for tag in tags]
+        key = tuple(points)
+        if key in weights:
+            weights[key] += 1
+        else:
+            weights[key] = 1
+
+    for point, weight in weights.items():
+        weights[point] = weight / len(points)
+
+    return weights
+
+
 def calc_weights_for_each(ops):
     """Return weights for given values of each op in given steps
     
     Instead of looking at the freqeuency of the combination of all ops, look at
     the freqeuncies of values of individual ops."""
-    weights = {}
+    weights = {tag: {} for tag in ops.keys()}
     for tag, points in ops.items():
         for point in points:
-            if points in weights[tag]:
+            if point in weights[tag]:
                 weights[tag][point] += 1
             else:
                 weights[tag][point] = 1
@@ -45,7 +63,7 @@ def combine_sim_weights(op_weights, op_weights_per_rep, rep):
     have the order parameter values as keys and the arrays of weights for those
     op values across the simulations being considered as values.
     """
-    for tag, weights in weights.items():
+    for tag, weights in op_weights.items():
         for point, weight in weights.items():
             if point in op_weights_per_rep[tag]:
                 op_weights_per_rep[tag][point].append(weight)
@@ -55,19 +73,68 @@ def combine_sim_weights(op_weights, op_weights_per_rep, rep):
     return op_weights_per_rep
 
 
-def calc_rep_op_weights(tags, filebase_run, temp):
+def combine_sim_combined_weights(op_weights, op_weights_per_rep, rep):
+    """Combines the weights of one sims ops with multiple others
+
+    Outputs a dictionary of order parameter values as keys and to arrays of
+    weights for those op values from each replicate as values.
+    """
+    for point, weight in op_weights.items():
+        if point in op_weights_per_rep:
+            op_weights_per_rep[point].append(weight)
+        else:
+            op_weights_per_rep[point] = [0]*rep + [weight]
+
+    return op_weights_per_rep
+
+
+def calc_rep_op_weights(tags, filebase, burn_in, runs, reps, temp):
     """Calculate the weights of a set of order parameters for a set of replicas
 
     Outputs a dictionary with order parameter tags as keys to dictionaries that
     have the order parameter values as keys and the arrays of weights for those
     op values across the simulations being considered as values.
     """
+    op_weights_per_rep = {tag: {} for tag in tags}
+    for rep in range(reps):
+        filename = '{}_run-{}_rep-{}-{}.ops'.format(filebase, 0, rep, temp)
+        ops = read_ops_from_file(filename, tags, burn_in)
+        for run in range(1, runs):
+            filename = '{}_run-{}_rep-{}-{}.ops'.format(filebase, run, rep, temp)
+            if not os.path.isfile(filename):
+                continue
+
+# BURN IN SHOUDL BE 0!!!
+            ops_run = read_ops_from_file(filename, tags, burn_in)
+            ops = concatenate_ops(ops, ops_run)
+
+        op_weights = calc_weights_for_each(ops)
+        op_weights_per_rep = combine_sim_weights(op_weights, op_weights_per_rep, rep)
+
+    return op_weights_per_rep
+
+
+def calc_rep_op_combined_weights(tags, filebase, burn_in, runs, reps, temp):
+    """Calculate the combined weights of a set of order parameters
+
+    Outputs a dictionary with with order parameter values as keys and an array 
+    of weights for those op values across the replicates as values.
+    """
     op_weights_per_rep = {}
     for rep in range(reps):
-        filename = '{}_rep-{}-{}.ops'.format(filebase_run, rep, temp)
-        ops = read_ops_from_file(filebasename, tags)
-        op_weights = calc_weights(ops)
-        op_weights_per_rep = combine_sim_weights(op_weights, op_weights_per_rep, rep)
+        filename = '{}_run-{}_rep-{}-{}.ops'.format(filebase, 0, rep, temp)
+        ops = read_ops_from_file(filename, tags, burn_in)
+        for run in range(1, runs):
+            filename = '{}_run-{}_rep-{}-{}.ops'.format(filebase, run, rep, temp)
+            if not os.path.isfile(filename):
+                continue
+
+# BURN IN SHOUDL BE 0!!!
+            ops = read_ops_from_file(filename, tags, burn_in)
+
+        op_weights = calc_weights(ops, tags)
+        op_weights_per_rep = combine_sim_combined_weights(op_weights,
+                op_weights_per_rep, rep)
 
     return op_weights_per_rep
 
@@ -145,10 +212,8 @@ def fill_weights(weights, reps, x_lims, y_lims):
     return weights
 
 
-def order_weights(weights):
-    """Return tuple of points and weights in order of increasing order param
-    
-    COULD THE OP ORDER FUNCTION BE USED?"""
+def order_and_split_dictionary(weights):
+    """Return tuple of points and weights in order of increasing order param"""
     sorted_weights = sorted(weights.items(), key=itemgetter(0))
     points = []
     weights_only = []
@@ -159,13 +224,42 @@ def order_weights(weights):
     return points, weights_only
 
 
+def order_fill_and_split_dictionary(d):
+
+    # Find maxima of ops
+    ops1 = [key[0] for key in d.keys()]
+    op1_max = max(ops1)
+    ops2 = [key[1] for key in d.keys()]
+    op2_max = max(ops2)
+
+    # Fill in op combos that were not sampled
+    for x in range(0, op1_max + 1):
+        for y in range(0, op2_max + 1):
+            if (x, y) not in d.keys():
+                d[(x, y)] = 'nan'
+
+    # Sort
+    sorted_d = sorted(d.items(), key=itemgetter(0))
+    keys = []
+    values= []
+    for key, value in sorted_d:
+        keys.append(key)
+        values.append(value)
+
+    return keys, values
+
+
 def calc_mean_std(weights):
     """Calculate means and standard deviations of weights"""
     means = []
     stds = []
     for rep_weights in weights:
-        means.append(np.mean(rep_weights))
-        stds.append(np.std(rep_weights))
+        if rep_weights == 'nan':
+            means.append(0)
+            stds.append(0)
+        else:
+            means.append(np.mean(rep_weights))
+            stds.append(np.std(rep_weights))
 
     return means, stds
 
@@ -186,34 +280,25 @@ def calc_pmf(weights):
     return pmfs
 
 
-def calc_mean_std_pmf(weights):
-    """Return the mean pmfs and standard deviations of given weights
+def calc_pmf_with_stds(weights, weight_stds):
+    """Convert weights to potential of mean force
 
-    So what is exactly happening?
+    Uses largest weight as reference.
     """
-
-    # Calculate pmfs at each point
-    pmfs = [[] for i in weights]
-    for rep in range(len(weights[0])):
-        all_weights = []
-        for rep_weights in weights:
-            all_weights.append(rep_weights[rep])
-
-        local_pmfs = calc_pmf(all_weights)
-        for i, pmf in enumerate(local_pmfs):
-            pmfs[i].append(pmf)
-
-    means = []
-    stds = []
-    for i, rep_pmfs in enumerate(pmfs):
-
-        # Not counting non-sampled states towards mean
-        samples = [i for i in rep_pmfs if i != 'nan']
-        if len(samples) != 0:
-            means.append(np.mean(samples))
-            stds.append(np.std(samples))
+    max_weight = max(weights)
+    max_weight_i = weights.index(max_weight)
+    max_weight_std = weight_stds[max_weight_i]
+    pmfs = []
+    pmf_stds = []
+    for weight, std in zip(weights, weight_stds):
+        if weight != 0:
+            pmfs.append(np.log(max_weight / weight))
+            e1 = max_weight_std / max_weight
+            e2 = std / weight
+            e = np.sqrt(e1**2 + e2**2)
+            pmf_stds.append(e)
         else:
-            means.append('nan')
-            stds.append('nan')
+            pmfs.append('nan')
+            pmf_stds.append('nan')
 
-    return means, stds
+    return pmfs, pmf_stds

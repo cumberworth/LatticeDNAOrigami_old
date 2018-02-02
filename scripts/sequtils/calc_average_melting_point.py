@@ -5,10 +5,8 @@
 import argparse
 import sys
 
-sys.path.insert(0, '../lattice_origami_domains')
-
-from lattice_dna_origami.origami_io import *
-from lattice_dna_origami.nearest_neighbour import *
+from origamipy.origami_io import *
+from origamipy.nearest_neighbour import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('filename', type=str, help='Configuration file name.')

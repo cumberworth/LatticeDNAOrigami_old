@@ -1,6 +1,11 @@
 """Functions for carrying out Multi Bennet Acceptance Ration (MBAR) analysis"""
 
+import math
+
 from pymbar import timeseries
+import scipy
+
+from origamipy.us_process import *
 
 
 def calc_rstaple_u(staple_M, lattice_site_volume):
@@ -10,33 +15,41 @@ def calc_rstaple_u(staple_M, lattice_site_volume):
     return rstaple_u 
 
 
-def calc_correlated_rpots(wins, win_enes, win_ops, win_biases, rstaple_u):
+def calc_correlated_rpots(wins, win_enes, win_ops, win_biases, rstaple_u, tags,
+        min_bias, slope):
     correlated_rpots = []
     for i in range(len(wins)):
         rpots = calc_reduced_potentials(wins[i], win_enes[i], win_ops[i],
-                win_biases[i], rstaple_u)
+                win_biases[i], rstaple_u, tags, min_bias, slope)
         correlated_rpots.append(rpots)
 
     return correlated_rpots
 
 
-def calc_reduced_potentials(win, win_enes, win_ops, win_biases, rstaple_u):
+def calc_reduced_potentials(win, win_enes, win_ops, win_biases, rstaple_u, tags,
+        min_bias, slope):
     """Calculate reduced potentials as defined in shirts2008"""
-    min_num_domains = win[0][0]
-    max_num_domains = win[1][0]
-    min_num_staples = win[0][1]
-    max_num_staples = win[1][1]
+    min_op1 = win[0][0]
+    max_op1 = win[1][0]
+    min_op2 = win[0][1]
+    max_op2 = win[1][1]
     reduced_potentials = []
     for i in range(len(win_enes)):
-        num_staples = win_ops[i][-2]
-        num_domains = win_ops[i][-1]
+        num_staples = win_ops['numstaples'][i]
+        op1 = win_ops[tags[0]][i]
+        op2 = win_ops[tags[1]][i]
         rchem_pot = num_staples * rstaple_u
         bias = 0
-        if (num_staples < min_num_staples or num_staples > max_num_staples) or (
-            num_domains < min_num_domains or num_domains > max_num_domains):
-            bias += OUTSIDE_BIAS
+        if op1 < min_op1:
+            bias += min_bias + slope*(min_op1 - op1)
+        if op1 > max_op1:
+            bias += min_bias + slope*(op1 - max_op1)
+        if op2 < min_op2:
+            bias += min_bias + slope*(min_op2 - op2)
+        if op2 > max_op2:
+            bias += min_bias + slope*(op2 - max_op2)
 
-        point = (int(num_domains), int(num_staples))
+        point = (int(op1), int(op2))
         if point in win_biases:
             bias += win_biases[point]
 
@@ -50,7 +63,7 @@ def calc_no_bias_reduced_potentials(enes, ops, rstaple_u):
     """Calculate reduced potentials as defined in shirts2008"""
     reduced_potentials = []
     for i in range(len(enes)):
-        num_staples = ops[i][-2]
+        num_staples = ops['numstaples'][i]
         rchem_pot = num_staples * rstaple_u
         rpot = enes[i] + rchem_pot
         reduced_potentials.append(rpot)
@@ -89,13 +102,30 @@ def create_uncorrelated_concatenation(wins, win_subsample_indices, win_obvs):
 
     return win_uncorrelated_obvs
 
+def create_uncorrelated_ops_concatenation(wins, win_subsample_indices, win_ops):
+    win_uncorrelated_ops = {}
+    tags = win_ops[0].keys()
+    subsample_indices = win_subsample_indices[0]
+    for tag in tags:
+        win_uncorrelated_ops[tag] = np.array(win_ops[0][tag])[subsample_indices]
+
+    for i in range(1, len(wins)):
+        subsample_indices = win_subsample_indices[i]
+        for tag in tags:
+            win_subsampled_ops = np.array(win_ops[i][tag])[subsample_indices]
+            win_uncorrelated_ops[tag] = np.concatenate(
+                    [win_uncorrelated_ops[tag], win_subsampled_ops])
+
+    return win_uncorrelated_ops
+
 def calc_uncorrelated_rpots(wins, win_uncorrelated_enes, win_uncorrelated_ops,
-        win_biases, rstaple_u):
+        win_biases, rstaple_u, tags, min_bias, slope):
 
     uncorrelated_rpots = []
     for i in range(len(wins)):
         rpots = calc_reduced_potentials(wins[i], win_uncorrelated_enes,
-                win_uncorrelated_ops, win_biases[i], rstaple_u)
+                win_uncorrelated_ops, win_biases[i], rstaple_u, tags, min_bias,
+                slope)
         uncorrelated_rpots.append(rpots)
 
     return uncorrelated_rpots

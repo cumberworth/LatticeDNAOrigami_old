@@ -11,44 +11,56 @@ import numpy as np
 import pymbar.mbar as mbar
 from operator import itemgetter
 
-WELL_BIAS = 0
-OUTSIDE_BIAS = 99
-LATTICE_SITE_VOLUME = 4e-28
+from origamipy.mbar import *
+from origamipy.pgfplots import *
+from origamipy.us_process import *
 
-# This has gotten too long
+LATTICE_SITE_VOLUME = 4e-28
+MIN_BIAS = 100
+SLOPE = 10
+
 def main():
 
     # Parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('filebase', type=str, help='Filebase simulation output files')
+    parser.add_argument('input_dir', type=str, help='Directory of inputs')
+    parser.add_argument('output_dir', type=str, help='Directory to output to')
     parser.add_argument('windows_file', type=str, help='Windows file')
     parser.add_argument('temp', type=float, help='System temperature')
     parser.add_argument('staple_M', type=float, help='Staple molarity (mol/V)')
+    parser.add_argument('--tags', nargs='+', type=str, help='Order parameter tags')
 
     args = parser.parse_args()
     
     filebase = args.filebase
+    inputs_dir = args.input_dir
+    output_dir = args.output_dir
     wins_filename = args.windows_file
     temp = args.temp
     staple_M = args.staple_M
+    tags = args.tags
 
     rstaple_u = calc_rstaple_u(staple_M, LATTICE_SITE_VOLUME)
 
     # Read and prepare inputs
-    wins = read_windows(wins_filename)
-    win_filebases = create_window_filebases(wins, filebase)
-    win_enes = read_energies(win_filebases)
-    win_ops = read_order_params(win_filebases)
-    win_biases = read_grid_biases(wins, win_filebases)
+    bias_tags, wins = read_windows_file(wins_filename)
+    win_filebases = create_window_filebases(wins, inputs_dir + '/' + filebase)
+    #win_enes = read_win_energies(win_filebases)
+    win_enes = read_win_energies_from_log(win_filebases)
+    win_ops = read_win_order_params(win_filebases, tags)
+    win_biases = read_win_grid_biases(wins, win_filebases)
     win_correlated_rpots = calc_correlated_rpots(wins, win_enes, win_ops,
-            win_biases, rstaple_u)
-    win_subsample_indices = subsample_independent_config_set(win_correlated_rpots)
+            win_biases, rstaple_u, bias_tags, MIN_BIAS, SLOPE)
+    win_subsample_indices = subsample_independent_config_set(
+            win_correlated_rpots)
     uncorrelated_enes = create_uncorrelated_concatenation(wins,
             win_subsample_indices, win_enes)
-    uncorrelated_ops = create_uncorrelated_concatenation(wins,
+    uncorrelated_ops = create_uncorrelated_ops_concatenation(wins,
             win_subsample_indices, win_ops)
     win_uncorrelated_rpots = calc_uncorrelated_rpots(wins,
-            uncorrelated_enes, uncorrelated_ops, win_biases, rstaple_u)
+            uncorrelated_enes, uncorrelated_ops, win_biases, rstaple_u,
+            bias_tags, MIN_BIAS, SLOPE)
     win_num_configs = [len(indices) for indices in win_subsample_indices]
 
     # Add no bias potential with no samples
@@ -61,65 +73,46 @@ def main():
     origami_mbar = mbar.MBAR(win_uncorrelated_rpots, win_num_configs)
     no_bias_uncorrelated_rpots = calc_no_bias_reduced_potentials(
             uncorrelated_enes, uncorrelated_ops, rstaple_u)
-    uncorrelated_domains = uncorrelated_ops[:, -1].astype(int)
-    uncorrelated_staples = uncorrelated_ops[:, -2].astype(int)
-    uncorrelated_dists = uncorrelated_ops[:, -3].astype(int)
 
-    # Expectations
-    ave_staples, var_staples = origami_mbar.computeExpectations(
-            uncorrelated_staples, no_bias_uncorrelated_rpots)
-    std_staples = np.sqrt(var_staples)
-    print('Average number of bound staples: {:.2f}+-{:.2f}'.format(ave_staples[0],
-        std_staples[0]))
-    ave_domains, var_domains = origami_mbar.computeExpectations(
-            uncorrelated_domains, no_bias_uncorrelated_rpots)
-    std_domains = np.sqrt(var_domains)
-    print('Average number of fully bound domain pairs: {:.2f}+-{:.2f}'.format(
-        ave_domains[0], std_domains[0]))
+    for i, tag in enumerate(tags):
 
-    # 1D PMFS (make a function for this)
-    staple_bins = set(uncorrelated_staples)
-    staple_to_bin = {j: i for i, j in enumerate(staple_bins)}
-    uncor_staple_bin_is = [staple_to_bin[i] for i in uncorrelated_staples]
-    uncor_staple_bin_is = np.array(uncor_staple_bin_is)
-    pmf_staples, var_pmf_staples = origami_mbar.computePMF(
-            no_bias_uncorrelated_rpots, uncor_staple_bin_is,
-            len(staple_bins))
-    write_pgf_file(staple_bins, pmf_staples, np.sqrt(var_pmf_staples),
-            filebase + '_pmfs.staples')
-    domain_bins = set(uncorrelated_domains)
-    domain_to_bin = {j: i for i, j in enumerate(domain_bins)}
-    uncor_domain_bin_is = [domain_to_bin[i] for i in uncorrelated_domains]
-    uncor_domain_bin_is = np.array(uncor_domain_bin_is)
-    pmf_domains, var_pmf_domains = origami_mbar.computePMF(
-            no_bias_uncorrelated_rpots, uncor_domain_bin_is,
-            len(domain_bins))
-    write_pgf_file(domain_bins, pmf_domains, np.sqrt(var_pmf_domains),
-            filebase + '_pmfs.domains')
-    dists_bins = set(uncorrelated_dists)
-    dists_to_bin = {j: i for i, j in enumerate(dists_bins)}
-    uncor_dists_bin_is = [dists_to_bin[i] for i in uncorrelated_dists]
-    uncor_dists_bin_is = np.array(uncor_dists_bin_is)
-    pmf_dists, var_pmf_dists = origami_mbar.computePMF(
-            no_bias_uncorrelated_rpots, uncor_dists_bin_is,
-            len(dists_bins))
-    write_pgf_file(dists_bins, pmf_dists, np.sqrt(var_pmf_dists),
-            filebase + '_pmfs.dists')
+        # Expectations
+        ave_ops, var_ops = origami_mbar.computeExpectations(
+                uncorrelated_ops[tag], no_bias_uncorrelated_rpots)
+        std_ops = np.sqrt(var_ops)
+        print('Average of {}: {:.2f}+-{:.2f}'.format(tag, ave_ops[0],
+            std_ops[0]))
 
-    # 2D PMFS
-    uncorrelated_sds = uncorrelated_ops[:, -2:].astype(int).tolist()
-    uncor_sds = [(i[0], i[1]) for i in uncorrelated_sds]
-    sd_bins = list(set(uncor_sds))
-    sd_to_bin = {j: i for i, j in enumerate(sd_bins)}
-    uncor_sd_bin_is = [sd_to_bin[i] for i in uncor_sds]
-    uncor_sd_bin_is = np.array(uncor_sd_bin_is)
-    pmf_sds, var_pmf_sds = origami_mbar.computePMF(
-            no_bias_uncorrelated_rpots, uncor_sd_bin_is,
-            len(sd_bins))
-    staple_lims = [0, max(staple_bins)]
-    domain_lims = [0, max(domain_bins)]
-    sd_bins, pmf_sds = sort_and_fill_pmfs(sd_bins, pmf_sds, staple_lims, domain_lims)
-    write_2d_pgf_file(sd_bins, pmf_sds, filebase + '_pmfs.sds')
+        # 1D PMFS (make a function for this)
+        op_bins = set(uncorrelated_ops[tag])
+        op_to_bin = {j: i for i, j in enumerate(op_bins)}
+        uncor_op_bin_is = [op_to_bin[i] for i in uncorrelated_ops[tag]]
+        uncor_op_bin_is = np.array(uncor_op_bin_is)
+        pmf_ops, var_pmf_ops = origami_mbar.computePMF(
+                no_bias_uncorrelated_rpots, uncor_op_bin_is, len(op_bins))
+        filename = output_dir + '/' + filebase + '_pmfs.{}'.format(tag)
+        write_pgf_with_errors(filename, op_bins, pmf_ops, np.sqrt(var_pmf_ops))
+
+        for tag2 in tags[i + 1:]:
+
+            # 2D PMFS
+            uncorrelated_op_pairs = list(zip(uncorrelated_ops[tag],
+                    uncorrelated_ops[tag2]))
+            op_pair_bins = list(set(uncorrelated_op_pairs))
+            op_pair_to_bin = {j: i for i, j in enumerate(op_pair_bins)}
+            uncor_op_pair_bin_is = [op_pair_to_bin[i] for i in
+                    uncorrelated_op_pairs]
+            uncor_op_pair_bin_is = np.array(uncor_op_pair_bin_is)
+            pmf_op_pairs, var_pmf_op_pairs= origami_mbar.computePMF(
+                    no_bias_uncorrelated_rpots, uncor_op_pair_bin_is,
+                    len(op_pair_bins))
+            op1_lims = [0, max(op_pair_bins[0])]
+            op2_lims = [0, max(op_pair_bins[1])]
+            sd_bins, pmf_sds = sort_and_fill_pmfs(op_pair_bins, pmf_op_pairs,
+                    op1_lims, op2_lims)
+            filename = output_dir + '/' + filebase + '_pmfs.{}-{}'.format(tag,
+                    tag2)
+            write_2d_pgf(filename, op_pair_bins, pmf_op_pairs)
 
  
 if __name__ == '__main__':

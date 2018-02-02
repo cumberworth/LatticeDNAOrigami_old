@@ -11,13 +11,21 @@ def read_ops_from_file(filename, tags, burn_in):
     with open(filename) as inp:
         header = inp.readline().split(', ')
 
-    all_ops = np.loadtxt(filename, skiprows=1)
+    all_ops = np.loadtxt(filename, skiprows=1, dtype=int)
     ops = {}
     for i, tag in enumerate(header):
         if tag in tags:
 
             # First index is step, not in header
             ops[tag] = all_ops[:, i + 1][burn_in:]
+
+    return ops
+
+
+def concatenate_ops(ops1, ops2):
+    ops = {}
+    for tag in ops1.keys():
+        ops[tag] = np.concatenate([ops1[tag], ops2[tag]])
 
     return ops
 
