@@ -9,10 +9,11 @@
 
 namespace movetypes {
 
+    using std::find;
     using std::fmin;
     using std::min;
     using std::set;
-    using std::find;
+
     using utility::Occupancy;
     using utility::OrigamiMisuse;
 
@@ -412,6 +413,9 @@ namespace movetypes {
     void CTRegrowthMCMovetype::reset_internal() {
         m_constraintpoints.reset_internal();
         m_excluded_staples.clear();
+        m_scaffold_segs.clear();
+        m_scaffold_dirs.clear();
+        m_scaffold_seg_refs.clear();
     }
 
     void CTRegrowthMCMovetype::sel_excluded_staples() {
@@ -433,7 +437,7 @@ namespace movetypes {
         }
     }
 
-    vector<Domain*> CTRegrowthMCMovetype::select_indices(
+    vector<Domain*> CTRegrowthMCMovetype::select_contiguous_domains_uniform_length(
             vector<Domain*> segment, unsigned int min_length, int seg) {
 
         unsigned int seg_length {static_cast<unsigned int>(segment.size())};
@@ -461,7 +465,8 @@ namespace movetypes {
             back_domain = (*back_domain) + -m_dir;
         }
         if (domains.size() < min_length) {
-            domains = select_indices(segment, min_length, seg);
+            domains = select_contiguous_domains_uniform_length(segment,
+                    min_length, seg);
             return domains;
         }
 
@@ -472,6 +477,162 @@ namespace movetypes {
         }
 
         return domains;
+    }
+
+    void CTRegrowthMCMovetype::select_non_contiguous_domains(
+              int min_length) {
+
+        vector<Domain*> scaffold_domains {m_origami_system.get_chain(
+                m_origami_system.c_scaffold)};
+
+        unsigned int sel_length {static_cast<unsigned int>(
+                m_random_gens.uniform_int(min_length, m_max_regrowth))};
+        int start_i {m_random_gens.uniform_int(0, scaffold_domains.size() - 1)};
+        int dir {m_random_gens.uniform_int(0, 1)};
+
+        Domain* root_domain {scaffold_domains[start_i]};
+        Domain* cur_domain {root_domain};
+        dir = m_random_gens.uniform_int(0, 1);
+        if (dir == 0) {
+            dir = -1;
+        }
+        vector<Domain*> domains {};
+        m_scaffold_segs.push_back({});
+        m_scaffold_seg_refs.push_back(cur_domain);
+        m_scaffold_dirs.push_back(dir);
+        Domain* next_domain {(*cur_domain) + dir};
+        if (next_domain == nullptr) {
+            dir *= -1;
+            next_domain = (*cur_domain) + dir;
+        }
+        m_scaffold_segs.back().push_back(next_domain);
+        cur_domain = next_domain;
+
+        while (domains.size() != sel_length) {
+            vector<Domain*> possible_next_domains {};
+            Domain* next_domain {(*cur_domain) + dir};
+            if (next_domain != nullptr and next_domain != root_domain) {
+                possible_next_domains.push_back(next_domain);
+            }
+            if (cur_domain->m_state == Occupancy::bound) {
+                Domain* bound_domain {cur_domain->m_bound_domain};
+                Domain* next_domain {(*cur_domain) + dir};
+                if (next_domain != nullptr) {
+                    possible_next_domains.push_back(next_domain);
+                }
+                if (bound_domain->m_forward_domain != nullptr) {
+                    Domain* neighbour_domain {
+                            bound_domain->m_forward_domain->m_bound_domain};
+                    if (neighbour_domain != nullptr and
+                            neighbour_domain->m_c ==
+                            m_origami_system.c_scaffold and neighbour_domain !=
+                            root_domain) {
+                        possible_next_domains.push_back(neighbour_domain);
+                    }
+                }
+                if (bound_domain->m_backward_domain != nullptr) {
+                    Domain* neighbour_domain {
+                        bound_domain->m_backward_domain->m_bound_domain};
+                    if (neighbour_domain != nullptr and
+                            neighbour_domain->m_c ==
+                            m_origami_system.c_scaffold and neighbour_domain !=
+                            root_domain) {
+                        possible_next_domains.push_back(neighbour_domain);
+                    }
+                }
+            }
+            if (possible_next_domains.size() == 0) {
+                break;
+            }
+            int next_domain_i {m_random_gens.uniform_int(0,
+                    possible_next_domains.size() - 1)};
+            next_domain = possible_next_domains[next_domain_i];
+            if (next_domain->m_d - cur_domain->m_d != dir) {
+                bool already_included {false};
+                for (auto seg: m_scaffold_segs) {
+                    auto seg_iter {find(seg.begin(), seg.end(), next_domain)};
+                    if (seg_iter != seg.end()) {
+                        already_included = true;
+                        break;
+                    }
+                }
+                if (already_included) {
+                    break;
+                }
+                dir = m_random_gens.uniform_int(0, 1);
+                if (dir == 0) {
+                    dir = -1;
+                }
+                if ((*next_domain + -dir) != nullptr) {
+                    Domain* next_prev_domain {(*next_domain + dir)};
+                    bool already_included {false};
+                    for (vector<Domain*>& seg: m_scaffold_segs) {
+                        auto seg_iter {find(seg.begin(), seg.end(),
+                                next_prev_domain)};
+                        if (seg_iter != seg.end()) {
+//                            auto seg_i = std::distance(seg.begin(), seg_iter);
+//                            if (seg_i == 0) {
+//                                seg.insert(seg.begin(), next_domain);
+//                            }
+//                            else {
+                            already_included = true;
+//                                seg.push_back(next_domain);
+//                            }
+                            break;
+                        }
+                    }
+                    if (already_included) {
+                        break;
+                    }
+                }
+                m_scaffold_dirs.push_back(dir);
+                m_scaffold_segs.push_back({});
+                m_scaffold_seg_refs.push_back(cur_domain);
+            }
+            if ((*next_domain + dir) != nullptr) {
+                Domain* next_next_domain {(*next_domain + dir)};
+                bool already_included {false};
+                for (int i {0}; i < static_cast<int>(
+                            m_scaffold_segs.size()) - 1; i++) {
+                    vector<Domain*>& seg {m_scaffold_segs[i]};
+                    auto seg_iter {find(seg.begin(), seg.end(),
+                            next_next_domain)};
+                    if (seg_iter != seg.end()) {
+                        already_included = true;
+//                        auto seg_i = std::distance(seg.begin(), seg_iter);
+//                        std::reverse(m_scaffold_segs.back().begin(),
+//                                m_scaffold_segs.back().end());
+//                        for (auto d: m_scaffold_segs.back()) {
+//                            if (seg_i == 0) {
+//                                seg.insert(seg.begin(), d);
+//                            }
+//                            else {
+//                                seg.push_back(d);
+//                            }
+//                        }
+//                        m_scaffold_segs.pop_back();
+//                        m_scaffold_dirs.pop_back();
+//                        break;
+                    }
+                }
+                if (already_included) {
+                    break;
+                }
+            }
+            m_scaffold_segs.back().push_back(next_domain);
+            domains.push_back(next_domain);
+            cur_domain = next_domain;
+        }
+
+        for (size_t i {0}; i != m_scaffold_segs.size(); i++) {
+            auto seg = m_scaffold_segs[i];
+            auto dir = m_scaffold_dirs[i];
+            Domain* next_d {*seg.back() + dir};
+            if (next_d != nullptr) {
+                m_constraintpoints.add_active_endpoint(next_d,
+                        next_d->m_pos, i);
+            }
+        }
     }
 
     bool CTRegrowthMCMovetype::excluded_staples_bound() {

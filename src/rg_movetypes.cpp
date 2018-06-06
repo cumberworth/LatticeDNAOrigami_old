@@ -579,7 +579,8 @@ namespace movetypes {
         bool accepted {false};
 
         // Select scaffold indices and excluded staples
-        m_sel_scaf_doms = select_indices(m_scaffold, 2);
+        m_sel_scaf_doms = select_contiguous_domains_uniform_length(
+                m_scaffold, 2);
         m_tracker.num_scaffold_domains = m_sel_scaf_doms.size();
         sel_excluded_staples();
 

@@ -143,7 +143,8 @@ namespace movetypes {
             central_segment.clear();
 
             // Select region to be transformed
-            central_segment = select_indices(m_scaffold, 1);
+            central_segment = select_contiguous_domains_uniform_length(
+                    m_scaffold, 1);
 
             // Select linker regions
             size_t linker1_length {static_cast<size_t>(

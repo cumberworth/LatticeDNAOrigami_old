@@ -407,9 +407,6 @@ namespace movetypes {
     }
 
     void CTCBRegrowthMCMovetype::grow_chain(vector<Domain*> domains) {
-        if (domains.size() <= 1) {
-            return;
-        }
         for (size_t i {1}; i != domains.size(); i++) {
             Domain* domain {domains[i]};
             m_dir = m_constraintpoints.get_dir(domain);
@@ -589,35 +586,32 @@ namespace movetypes {
         bool accepted {false};
 
         m_regrow_old = false;
-        vector<Domain*> scaffold_domains {select_indices(m_scaffold, 2)};
-        m_tracker.num_scaffold_domains = scaffold_domains.size();
+        //auto segs_dirs = select_contiguous_domains_uniform_length(m_scaffold, 2);
+        select_non_contiguous_domains(1);
+        //m_tracker.num_scaffold_domains = scaffold_domains.size();
         sel_excluded_staples();
 
-        m_constraintpoints.calculate_constraintpoints(scaffold_domains, m_dir,
-                m_excluded_staples);
-        if (not m_origami_system.m_cyclic and scaffold_domains.size() !=
-            m_origami_system.get_chain(0).size()) {
-            m_constraintpoints.remove_active_endpoint(scaffold_domains[0]);
-        }
+        m_constraintpoints.calculate_constraintpoints(m_scaffold_segs,
+                m_scaffold_dirs, m_excluded_staples);
+
         set<int> staples {m_constraintpoints.staples_to_be_regrown()};
         m_tracker.num_staples = staples.size();
 
         // Unassign domains to be regrown
-        vector<Domain*> scaffold_domains_to_unassign(scaffold_domains.begin() +
-                1, scaffold_domains.end());
-        unassign_domains(scaffold_domains_to_unassign);
+        for (auto seg: m_scaffold_segs) {
+            unassign_domains(seg);
+        }
         for (auto c_i: staples) {
             unassign_domains(m_origami_system.get_chain(c_i));
         }
 
         // Grow scaffold and staples
-        if (m_constraintpoints.is_growthpoint(scaffold_domains[0])) {
-            grow_staple_and_update_endpoints(scaffold_domains[0]);
-            if (m_rejected) {
-                return accepted;
-            }
+        for (size_t i {0}; i != m_scaffold_segs.size(); i++) {
+            m_seg = i;
+            auto seg = m_scaffold_segs[i];
+            seg.insert(seg.begin(), m_scaffold_seg_refs[m_seg]);
+            grow_chain(seg);
         }
-        grow_chain(scaffold_domains);
 
         // Check if excluded staples have become unbound
         bool bound_to_system {excluded_staples_bound()};
@@ -630,23 +624,22 @@ namespace movetypes {
         // Regrow in old conformation
         setup_for_regrow_old();
         m_constraintpoints.reset_active_endpoints();
-        if (not m_origami_system.m_cyclic and scaffold_domains.size() !=
-            m_origami_system.get_chain(0).size()) {
-            m_constraintpoints.remove_active_endpoint(scaffold_domains[0]);
-        }
 
         // Unassign staples except those bound/linked to external scaffold
-        unassign_domains(scaffold_domains_to_unassign);
+        for (auto seg: m_scaffold_segs) {
+            unassign_domains(seg);
+        }
         for (auto c_i: staples) {
             unassign_domains(m_origami_system.get_chain(c_i));
         }
 
         // Grow scaffold and staples
-        if (m_constraintpoints.is_growthpoint(scaffold_domains[0])) {
-            grow_staple_and_update_endpoints(scaffold_domains[0]);
+        for (size_t i {0}; i != m_scaffold_segs.size(); i++) {
+            m_seg = i;
+            auto seg = m_scaffold_segs[i];
+            seg.insert(seg.begin(), m_scaffold_seg_refs[m_seg]);
+            grow_chain(m_scaffold_segs[i]);
         }
-
-        grow_chain(scaffold_domains);
 
         // Reset modifier and test acceptance
         m_modifier = 1;

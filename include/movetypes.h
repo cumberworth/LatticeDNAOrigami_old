@@ -261,21 +261,43 @@ namespace movetypes {
 
             void sel_excluded_staples();
 
-            /** Select scaffold segment to be regrown */
-            vector<Domain*> select_indices(
+            /** Select contiguous domains from given segment
+             *
+             * The selected length is uniformly distributed.
+             */
+            vector<Domain*> select_contiguous_domains_uniform_length(
                     vector<Domain*> d,
                     unsigned int min_length,
                     int seg=0);
+
+            /** Select non-contiguous scaffold segment to be regrown
+             *
+             * In contrast to select_indices, the scaffold segment may be non-
+             * contiguous. When a bound scaffold domain is encountered, it will
+             * with uniform probability select to continue with the next domain
+             * along the scaffold or jump to any scaffold domains that are
+             * bound to the same staple on an adjacent site. The direction
+             * for each segment is selected randomly and will grow up to the
+             * given maximum length but will stop prematurely if the end of the
+             * chain is reached (thus the lengths to be regrown are not
+             * uniformly distributed).
+             */
+            void select_non_contiguous_domains(
+                    int min_length);
 
             /** Check if excluded staples are still bound to system */
             bool excluded_staples_bound();
 
             int m_dir;
+            int m_seg;
             int m_num_excluded_staples;
             vector<int> m_excluded_staples;
             Constraintpoints m_constraintpoints {m_origami_system,
                     m_ideal_random_walks}; // For fixed end biases
             vector<Domain*> m_scaffold {};
+            vector<vector<Domain*>> m_scaffold_segs {};
+            vector<int> m_scaffold_dirs {};
+            vector<Domain*> m_scaffold_seg_refs {};
             unsigned int m_max_regrowth; // Maximum number of scaffold domains to regrow
     };
 
