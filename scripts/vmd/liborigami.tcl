@@ -5,21 +5,44 @@
 
 # Color scheme and labels
 set labels(scaffold_domain) "Unbound scaffold domain"
-set colors(scaffold_domain) 10
+set colors(scaffold_domain) 0
+# Dark-A
+color change rgb 0 0.10588235294117647 0.6196078431372549 0.4666666666666667
+
 set labels(staple_domain) "Unbound staple domain"
-set colors(staple_domain) 31
+set colors(staple_domain) 1
+# Dark2-B
+color change rgb 1 0.8509803921568627 0.37254901960784315 0.00784313725490196
+
 set labels(bound_domain) "Bound domain"
-set colors(bound_domain) 19
+set colors(bound_domain) 2
+# Dark2-A + Dark2-B
+color change rgb 2 0.21568627450980393 0.3176470588235294 0.0784313725490196
+
 set labels(misbound_domain) "Misbound domain"
-set colors(misbound_domain) 8
+set colors(misbound_domain) 3
+# Complement of Dark2-A + Dark2-B
+color change rgb 3 0.3176470588235294 0.0784313725490196 0.20784313725490197
+
 set labels(scaffold_next_domain) "Scaffold next domain vector"
-set colors(scaffold_next_domain) 10
+set colors(scaffold_next_domain) 4
+# Dark2-F
+color change rgb 4 0.9019607843137255 0.6705882352941176 0.00784313725490196
+
 set labels(staple_next_domain) "Staple next domain vector"
-set colors(staple_next_domain) 31
+set colors(staple_next_domain) 5
+# Dark2-C
+color change rgb 5 0.4588235294117647 0.4392156862745098 0.7019607843137254
+
 set labels(scaffold_ore) "Scaffold orientation vector"
-set colors(scaffold_ore) 29
+set colors(scaffold_ore) 6
+# Dark2-D
+color change rgb 6 0.9058823529411765 0.1607843137254902 0.5411764705882353
+
 set labels(staple_ore) "Staple orientation vector"
-set colors(staple_ore) 4
+set colors(staple_ore) 7
+# Dark2-E
+color change rgb 7 0.4 0.6509803921568628 0.11764705882352941
 
 proc create_legend {} {
     # Create legend
@@ -110,6 +133,7 @@ proc calc_num_staples {frame} {
 
 proc create_domain_reps {} {
     global origami
+    mol rep vdw 1.0 25
     mol rep vdw
     set numatoms [molinfo $origami get numatoms]
     for {set i 0} {$i != $numatoms} {incr i} {
@@ -156,6 +180,7 @@ proc update_radii {} {
     # Set undefined domains' radii to 0 for current frame
     global states
     global origami
+    global radius
     set frame [molinfo $origami get frame]
     set numatoms [molinfo $origami get numatoms]
     for {set atom_i 0} {$atom_i != $numatoms} {incr atom_i} {
@@ -164,19 +189,20 @@ proc update_radii {} {
         if {$state == 0 || $state == -1} {
             $atom set radius 0
         } else {
-            $atom set radius 0.25
+            $atom set radius $radius
         }
     }
 }
 
-proc draw_3d_vector {origin vector color} {
+proc draw_3d_vector {origin vector color cylradius} {
     # Draw vector from origin
     global origami
+    global arrowheadlength
     graphics $origami color $color
     set end [vecadd $origin $vector]
-    set middle [vecadd $origin [vecscale 0.8 [vecsub $end $origin]]]
-    graphics $origami cylinder $origin $middle radius 0.05 resolution 10
-    graphics $origami cone $middle $end radius 0.15 resolution 10
+    set middle [vecadd $origin [vecsub $vector [vecscale $arrowheadlength [vecnorm $vector]]]]
+    graphics $origami cylinder $origin $middle radius $cylradius resolution 25
+    graphics $origami cone $middle $end radius 0.10 resolution 25
 }
 
 proc draw_next_domain_vectors {} {
@@ -186,6 +212,8 @@ proc draw_next_domain_vectors {} {
     global num_scaffold_domains
     global origami
     global states
+    global radius
+    global cylinderradius
     set frame [molinfo $origami get frame]
     set num_staples [calc_num_staples $frame]
 
@@ -197,11 +225,12 @@ proc draw_next_domain_vectors {} {
         set d2 [atomselect $origami "index $d2_i" frame $frame]
         set d2_coors [lindex [$d2 get {x y z}] 0]
         set diff [vecsub $d2_coors $d1_coors]
-        set vector [vecscale $diff 0.75]
+        set vector [vecscale [expr 1 - $radius] $diff]
         set state1 [lindex [lindex $states $frame] $i]
         set state2 [lindex [lindex $states $frame] $d2_i]
         if {$state1 != 0 && $state2 != 0} {
-            draw_3d_vector $d1_coors $vector $colors(scaffold_next_domain)
+            draw_3d_vector $d1_coors $vector $colors(scaffold_next_domain) \
+                [vecscale 1.00 $cylinderradius]
         }
         set d1_coors $d2_coors
     }
@@ -215,11 +244,12 @@ proc draw_next_domain_vectors {} {
         set d2 [atomselect $origami "index $d2_i" frame $frame]
         set d2_coors [lindex [$d2 get {x y z}] 0]
         set diff [vecsub $d2_coors $d1_coors]
-        set vector [vecscale $diff 0.75]
+        set vector [vecscale $diff [expr 1 - $radius]]
         set state1 [lindex [lindex $states $frame] $d1_i]
         set state2 [lindex [lindex $states $frame] $d2_i]
-        if {$state1 != 0 && $state2 != 0} {
-            draw_3d_vector $d1_coors $vector $colors(staple_next_domain)
+        if {$state1 != 0 && $state2 != 0 && [veclength $vector] <= 1} {
+            draw_3d_vector $d1_coors $vector $colors(staple_next_domain) \
+                [vecscale 0.99 $cylinderradius]
         }
     }
 }
@@ -232,6 +262,7 @@ proc draw_ore_vectors {} {
     global num_scaffold_domains
     global origami
     global states
+    global cylinderradius
     set frame [molinfo $origami get frame]
     set num_staples [calc_num_staples $frame]
 
@@ -245,7 +276,8 @@ proc draw_ore_vectors {} {
         set d_coors [lindex [$d get {x y z}] 0]
         set d_ore [lindex [lindex $ores $frame] $i]
         set vector [vecscale $d_ore 0.5]
-        draw_3d_vector $d_coors $vector $colors(scaffold_ore)
+        draw_3d_vector $d_coors $vector $colors(scaffold_ore) \
+                [vecscale 0.98 $cylinderradius]
     }
 
     # Draw staple vectors
@@ -260,7 +292,8 @@ proc draw_ore_vectors {} {
         set d_coors [lindex [$d get {x y z}] 0]
         set d_ore [lindex [lindex $ores $frame] $i]
         set vector [vecscale $d_ore 0.5]
-        draw_3d_vector $d_coors $vector $colors(staple_ore)
+        draw_3d_vector $d_coors $vector $colors(staple_ore) \
+                [vecscale 0.97 $cylinderradius]
     }
 }
 

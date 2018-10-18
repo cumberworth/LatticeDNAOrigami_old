@@ -5,9 +5,21 @@ set filebase [lindex $argv 1]
 
 source $vmd_file_dir/liborigami.tcl
 
-#after 10000
 set origami [mol new $filebase.vsf]
 set num_scaffold_domains [calc_num_scaffold_domains]
+
+color Display Background white
+display shadows on
+display ambientocclusion on
+display aoambient 1.0
+display aodirect 0.4
+display resize 1000 1000
+mol material AOChalky
+
+set radius 0.20
+set arrowheadlength 0.1
+set cylinderradius 0.03
+
 mol delrep 0 0
 create_domain_reps
 animate read vcf $filebase.vcf waitfor all $origami
