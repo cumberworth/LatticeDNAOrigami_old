@@ -1,13 +1,19 @@
-#!/usr/env python
-
 """IO classes for origami system information, topologies, and configurations"""
 
-import numpy as np
+import collections
 import json
+
+import numpy as np
+
+NEWLINE = '\n'
+
+
+FileInfo = collections.namedtuple('FileInfo', ['inputdir', 'outputdir',
+                                               'filebase'])
 
 
 class JSONStructInpFile:
-    """JSON input file for system information, topology, and configuration
+    """JSON input file for system information, topology, and configuration.
 
     Can contain multiple configurations.
     """
@@ -41,7 +47,7 @@ class JSONStructInpFile:
 
 
 class JSONStructOutFile:
-    """JSON output file for system information, topology, and configuration"""
+    """JSON output file for system information, topology, and configuration."""
 
     def __init__(self, filename, origami_system):
         self._filename = filename
@@ -72,21 +78,14 @@ class JSONStructOutFile:
                   separators=(',', ': '))
 
 
-class TxtTrajInpFile:
-    """Plain text trajectory input file
-
-    Requires system information be provided through an input file.
-    """
-
-    def __init__(self, traj_filename, struct_file):
-        self._traj_filename = traj_filename
-        self._struct_file = struct_file
+class StepsInpFile:
+    def __init__(self, filename):
+        self._filename = filename
         self._line = ''
         self._eof = False
         self._step = -1
-        self._chains = []
 
-        self._traj_file = open(traj_filename)
+        self._file = open(filename)
 
     def __iter__(self):
         return self
@@ -94,30 +93,48 @@ class TxtTrajInpFile:
     def __next__(self):
         if not self._eof:
             try:
-                self._parse_chains()
+                self._parse_step()
             except StopIteration:
                 self._eof = True
             finally:
-                return self._chains
+                return self._return_step()
         else:
             self._eof = False
             # TODO: use to be implemented method for get_chains
-            self._traj_file.seek(0)
+            self._file.seek(0)
             raise StopIteration
 
     @property
     def step(self):
         return len(self._step)
 
+    def close(self):
+        self._file.close()
+
+    def _parse_step(self):
+        raise NotImplementedError
+
+    def _return_step(self):
+        raise NotImplementedError
+
+
+class TxtTrajInpFile(StepsInpFile):
+    """Plain text trajectory input file.
+
+    Requires system information be provided through an input file.
+    """
+
+    def __init__(self, filename, struct_file):
+        super().__init__(filename)
+        self._struct_file = struct_file
+        self._chains = []
+
     def get_chains(self, step):
         pass
         # find starting lines
         # parse chains
 
-    def close(self):
-        self._traj_file.close()
-
-    def _parse_chains(self):
+    def _parse_step(self):
         self._next_line()
         self._step = self._get_step()
         self._chains = []
@@ -128,8 +145,11 @@ class TxtTrajInpFile:
             if self._line == '':
                 chains_remain = False
 
+    def _return_step(self):
+        return self._chains
+
     def _next_line(self):
-        self._line = next(self._traj_file).rstrip()
+        self._line = next(self._file).rstrip()
 
     def _get_step(self):
         return int(self._line)
@@ -154,7 +174,7 @@ class TxtTrajInpFile:
 
 
 class TxtTrajOutFile:
-    """Plain text trajectory output file"""
+    """Plain text trajectory output file."""
 
     def __init__(self, filename):
         self.file = open(filename, 'w')
@@ -173,3 +193,85 @@ class TxtTrajOutFile:
                     self.file.write('{} '.format(comp))
             self.file.write('\n')
         self.file.write('\n')
+
+
+class SwapInpFile(StepsInpFile):
+    def __init__(self, inputdir, filebase):
+        filename = self._create_filename(inputdir, filebase)
+        super().__init__(filename)
+        self._header = ''
+        self._threads_to_replicas = []
+        # TODO: check if starting at step 0 or 1
+
+        self._parse_header()
+
+    def _create_filename(self, inputdir, filebase):
+        return '{}/{}.{}'.format(inputdir, filebase, 'swp')
+
+    def _parse_header(self):
+        # TODO: extract the replica parameters
+        self._next_line()
+        self._header = self._line
+
+    def _next_line(self):
+        self._line = next(self._file).rstrip()
+
+    def _parse_step(self):
+        # TODO: take into account step size
+        self._step += 1
+        self._threads_to_replicas = [int(i) for i in self._line.split()]
+        self._next_line()
+
+    def _return_step(self):
+        return self._threads_to_replicas
+
+
+class UnparsedStepInpFile(StepsInpFile):
+    """Read steps in single string chunks."""
+    def __init__(self, filename, headerlines=0):
+        super().__init__(filename)
+        self._header = ''
+        self._step_chunk = ''
+
+        self._parse_header(headerlines)
+
+    @property
+    def header(self):
+        return self._header
+
+    def _parse_header(self, headerlines):
+        for i in range(headerlines):
+            self._header = self._header + self._line
+            self._next_line()
+
+    def _return_step(self):
+        return self._step_chunk
+
+    def _next_line(self):
+        self._line = next(self._file)
+
+
+class UnparsedMultiLineStepInpFile(UnparsedStepInpFile):
+    """Read multi-line steps in single string chunks.
+
+    The program's standard delimiter for steps is an empy new line (or a double
+    new line.
+    """
+    def _parse_step(self):
+        self._step_chunk = self._line
+        while self._line != NEWLINE:
+            self._next_line()
+            self._step_chunk = self._step_chunk + self._line
+
+        self._next_line()
+
+
+class UnparsedSingleLineStepInpFile(UnparsedStepInpFile):
+    """Read single line steps in single string chunks.
+
+    The program's standard delimiter for steps is an empy new line (or a double
+    new line.
+    """
+    def _parse_step(self):
+        self._step_chunk = self._line
+        self._next_line()
