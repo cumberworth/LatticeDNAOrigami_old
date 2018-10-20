@@ -130,9 +130,12 @@ class TxtTrajInpFile(StepsInpFile):
         self._chains = []
 
     def get_chains(self, step):
-        pass
-        # find starting lines
-        # parse chains
+        for i, chains in enumerate(self):
+            if i == step:
+                return chains
+
+        else:
+            raise IndexError
 
     def _parse_step(self):
         self._next_line()
@@ -212,6 +215,7 @@ class SwapInpFile(StepsInpFile):
         # TODO: extract the replica parameters
         self._next_line()
         self._header = self._line
+        self._next_line()
 
     def _next_line(self):
         self._line = next(self._file).rstrip()
@@ -240,6 +244,7 @@ class UnparsedStepInpFile(StepsInpFile):
         return self._header
 
     def _parse_header(self, headerlines):
+        self._next_line()
         for i in range(headerlines):
             self._header = self._header + self._line
             self._next_line()

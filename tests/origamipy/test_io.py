@@ -5,10 +5,6 @@ import pytest
 from origamipy import io
 
 @pytest.fixture
-def four_domain_struct_inp_file():
-    return io.JSONStructInpFile('tests/data/four_unbound.json')
-
-@pytest.fixture
 def txt_traj_inp_file(four_domain_struct_inp_file):
     return io.TxtTrajInpFile('tests/data/four.trj', four_domain_struct_inp_file)
 

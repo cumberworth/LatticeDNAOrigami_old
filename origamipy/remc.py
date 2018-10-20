@@ -20,20 +20,11 @@ def create_file_collections(all_exchange_params, fileinfo, filetypes):
         f_collection = FileCollection(all_exchange_params, fileinfo, filetype)
         all_file_collections.append(f_collection)
 
-
-def create_exchange_params(temps, stack_mults):
-
-    # This is the order the exchange parameters are output in the exchange file
-    # TODO: Have this be read from the exchange file
-    all_params = []
-    for temp in temps:
-        for stackm in stack_mults:
-            all_params.append(Params(temp, stackm))
-
-    return all_params
+    return all_file_collections
 
 
 def exchange_params_to_subfile_string(params):
+    params = [str(i) for i in params]
     return '-'.join(params)
 
 
@@ -43,7 +34,7 @@ Params = collections.namedtuple('Params', ['temp', 'stack_mult'])
 class FileCollection:
     """Read from thread files and write to replica files"""
 
-    def __init__(self, fileinfo, ext, all_exchange_params):
+    def __init__(self, all_exchange_params, fileinfo, ext):
         self._fileinfo = fileinfo
         self._ext = ext
         self._all_exchange_params = all_exchange_params
@@ -82,7 +73,7 @@ class FileCollection:
             filename = '{}/{}-{}.{}'.format(self._fileinfo.inputdir,
                                             self._fileinfo.filebase, thread,
                                             self._ext)
-            thread_file = self.__filetype(filename, self._num_header_lines)
+            thread_file = self._filetype(filename, self._num_header_lines)
             self._thread_files.append(thread_file)
 
     def _open_replica_files(self):
