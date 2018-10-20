@@ -3,7 +3,7 @@
 import numpy as np
 
 
-def read_ops_from_file(filename, tags, burn_in):
+def read_ops_from_file(filename, tags, burn_in, skip):
     """Read specified order parameters from file
 
     Returns a dictionary of tags to values.
@@ -11,7 +11,7 @@ def read_ops_from_file(filename, tags, burn_in):
     with open(filename) as inp:
         header = inp.readline().split(', ')
 
-    all_ops = np.loadtxt(filename, skiprows=1, dtype=int)
+    all_ops = np.loadtxt(filename, skiprows=1, dtype=int)[::skip]
     ops = {}
     for i, tag in enumerate(header):
         if tag in tags:

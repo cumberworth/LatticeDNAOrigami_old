@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-
-"""Misc constants, functions, and classes for lattice origami model."""
+"""Misc. constants and functions for analysis of simulations."""
 
 import math
 import itertools
@@ -22,7 +20,6 @@ VECTORS = [np.array(j * i) for i in dimensions for j in directions]
 AN = scipy.constants.N_A
 
 
-# Usefull general functions
 def value_is_multiple(value, multiple):
     """Test if given value is a multiple of second value."""
     is_multiple = False
@@ -54,7 +51,6 @@ def molarity_to_lattice_volume(molarity, lattice_site_volume):
     return V
 
 
-# Vector manipulation
 def rotate_vector_half(vector, rotation_axis):
     vector = np.copy(vector)
     if all(np.abs(rotation_axis) == XHAT):
@@ -72,43 +68,43 @@ def rotate_vector_half(vector, rotation_axis):
     return vector
 
 
-def rotate_vector_quarter(vector, rotation_axis, direction):
-    """Rotate given vector pi/2 about given axis in given direction."""
-    vector = np.copy(vector)
+def rotate_vectors_quarter(vectors, rotation_axis, direction):
+    """Rotate given vectors pi/2 about given axis in given direction."""
+    rotated_vectors = np.copy(vectors)
     if all(rotation_axis == XHAT):
-        y = vector[1]
-        z = vector[2]
-        vector[1] = direction * -z
-        vector[2] = direction * y
+        y = vectors[:, 1]
+        z = vectors[:, 2]
+        rotated_vectors[:, 1] = direction * -z
+        rotated_vectors[:, 2] = direction * y
 
     if all(rotation_axis == -XHAT):
-        y = vector[1]
-        z = vector[2]
-        vector[1] = direction * z
-        vector[2] = direction * -y
+        y = vectors[:, 1]
+        z = vectors[:, 2]
+        rotated_vectors[:, 1] = direction * z
+        rotated_vectors[:, 2] = direction * -y
 
     elif all(rotation_axis == YHAT):
-        x = vector[0]
-        z = vector[2]
-        vector[2] = direction * -x
-        vector[0] = direction * z
+        x = vectors[:, 0]
+        z = vectors[:, 2]
+        rotated_vectors[:, 2] = direction * -x
+        rotated_vectors[:, 0] = direction * z
 
     elif all(rotation_axis == -YHAT):
-        x = vector[0]
-        z = vector[2]
-        vector[2] = direction * x
-        vector[0] = direction * -z
+        x = vectors[:, 0]
+        z = vectors[:, 2]
+        rotated_vectors[:, 2] = direction * x
+        rotated_vectors[:, 0] = direction * -z
 
     elif all(rotation_axis == ZHAT):
-        x = vector[0]
-        y = vector[1]
-        vector[0] = direction * -y
-        vector[1] = direction * x
+        x = vectors[:, 0]
+        y = vectors[:, 1]
+        rotated_vectors[:, 0] = direction * -y
+        rotated_vectors[:, 1] = direction * x
 
     elif all(rotation_axis == -ZHAT):
-        x = vector[0]
-        y = vector[1]
-        vector[0] = direction * y
-        vector[1] = direction * -x
+        x = vectors[:, 0]
+        y = vectors[:, 1]
+        rotated_vectors[:, 0] = direction * y
+        rotated_vectors[:, 1] = direction * -x
 
-    return vector
+    return rotated_vectors

@@ -3,6 +3,8 @@
 """Utilities for calculating NN model quantities."""
 
 import math
+
+import numpy as np
 import scipy.constants
 
 # Molar gas constant (J/K/mol)
@@ -44,6 +46,10 @@ NN_ENTROPY = {
     'SYMMETRY_CORRECTION': -0.0014}
 
 COMPLEMENTARY_BASE_PAIRS = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G'}
+
+
+def remove_energy_units(ene):
+    return ene * J_PER_CAL * 1000 / R
 
 
 def calc_hybridization_energy(sequence, T, cation_M):
@@ -94,11 +100,6 @@ def find_longest_contig_complement(seq_1, seq_2):
         else:
             return comp_seqs
 
-    # WRONG JUST FOR BENCHMARKING
-    print('WARNING WRONG WRONG WRONG')
-    if comp_seqs == []:
-        comp_seqs = ['A']
-
     return comp_seqs
 
 def calc_melting_point(sequence, strand_M, cation_M):
@@ -111,13 +112,7 @@ def calc_melting_point(sequence, strand_M, cation_M):
     # Convert to J/mol/K
     DS = DS * J_PER_CAL * 1000
 
-    # Factor dependent on whether sequence is palindrome (non-selfcomplementary)
-    if sequence_is_palindromic(sequence):
-        x = 1
-    else:
-        x = 4
-
-    melting_T = DH / (DS + R * math.log(strand_M / x))
+    melting_T = DH / (DS + R * math.log(strand_M))
 
     return melting_T
 
@@ -135,6 +130,27 @@ def calc_internal_melting_point(sequence, cation_M):
 
     return melting_T
 
+
+def calc_excess_bound_fraction(seq, cation_M, staple_M, temp):
+    """Calculate fraction scaffold domains bound with excess staple strand"""
+
+    DG = calc_hybridization_energy(seq, temp, cation_M)
+    bound_to_unbound = staple_M * np.exp(-DG / temp)
+
+    return bound_to_unbound / (1 + bound_to_unbound)
+
+
+def calc_equimolar_bound_fraction(seq, cation_M, staple_M, temp):
+    """Calculate fraction scaffold domains bound with equimolar staples"""
+
+    DG = calc_hybridization_energy(seq, temp, cation_M)
+    K = np.exp(-DG / temp)
+    a = 1
+    b = -(2*staple_M + 1/K)
+    c = staple_M**2
+    x = (-b - np.sqrt(b**2 - 4*a*c)) / 2*a
+
+    return x / staple_M
 
 def calc_hybridization_enthalpy_and_entropy(sequence, cation_M):
     """Calculate hybridization enthalpy and entropy of domains with NN model.

@@ -150,7 +150,7 @@ def calc_effN_ops(tags, ops):
     """Calculate effective sample sizes for given order parameters"""
     effN_ops = {}
     for tag in tags:
-        t, g, Neff = timeseries.detectEquilibration(ops[tag])
+        t, g, Neff = timeseries.detectEquilibration(ops[tag], fast=True)
         t /= len(ops[tag])
         effN_ops[tag] = (t, g, Neff)
 

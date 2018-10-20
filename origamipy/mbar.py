@@ -1,4 +1,4 @@
-"""Functions for carrying out Multi Bennet Acceptance Ration (MBAR) analysis"""
+"""Functions for carrying out Multi Bennet Acceptance Ratio (MBAR) analysis"""
 
 import math
 
@@ -8,10 +8,9 @@ import scipy
 from origamipy.us_process import *
 
 
-def calc_rstaple_u(staple_M, lattice_site_volume):
+def calc_rstaple_u(staple_M):
     """Calculate reduced staple chemical potential"""
-    sites_per_litre = 1e-3 / lattice_site_volume
-    rstaple_u = math.log(staple_M * scipy.constants.N_A / sites_per_litre)
+    rstaple_u = math.log(staple_M)
     return rstaple_u 
 
 
@@ -71,10 +70,10 @@ def calc_no_bias_reduced_potentials(enes, ops, rstaple_u):
     return np.array(reduced_potentials)
 
 
-def subsample_independent_config_set(win_rpots):
-    print('Window, configs, t0, g,   Neff')
-    win_subsample_indices = []
-    for i, rpots in enumerate(win_rpots):
+def subsample_independent_config_set(state_rpots):
+    print('State, configs, t0, g,   Neff')
+    state_subsample_indices = []
+    for i, rpots in enumerate(state_rpots):
 
         # t is start of equilbrated subset, g is statistical innefficiency,
         # Neff is effective sample number
@@ -83,40 +82,42 @@ def subsample_independent_config_set(win_rpots):
         prod_indices = timeseries.subsampleCorrelatedData(rpots[t:], g=g)
         indices = [i + t for i in prod_indices]
         #indices = list(range(len(rpots)))
-        win_subsample_indices.append(indices)
+        state_subsample_indices.append(indices)
 
-    return win_subsample_indices
+    return state_subsample_indices
 
 
     win_uncorrelated_enes = []
     win_uncorrelated_ops = []
 
-def create_uncorrelated_concatenation(wins, win_subsample_indices, win_obvs):
-    subsample_indices = win_subsample_indices[0]
-    win_uncorrelated_obvs = np.array(win_obvs[0])[subsample_indices]
-    for i in range(1, len(wins)):
-        subsample_indices = win_subsample_indices[i]
-        win_subsampled_obvs = np.array(win_obvs[i])[subsample_indices]
-        win_uncorrelated_obvs = np.concatenate([win_uncorrelated_obvs,
-            win_subsampled_obvs])
+def create_uncorrelated_concatenation(state_subsample_indices, state_obvs):
+    subsample_indices = state_subsample_indices[0]
+    state_uncorrelated_obvs = np.array(state_obvs[0])[subsample_indices]
+    for i in range(1, len(state_obvs)):
+        subsample_indices = state_subsample_indices[i]
+        state_subsampled_obvs = np.array(state_obvs[i])[subsample_indices]
+        state_uncorrelated_obvs = np.concatenate([state_uncorrelated_obvs,
+            state_subsampled_obvs])
 
-    return win_uncorrelated_obvs
+    return state_uncorrelated_obvs
 
-def create_uncorrelated_ops_concatenation(wins, win_subsample_indices, win_ops):
-    win_uncorrelated_ops = {}
-    tags = win_ops[0].keys()
-    subsample_indices = win_subsample_indices[0]
+def create_uncorrelated_ops_concatenation(state_subsample_indices, state_ops):
+    state_uncorrelated_ops = {}
+    tags = state_ops[0].keys()
+    subsample_indices = state_subsample_indices[0]
     for tag in tags:
-        win_uncorrelated_ops[tag] = np.array(win_ops[0][tag])[subsample_indices]
+        state_uncorrelated_ops[tag] = np.array(state_ops[0][tag])[
+                subsample_indices]
 
-    for i in range(1, len(wins)):
-        subsample_indices = win_subsample_indices[i]
+    for i in range(1, len(state_subsample_indices)):
+        subsample_indices = state_subsample_indices[i]
         for tag in tags:
-            win_subsampled_ops = np.array(win_ops[i][tag])[subsample_indices]
-            win_uncorrelated_ops[tag] = np.concatenate(
-                    [win_uncorrelated_ops[tag], win_subsampled_ops])
+            state_subsampled_ops = np.array(state_ops[i][tag])[
+                    subsample_indices]
+            state_uncorrelated_ops[tag] = np.concatenate(
+                    [state_uncorrelated_ops[tag], state_subsampled_ops])
 
-    return win_uncorrelated_ops
+    return state_uncorrelated_ops
 
 def calc_uncorrelated_rpots(wins, win_uncorrelated_enes, win_uncorrelated_ops,
         win_biases, rstaple_u, tags, min_bias, slope):
