@@ -58,11 +58,11 @@ class FileCollection:
         if self._ext in ['trj', 'vcf']:
             self._num_header_lines = 0
             self._filetype = io.UnparsedMultiLineStepInpFile
-        elif self._ext in ['times', 'ores', 'states', 'staples',
+        elif self._ext in ['ores', 'states', 'staples',
                            'staplestates']:
             self._num_header_lines = 0
             self._filetype = io.UnparsedSingleLineStepInpFile
-        elif self._ext in ['enes', 'ops']:
+        elif self._ext in ['times', 'enes', 'ops']:
             self._num_header_lines = 1
             self._filetype = io.UnparsedSingleLineStepInpFile
         else:
