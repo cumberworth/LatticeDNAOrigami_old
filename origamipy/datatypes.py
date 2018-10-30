@@ -1,29 +1,47 @@
 """Functions for processing order parameter files"""
 
 import numpy as np
+import pandas as pd
 
 
-def read_weights_from_file(filename):
-    """Read order parameter weights from enumeration output file
+class EnumerationWeights:
+    def __init__(self, filename):
+        self._tags, self._dataframe = self._read_weights_from_file(filename)
 
-    The order parameters are stored in the first column in parantheses.
-    """
-    with open(filename) as inp:
-        tags = inp.readline().split()
-        lines = inp.readlines()
+    @classmethod
+    def _read_weights_from_file(self, filename):
+        data = pd.read_csv(filename, sep='\s|\)\s', header=None, skiprows=1,
+                           engine='python')
+        data[0] = data[0].str.lstrip('(').astype(int)
+        tags = self._get_tags(filename)
+        tags.append('weight')
+        data.columns = tags
+        tags.pop()
+        return tags, data
 
-    points_weights = {}
-    for line in lines:
-        if line == '\n':
-            continue
+    @classmethod
+    def _get_tags(self, filename):
+        tags = []
+        with open(filename) as f:
+            tags = f.readline().rstrip().split()
+            tags = [tag.rstrip(',') for tag in tags]
 
-        start_p = line.find('(')
-        end_p = line.find(')')
-        point = tuple(int(i) for i in line[start_p + 1:end_p].split())
-        weight = float(line.split()[-1])
-        points_weights[point] = weight
+        return tags
 
-    return tags, points_weights
+    def calc_all_1d_means(self):
+        means = []
+        for tag in self._tags:
+            weights = self._marginalize(tag)
+            means.append((weights.index*weights).sum())
+
+        return means
+
+    def _marginalize(self, tag):
+        return self._dataframe.groupby(tag)['weight'].sum()
+
+    @property
+    def tags(self):
+        return self._tags
 
 
 class OutputData:
@@ -70,6 +88,10 @@ class OutputData:
         concatenated_data = np.concatenate(masked_data_list, axis=1)
         data = output_data_list[0]
         return type(data)(data._tags, concatenated_data)
+
+    @property
+    def tags(self):
+        return self._tags
 
     def __init__(self, tags, data):
         self._tags = tags
@@ -134,6 +156,12 @@ class OrderParams(OutputData):
     _ext = 'ops'
     _header_lines = 1
 
+    @classmethod
+    def _get_tags(cls, filename, **kwargs):
+        tags = super()._get_tags(filename)
+        tags.insert(0, 'step')
+        return tags
+
 
 class Times(OutputData):
     _ext = 'times'
@@ -146,8 +174,8 @@ class NumStaplesOfType(OutputData):
 
     @classmethod
     def _get_tags(cls, *args, data=None):
-        tags = []
-        for i in range(1, data.shape[0] + 1):
+        tags = ['step']
+        for i in range(1, data.shape[0]):
             tags.append('staplestate{}'.format(i))
 
         return tags
@@ -159,8 +187,8 @@ class StapleTypeStates(OutputData):
 
     @classmethod
     def _get_tags(cls, *args, data=None):
-        tags = []
-        for i in range(1, data.shape[0] + 1):
+        tags = ['step']
+        for i in range(1, data.shape[0]):
             tags.append('staples{}'.format(i))
 
         return tags

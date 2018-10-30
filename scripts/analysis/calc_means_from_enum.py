@@ -1,16 +1,15 @@
 #!/usr/bin/env python
 
-"""Carry out standard MBAR analysis on 2D REMC simulation output.
-
-The exchange variables are assumed to be temperature and stacking multiplier,
-in that order.
-"""
+"""Take output from count matrices and average"""
 
 import argparse
+import sys
+
+import numpy as np
 
 from origamipy import conditions
-from origamipy import biases
 from origamipy import outputs
+from origamipy import biases
 
 
 def main():
@@ -19,23 +18,19 @@ def main():
     fileformatter = construct_fileformatter()
     all_conditions = conditions.AllSimConditions(conditions_map, fileformatter)
     inp_filebase = create_input_filepathbase(args)
-    sims_collection = outputs.MultiStateSimCollection(inp_filebase, all_conditions)
-
-    sims_collection.perform_decorrelation()
-    sims_collection.perform_mbar()
-
+    enums = outputs.EnumCollection(inp_filebase, all_conditions)
     out_filebase = create_output_filepathbase(args)
-    sims_collection.calculate_all_expectations(out_filebase)
+    enums.calc_all_1d_means(out_filebase)
 
 
 def construct_conditions_map(args):
     stack_biases = []
     for stack_mult in args.stack_mults:
-        stack_bias = biases.StackingBias(args.stack_ene, stack_mult)
+        stack_bias = biases.StackingBias(0, stack_mult)
         stack_biases.append(stack_bias)
 
     conditions_map = {'temp': args.temps,
-                     'staple_m': [args.staple_m],
+                     'staple_m': [0],
                      'bias': stack_biases}
 
     return conditions_map
@@ -59,7 +54,7 @@ def parse_args():
     parser.add_argument(
             'filebase',
             type=str,
-            help='Base name for files')
+            help='Filebase')
     parser.add_argument(
             'input_dir',
             type=str,
@@ -68,14 +63,6 @@ def parse_args():
             'output_dir',
             type=str,
             help='Directory to output to')
-    parser.add_argument(
-            'staple_m',
-            type=float,
-            help='Staple molarity (mol/V)')
-    parser.add_argument(
-            'stack_ene',
-            type=float,
-            help='Stacking energy (kb K)')
     parser.add_argument(
             '--temps',
             nargs='+',
@@ -86,17 +73,13 @@ def parse_args():
             nargs='+',
             type=float,
             help='Stacking energy multipliers')
-    parser.add_argument('--tags',
+    parser.add_argument(
+            '--tags',
             nargs='+',
             type=str,
             help='Order parameter tags')
-    parser.add_argument('--tag_pairs',
-            nargs='+',
-            type=str,
-            help='Tags to calculate 2D pmf for (comma delim)')
 
     return parser.parse_args()
-
 
 if __name__ == '__main__':
     main()

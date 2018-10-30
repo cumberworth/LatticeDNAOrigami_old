@@ -15,3 +15,4 @@ scripts/ideal_random_walks/num_walks.arch
 bin/
 build/
 localtests/
+tests/data/

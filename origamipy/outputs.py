@@ -1,15 +1,14 @@
-"""Running MBAR."""
+"""Collections of simulation and enumeration outputs."""
 
 import collections
-import itertools
 import math
 
 import numpy as np
 from pymbar import timeseries
 from pymbar import mbar
 
-from origamipy import biases
 from origamipy import datatypes
+from origamipy import io
 
 
 NUM_STAPLES_TAG = 'numstaples'
@@ -18,16 +17,18 @@ NUM_STAPLES_TAG = 'numstaples'
 def calc_reduced_potentials(enes, ops, conditions):
     """Reduced potentials as defined in shirts2008."""
     rstaple_u = calc_reduced_staple_u(conditions)
-    bias_collection = conditions.bias(ops)
+    bias_collection = conditions.total_bias(ops)
     num_staples = ops[NUM_STAPLES_TAG]
     e = (enes.enthalpies + enes.stacking_energies + bias_collection)
     renes = e/conditions.temp
+
     return renes - enes.enthalpies + rstaple_u*num_staples
 
 
 def calc_reduced_staple_u(conditions):
     """Calculate reduced staple chemical potential"""
     rstaple_u = math.log(conditions.staple_m)
+
     return rstaple_u
 
 
@@ -37,95 +38,36 @@ DecorrelationResults = collections.namedtuple('DecorrelationResults', [
                                               'Neff'])
 
 
-SimConditions = collections.namedtuple('SimConditions', [
-                                       'temp',
-                                       'staple_m',
-                                       'bias',
-                                       'fileformat'])
+class EnumCollection:
+    def __init__(self, filebase, all_conditions):
+        self._filebase = filebase
+        self._all_conditions = all_conditions
+        self._enum_weights = []
 
+        self._load_data()
 
-ConditionsFileformatSpec = collections.namedtuple('ConditionFileformatSpec', [
-                                                 'condition',
-                                                 'spec'])
+    def _load_data(self):
+        for conditions in self._all_conditions:
+            t = '{}-{}.weights'
+            filename = t.format(self._filebase, conditions.fileformat)
+            self._enum_weights.append(datatypes.EnumerationWeights(filename))
 
+    def calc_all_1d_means(self, filebase):
+        means = []
+        for weights in self._enum_weights:
+            means.append(weights.calc_all_1d_means())
 
-class ConditionsFileformatter:
-    def __init__(self, spec):
-        self._spec = spec
-
-    def __call__(self, cur_conditions):
-
-        fileformat_elements = []
-        for condition, spec in self._spec:
-            condition_value = cur_conditions[condition]
-            if 'bias' in condition:
-                condition_value = condition_value.fileformat_value
-
-            fileformat_elements.append(spec.format(condition_value))
-
-        return '-'.join(fileformat_elements)
-
-
-class AllSimConditions:
-    """All combinations of given simulation conditions."""
-    def __init__(self, condition_map, fileformatter):
-        self._conditions_map = condition_map
-        self._fileformatter = fileformatter
-        self._combos = None
-        self._cur_conditions = None
-        self._cur_fileformat = None
-        self._cur_total_bias = None
-
-        self._reset_combo_iterator()
-
-    def _reset_combo_iterator(self):
-        self._combos = itertools.product(*self._conditions_map.values())
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        try:
-            combo = next(self._combos)
-        except StopIteration:
-            self._reset_combo_iterator()
-            raise
-
-        self._cur_conditions = dict(zip(self._conditions_map.keys(), combo))
-        self._construct_total_bias()
-        self._cur_fileformat = self._fileformatter(self._cur_conditions)
-        return self.current_conditions
-
-    def _construct_total_bias(self):
-        bs = [v for k, v in self._cur_conditions.items() if 'bias' in k]
-        self._cur_total_bias = biases.TotalBias(bs)
-        return self.current_conditions
-
-    @property
-    def temp(self):
-        return self._cur_conditions['temp']
-
-    @property
-    def staple_m(self):
-        return self._cur_conditions['staple_m']
-
-    @property
-    def bias(self):
-        return self._cur_total_bias
-
-    @property
-    def fileformat(self):
-        return self._cur_fileformat
-
-    @property
-    def current_conditions(self):
-        c = SimConditions(self.temp, self.staple_m, self.bias, self.fileformat)
-        return c
+        all_conds = self._all_conditions.condition_to_characteristic_values
+        tags = self._all_conditions.condition_tags + self._enum_weights[0].tags
+        out_file = io.TagOutFile('{}.aves'.format(filebase))
+        out_file.write(tags, np.concatenate([all_conds, np.array(means)],
+                       axis=1))
 
 
 class SimCollection:
-    _datatypes = ['enes', 'ops', 'staples', 'staplestates']
     """Output data for all runs of each replica of a simulation."""
+    _datatypes = ['enes', 'ops', 'staples', 'staplestates']
+
     def __init__(self, filebase, conditions):
         self._filebase = filebase
         self._conditions = conditions
@@ -269,22 +211,23 @@ class MultiStateSimCollection:
     def __init__(self, filepathbase, all_conditions):
         self._filepathbase = filepathbase
         self._all_conditions = all_conditions
-        self._sim_collections = []
-        self._decorrelated_enes = []
-        self._decorrelated_ops = []
-        self._decorrelated_staples = []
-        self._decorrelated_staplestates = []
+        self._sim_collections = {}
+        self._decor_enes = []
+        self._decor_ops = []
+        self._decor_staples = []
+        self._decor_staplestates = []
+        self._conditions_to_decor_rpots = {}
 
         self._create_sim_collections()
 
     def _create_sim_collections(self):
         for conditions in self._all_conditions:
             sim_collection = SimCollection(self._filepathbase, conditions)
-            self._sim_collections.append(sim_collection)
+            self._sim_collections[conditions] = sim_collection
 
     def perform_decorrelation(self):
         print('State,   configs, t0, g,   Neff')
-        for sim_collection in self._sim_collections:
+        for sim_collection in self._sim_collections.values():
             sim_collection.perform_decorrelation()
 
         self._collect_decorrelated_outputs()
@@ -294,7 +237,7 @@ class MultiStateSimCollection:
         ops = []
         staples = []
         staplestates = []
-        for sim in self._sim_collections:
+        for sim in self._sim_collections.values():
             enes.append(sim.decorrelated_energies)
             ops.append(sim.decorrelated_order_params)
             staples.append(sim.decorrelated_staples)
@@ -312,24 +255,53 @@ class MultiStateSimCollection:
         self._mbar = mbar.MBAR(rpots_matrix, num_configs_per_conditions)
 
     def _calc_decorrelated_rpots_for_all_conditions(self):
-        rpots = []
+        conditions_rpots = []
         for conditions in self._all_conditions:
-            rpots.append(calc_reduced_potentials(self._decor_enes,
-                         self._decor_ops, conditions))
+            rpots = calc_reduced_potentials(self._decor_enes, self._decor_ops,
+                                            conditions)
+            conditions_rpots.append(rpots)
+            self._conditions_to_decor_rpots[conditions.fileformat] = rpots
 
-        return np.array(rpots)
+        return np.array(conditions_rpots)
 
     def _get_num_configs_per_conditions(self):
         num_configs = []
-        for sim in self._sim_collections:
+        for sim in self._sim_collections.values():
             num_configs.append(sim.num_decorrelated_configs)
 
         return num_configs
 
-#    def calculate_expectations(self):
-#        for tag in tags:
-#            aves, varis = self._mbar.computeExpectations(
-#                    uncorrelated_ops[tag], target_uncorrelated_rpots)
-#            stds = np.sqrt(varis)
-#
-#        return aves, stds
+    def calculate_all_expectations(self, filebase):
+        dts = [self._decor_ops, self._decor_staples, self._decor_staplestates]
+        all_tags = self._all_conditions.condition_tags
+        all_aves = []
+        all_stds = []
+        for datatype in dts:
+            for tag in datatype.tags:
+                if tag == 'step':
+                    continue
+                aves, stds = self._calc_expectations(datatype[tag])
+                all_tags.append(tag)
+                all_aves.append(aves)
+                all_stds.append(stds)
+
+        all_conds = self._all_conditions.condition_to_characteristic_values
+        aves_file = io.TagOutFile('{}.aves'.format(filebase))
+        aves_file.write(all_tags, np.concatenate([all_conds,
+                        np.array(all_aves).T], axis=1))
+        stds_file = io.TagOutFile('{}.stds'.format(filebase))
+        stds_file.write(all_tags, np.concatenate([all_conds,
+                        np.array(all_stds).T], axis=1))
+
+    def _calc_expectations(self, values):
+        aves = []
+        stds = []
+        for conditions in self._all_conditions:
+            # It would be more efficient to collect all timeseries of the same
+            # conditions and run this once
+            rpots = self._conditions_to_decor_rpots[conditions.fileformat]
+            ave, vari = self._mbar.computeExpectations(values, rpots)
+            aves.append(ave[0].astype(float))
+            stds.append(np.sqrt(vari)[0].astype(float))
+
+        return aves, stds

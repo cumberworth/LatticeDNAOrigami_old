@@ -12,7 +12,7 @@ class StackingBias:
 
     def __call__(self, order_params):
         total_stack_energy = order_params[STACK_TAG]*self._stack_energy
-        return total_stack_energy*self._complementary_stack_mult
+        return -total_stack_energy*self._complementary_stack_mult
 
     @property
     def fileformat_value(self):

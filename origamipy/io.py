@@ -280,3 +280,12 @@ class UnparsedSingleLineStepInpFile(UnparsedStepInpFile):
     def _parse_step(self):
         self._step_chunk = self._line
         self._next_line()
+
+
+class TagOutFile:
+    def __init__(self, filename):
+        self._filename = filename
+
+    def write(self, tags, data):
+        np.savetxt(self._filename, data, header=' '.join(tags), comments='',
+                   fmt='%.6f')
