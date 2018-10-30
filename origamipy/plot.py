@@ -5,9 +5,10 @@ import sys
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
+import pandas as pd
 
 
-def set_defaults():
+def set_default_appearance():
 
     plt.rcParams['lines.linewidth'] = 1.5
     plt.rcParams['lines.markeredgewidth'] = 1.0
@@ -37,3 +38,16 @@ def set_defaults():
 
     # Errorbar plots
     plt.rcParams['errorbar.capsize'] = 2
+
+
+def read_expectations(filebase):
+    aves_filename = '{}.aves'.format(filebase)
+    aves = pd.read_csv(aves_filename, sep=' ')
+    stds_filename = '{}.stds'.format(filebase)
+    stds = pd.read_csv(stds_filename, sep=' ')
+
+    return aves, stds
+
+
+def cm_to_inches(cm):
+    return cm/2.54

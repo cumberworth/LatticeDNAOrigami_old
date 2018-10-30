@@ -73,11 +73,6 @@ def parse_args():
             nargs='+',
             type=float,
             help='Stacking energy multipliers')
-    parser.add_argument(
-            '--tags',
-            nargs='+',
-            type=str,
-            help='Order parameter tags')
 
     return parser.parse_args()
 

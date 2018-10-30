@@ -14,5 +14,7 @@ scripts/ideal_random_walks/num_walks.arch
 .d/
 bin/
 build/
+dist/
 localtests/
 tests/data/
+origamipy.egg-info/
