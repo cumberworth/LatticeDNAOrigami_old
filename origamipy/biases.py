@@ -4,6 +4,15 @@
 STACK_TAG = 'numstackedpairs'
 
 
+class NoBias:
+    def __call__(self, *args):
+        return 0
+
+    @property
+    def fileformat_value(self):
+        return 0
+
+
 class StackingBias:
     def __init__(self, stack_energy, stack_mult):
         self._stack_energy = stack_energy

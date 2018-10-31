@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
-"""Carry out standard MBAR analysis on 2D REMC simulation output.
+"""Carry out standard MBAR analysis on 1D REMC simulation output.
 
-The exchange variables are assumed to be temperature and stacking multiplier,
+The exchange variable is assumed to be temperature.
 in that order.
 """
 
@@ -29,23 +29,15 @@ def main():
 
 
 def construct_conditions_map(args):
-    stack_biases = []
-    for stack_mult in args.stack_mults:
-        stack_bias = biases.StackingBias(args.stack_ene, stack_mult)
-        stack_biases.append(stack_bias)
-
     conditions_map = {'temp': args.temps,
-                     'staple_m': [args.staple_m],
-                     'bias': stack_biases}
+                      'staple_m': [args.staple_m],
+                      'bias': [biases.NoBias()]}
 
     return conditions_map
 
 
 def construct_fileformatter():
-    specs = []
-    specs.append(conditions.ConditionsFileformatSpec('temp', '{:d}'))
-    specs.append(conditions.ConditionsFileformatSpec('bias', '{:.1f}'))
-
+    specs = [conditions.ConditionsFileformatSpec('temp', '{:.1f}')]
     return conditions.ConditionsFileformatter(specs)
 
 
@@ -82,13 +74,8 @@ def parse_args():
     parser.add_argument(
             '--temps',
             nargs='+',
-            type=int,
-            help='Temperatures')
-    parser.add_argument(
-            '--stack_mults',
-            nargs='+',
             type=float,
-            help='Stacking energy multipliers')
+            help='Temperatures')
     parser.add_argument('--tags',
             nargs='+',
             type=str,

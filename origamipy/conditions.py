@@ -5,6 +5,7 @@ import itertools
 
 from origamipy import biases
 
+
 ConditionsFileformatSpec = collections.namedtuple('ConditionFileformatSpec', [
                                                  'condition',
                                                  'spec'])

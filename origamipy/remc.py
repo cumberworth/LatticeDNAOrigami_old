@@ -23,14 +23,6 @@ def create_file_collections(all_exchange_params, fileinfo, filetypes):
     return all_file_collections
 
 
-def exchange_params_to_subfile_string(params):
-    params = [str(i) for i in params]
-    return '-'.join(params)
-
-
-Params = collections.namedtuple('Params', ['temp', 'stack_mult'])
-
-
 class FileCollection:
     """Read from thread files and write to replica files"""
 
@@ -62,7 +54,7 @@ class FileCollection:
                            'staplestates']:
             self._num_header_lines = 0
             self._filetype = io.UnparsedSingleLineStepInpFile
-        elif self._ext in ['times', 'enes', 'ops']:
+        elif self._ext in ['times', 'ene', 'ops']:
             self._num_header_lines = 1
             self._filetype = io.UnparsedSingleLineStepInpFile
         else:
@@ -78,7 +70,6 @@ class FileCollection:
 
     def _open_replica_files(self):
         for params in self._all_exchange_params:
-            params = exchange_params_to_subfile_string(params)
             filename = '{}/{}-{}.{}'.format(self._fileinfo.outputdir,
                                             self._fileinfo.filebase, params,
                                             self._ext)
