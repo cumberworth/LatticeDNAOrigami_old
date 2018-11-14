@@ -18,8 +18,8 @@ namespace movetypes {
                 OrigamiSystem& origami_system,
                 RandomGens& random_gens,
                 IdealRandomWalks& ideal_random_walks,
-                vector<OrigamiOutputFile*> config_files,
-                string label,
+                vector<OrigamiOutputFile*> const& config_files,
+                string const& label,
                 SystemOrderParams& ops,
                 SystemBiases& biases,
                 InputParameters& params) :
@@ -45,11 +45,9 @@ namespace movetypes {
                 m_rejected = true;
                 break;
             }
-            else {
-                pair<int, int> key {domain->m_c, domain->m_d};
-                m_assigned_domains.push_back(key);
-                write_config();
-            }
+            pair<int, int> key {domain->m_c, domain->m_d};
+            m_assigned_domains.push_back(key);
+            write_config();
         }
     }
 
@@ -57,8 +55,6 @@ namespace movetypes {
         m_ops.update_move_params();
         double ex_bias {m_biases.calc_move()};
         m_delta_e += ex_bias;
-
-        return;
     }
 
     void MetMCMovetype::unassign_domains(vector<Domain*> domains) {
@@ -75,8 +71,8 @@ namespace movetypes {
             OrigamiSystem& origami_system,
             RandomGens& random_gens,
             IdealRandomWalks& ideal_random_walks,
-            vector<OrigamiOutputFile*> config_files,
-            string label,
+            vector<OrigamiOutputFile*> const& config_files,
+            string const& label,
             SystemOrderParams& ops,
             SystemBiases& biases,
             InputParameters& params,
@@ -90,7 +86,7 @@ namespace movetypes {
                     config_files, label, ops, biases, params),
             m_adaptive_exchange {adaptive_exchange},
             m_allow_nonsensical_ps {m_params.m_allow_nonsensical_ps},
-            m_exchange_mults {exchange_mults} {
+            m_exchange_mults {std::move(exchange_mults)} {
 
         size_t num_missing_exchange_mults {
                 m_origami_system.m_identities.size() -
@@ -108,8 +104,8 @@ namespace movetypes {
         m_staple_bound = false;
     }
 
-    void MetStapleExchangeMCMovetype::write_log_summary(ostream* log_stream) {
-        write_log_summary_header(log_stream);
+    void MetStapleExchangeMCMovetype::write_log_summary(std::unique_ptr<ostream> log_stream) {
+        write_log_summary_header(std::move(log_stream));
 
         // Insertion of each staple type
         map<int, int> insertion_attempts {};
@@ -366,8 +362,8 @@ namespace movetypes {
             OrigamiSystem& origami_system,
             RandomGens& random_gens,
             IdealRandomWalks& ideal_random_walks,
-            vector<OrigamiOutputFile*> config_files,
-            string label,
+            vector<OrigamiOutputFile*> const& config_files,
+            string const& label,
             SystemOrderParams& ops,
             SystemBiases& biases,
             InputParameters& params):
@@ -379,8 +375,8 @@ namespace movetypes {
                     config_files, label, ops, biases, params) {
     }
 
-    void MetStapleRegrowthMCMovetype::write_log_summary(ostream* log_stream) {
-        write_log_summary_header(log_stream);
+    void MetStapleRegrowthMCMovetype::write_log_summary(std::unique_ptr<ostream> log_stream) {
+        write_log_summary_header(std::move(log_stream));
 
         // Insertion of each staple type
         map<int, int> attempts {};

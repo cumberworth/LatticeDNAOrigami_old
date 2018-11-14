@@ -78,6 +78,9 @@ namespace utility {
     // Hash needs this, ambiguous to also have method
     bool operator==(const VectorThree& v1, const VectorThree& v2);
 
+    struct OrientationRotationTracking {
+    };
+
     struct StapleExchangeTracking {
         bool staple_insertion;
         bool no_staples;

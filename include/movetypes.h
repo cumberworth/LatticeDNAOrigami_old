@@ -6,6 +6,7 @@
 #include <deque>
 #include <iostream>
 #include <iostream>
+#include <memory>
 #include <unordered_map>
 #include <set>
 #include <string>
@@ -65,38 +66,29 @@ namespace movetypes {
                     OrigamiSystem& origami_system,
                     RandomGens& random_gens,
                     IdealRandomWalks& ideal_random_walks,
-                    vector<OrigamiOutputFile*> config_files,
-                    string label,
+                    vector<OrigamiOutputFile*> const& config_files,
+                    string const& label,
                     SystemOrderParams& ops,
                     SystemBiases& biases,
                     InputParameters& params);
             MCMovetype(const MCMovetype&) = delete;
             MCMovetype& operator=(const MCMovetype&) = delete;
             virtual ~MCMovetype() {};
-
-            /** Attempt move and return result */
             bool attempt_move(long long int step);
 
             /** Reset origami system to state before move attempt */
             virtual void reset_origami();
-
-            /** Write summary header of movetype attempts */
-            void write_log_summary_header(ostream* log_stream);
-
-            /** Write summary of movetype attempts */
-            virtual void write_log_summary(ostream* log_stream) = 0;
+            void write_log_summary_header(std::unique_ptr<ostream> log_stream);
+            virtual void write_log_summary(std::unique_ptr<ostream> log_stream) = 0;
 
             string get_label();
             int get_attempts();
             int get_accepts();
 
         protected:
-            // Methods requiring definition for all movetypes
             virtual void add_external_bias() = 0;
             virtual bool internal_attempt_move() = 0;
             virtual void add_tracker(bool accepted) = 0;
-
-            // Methods that probably need to be overriden
             virtual void reset_internal();
 
             // Shared general utility functions
@@ -107,20 +99,10 @@ namespace movetypes {
               * chains and then over the constituent domains
               */
             Domain* select_random_domain();
-
-            /** Return a random staple type */
             int select_random_staple_identity();
-
-            /** Return index to a random staple staple of given type */
             int select_random_staple_of_identity(int c_i_ident);
-
-            /** Return a random neighbour lattice site position to given */
             VectorThree select_random_position(VectorThree p_prev);
-
-            /** Return a random unit orientation vector */
             VectorThree select_random_orientation();
-
-            /** Test if move accepted with given probability */
             bool test_acceptance(long double p_ratio);
 
             /** Test if staple is anchoring other staples to the system
@@ -181,7 +163,6 @@ namespace movetypes {
                     vector<Domain*> selected_chain);
     };
 
-    /** For debugging purposes */
     class IdentityMCMovetype: public MCMovetype {
         public:
             IdentityMCMovetype(
@@ -284,7 +265,8 @@ namespace movetypes {
               *
               * Selection begins by selectig a random domain in the given
               * segment, a random direction, a random maximum segment
-              * length and a random maximum number of domains to regrow length.              * Domains are added to this first segment until the maxium
+              * length and a random maximum number of domains to regrow length.
+              * Domains are added to this first segment until the maxium
               * segment length is reached, the maximum number of domains to
               * regrow is reached. If an added domain is bound to a staple
               * that is bound to another scaffold domain is reached, and if the

@@ -10,8 +10,8 @@ namespace movetypes {
                 OrigamiSystem& origami_system,
                 RandomGens& random_gens,
                 IdealRandomWalks& ideal_random_walks,
-                vector<OrigamiOutputFile*> config_files,
-                string label,
+                vector<OrigamiOutputFile*> const& config_files,
+                string const& label,
                 SystemOrderParams& ops,
                 SystemBiases& biases,
                 InputParameters& params) :
@@ -19,7 +19,8 @@ namespace movetypes {
                 config_files, label, ops, biases, params) {
 	}
 
-    void OrientationRotationMCMovetype::write_log_summary(ostream*) {
+    void OrientationRotationMCMovetype::write_log_summary(std::unique_ptr<ostream> log_stream) {
+        write_log_summary_header(std::move(log_stream));
     }
 
     bool OrientationRotationMCMovetype::internal_attempt_move() {
@@ -56,6 +57,7 @@ namespace movetypes {
         return accepted;
     }
 
-    void OrientationRotationMCMovetype::add_tracker(bool) {
+    void OrientationRotationMCMovetype::add_tracker(bool accepted) {
+//        movetypes::add_tracker(m_tracker, m_tracking, accepted);
     }
 }

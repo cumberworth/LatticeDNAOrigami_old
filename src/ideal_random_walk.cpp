@@ -22,7 +22,7 @@ namespace idealRandomWalk {
         // Only work with one permutation of DR
         DR = DR.absolute().sort();
         pair<VectorThree, int> walk_key {DR, steps};
-        if (m_num_walks.count(walk_key)) {
+        if (m_num_walks.find(walk_key) != m_num_walks.end()) {
             return m_num_walks.at(walk_key);
         }
         int DX {DR[0]};

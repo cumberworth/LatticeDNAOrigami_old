@@ -138,7 +138,7 @@ namespace simulation {
             SystemOrderParams& m_ops;
             SystemBiases& m_biases;
 
-            ostream* m_logging_stream;
+            std::unique_ptr<ostream> m_logging_stream;
             int m_logging_freq;
             int m_centering_freq;
             int m_centering_domain;

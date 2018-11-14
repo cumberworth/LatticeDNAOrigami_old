@@ -97,25 +97,23 @@ namespace nearestNeighbour {
     		{'A', 'T'}, {'T', 'A'}, {'G', 'C'}, {'C', 'G'}};
 
 	double calc_seq_spec_stacking_energy(
-            string seq_i,
-            string seq_j,
-            double temp,
-            double cation_M);
+            string const& seq_i,
+            string const& seq_j);
 
 	ThermoOfHybrid calc_unitless_hybridization_thermo(
-            string seq,
+            string const& seq,
             double temp,
             double cation_M);
 
 	double calc_unitless_hybridization_energy(
-            string seq,
+            string const& seq,
             double temp,
             double cation_M);
 
-    ThermoOfHybrid calc_hybridization_H_and_S(string seq, double cation_M);
+    ThermoOfHybrid calc_hybridization_H_and_S(string const& seq, double cation_M);
 	vector<string> find_longest_contig_complement(string seq_i, string seq_j);
     string calc_comp_seq(string seq);
-    bool seq_is_palindromic(string seq);
+    bool seq_is_palindromic(string const& seq);
 }
 
 #endif // NEAREST_NEIGHBOUR_H

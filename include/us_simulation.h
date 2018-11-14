@@ -4,6 +4,7 @@
 #define US_SIMULATION_H
 
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -64,11 +65,11 @@ namespace us {
             vector<GridPoint> get_points();
 
             // Probably move these to files and interface with grid bias
-            void read_weights(string filename);
+            void read_weights(string const& filename);
             void output_weights();
 
-            void set_config_from_traj(string filename, int step);
-            void set_output_stream(ostream* out_stream);
+            void set_config_from_traj(string const& filename, int step);
+            void set_output_stream(std::unique_ptr<ostream> out_stream);
             int get_grid_dim();
 
         protected:
@@ -80,13 +81,13 @@ namespace us {
             long long int m_max_iter_dur;
             long long int m_prod_steps;
             long long int m_max_prod_dur;
-            long long int m_steps;
+            long long int m_steps {0};
             double m_max_rel_P_diff;
             GridBiasFunction& m_grid_bias;
             double m_max_D_bias;
             vector<int> m_equil_dif;
 
-            ostream* m_us_stream {&cout};
+            std::unique_ptr<ostream> m_us_stream {&cout};
 
             vector<GridPoint> m_new_points {};
             vector<GridPoint> m_old_points {};
@@ -105,9 +106,9 @@ namespace us {
             void clear_grids();
             void update_internal(long long int step);
             void estimate_current_weights();
-            virtual void update_grids(int n) = 0;
+            virtual void update_grids() = 0;
             void fill_grid_sets();
-            virtual void update_bias(int n) = 0;
+            virtual void update_bias() = 0;
             virtual void output_summary(int n) = 0;
     };
 
@@ -122,8 +123,8 @@ namespace us {
             ~SimpleUSGCMCSimulation() {}
             
         private:
-            void update_bias(int);
-            void update_grids(int);
+            void update_bias();
+            void update_grids();
             void output_summary(int n);
     };
 
@@ -145,7 +146,7 @@ namespace us {
             void setup_window_sims(OrigamiSystem& origami);
             void output_iter_summary(int n);
             void update_internal(long long int) {}
-            void parse_windows_file(string filename);
+            void parse_windows_file(string const& filename);
             void update_master_order_params(int n);
             void update_master_converged_sims(bool sim_converged, int n);
             void copy_files_to_central_dir(int n);
@@ -164,9 +165,9 @@ namespace us {
             string m_local_dir;
             string m_central_dir;
 
-            ofstream* m_us_stream;
+            std::unique_ptr<ofstream> m_us_stream {nullptr};
 
-            USGCMCSimulation* m_us_sim;
+            std::unique_ptr<USGCMCSimulation> m_us_sim {nullptr};
             int m_windows {0};
             int m_grid_dim {0};
             vector<string> m_window_bias_tags {};

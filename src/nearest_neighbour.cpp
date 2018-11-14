@@ -11,19 +11,14 @@
 
 namespace nearestNeighbour {
 
-    using std::cout;
-    using std::tuple;
     using std::string;
     using std::vector;
-    using std::tie;
     using std::log;
     using std::reverse;
 
     double calc_seq_spec_stacking_energy(
-            string seq_i,
-            string seq_j,
-            double,
-            double) {
+            string const& seq_i,
+            string const& seq_j) {
 
         string nuc_i_back {seq_i.back()};
         string nuc_j_front {seq_j.front()};
@@ -35,7 +30,7 @@ namespace nearestNeighbour {
     }
 
     ThermoOfHybrid calc_unitless_hybridization_thermo(
-            string seq,
+            string const& seq,
             double temp,
             double cation_M) {
         ThermoOfHybrid DH_DS {calc_hybridization_H_and_S(seq, cation_M)};
@@ -48,7 +43,7 @@ namespace nearestNeighbour {
     }
 
     double calc_unitless_hybridization_energy(
-            string seq,
+            string const& seq,
             double temp,
             double cation_M) {
         ThermoOfHybrid DH_DS {calc_unitless_hybridization_thermo(seq, temp, cation_M)};
@@ -56,7 +51,7 @@ namespace nearestNeighbour {
         return DH_DS.enthalpy - DH_DS.entropy;
     }
 
-    ThermoOfHybrid calc_hybridization_H_and_S(string seq, double cation_M) {
+    ThermoOfHybrid calc_hybridization_H_and_S(string const& seq, double cation_M) {
         string comp_seq {calc_comp_seq(seq)};
 
         // Initiation free energy
@@ -79,7 +74,7 @@ namespace nearestNeighbour {
             string c3 {comp_seq[nuc_i]};
             string c4 {comp_seq[nuc_i + 1]};
             string comp_seq_pair {c3 + c4};
-            string key {seq_pair + "/" + comp_seq_pair};
+            string key {seq_pair += "/" + comp_seq_pair};
             DH_stack += NN_Enthalpy.at(key);
             DS_stack += NN_Entropy.at(key);
         }
@@ -107,8 +102,8 @@ namespace nearestNeighbour {
     }
 
     vector<string> find_longest_contig_complement(
-            string seq_i,
-            string seq_j) {
+            string const& seq_i,
+            string const& seq_j) {
         // Find smallest sequence
         string seq_three;
         string seq_five;
@@ -141,10 +136,7 @@ namespace nearestNeighbour {
                     comp_seqs.push_back(subseq);
                 }
             }
-            if (comp_seqs.empty()) {
-                continue;
-            }
-            else {
+            if (not comp_seqs.empty()) {
                 return comp_seqs;
             }
         }
@@ -160,7 +152,7 @@ namespace nearestNeighbour {
         return comp_seq;
     }
 
-    bool seq_is_palindromic(string seq) {
+    bool seq_is_palindromic(string const& seq) {
         string comp_seq {calc_comp_seq(seq)};
         string reverse_comp_seq {comp_seq};
         reverse(reverse_comp_seq.begin(), reverse_comp_seq.end());

@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstdlib>
+#include <memory>
 
 #include "json/json.h"
 
@@ -37,7 +38,7 @@ namespace us {
             m_max_D_bias {params.m_max_D_bias} {
 
         // Read in weights if specified
-        if (params.m_biases_file != "") {
+        if (not params.m_biases_file.empty()) {
             ifstream bias_file {params.m_biases_file};
             if (bias_file.good()) {
                 *m_us_stream << "Reading biases from file\n";
@@ -49,7 +50,7 @@ namespace us {
         }
 
         // Update starting configs if restarting
-        if (m_params.m_restart_traj_file != "") {
+        if (not m_params.m_restart_traj_file.empty()) {
             *m_us_stream << "Reading starting config from file\n";
             set_config_from_traj(m_params.m_restart_traj_file, params.m_restart_step);
         }
@@ -75,14 +76,13 @@ namespace us {
         string output_filebase {m_params.m_output_filebase + postfix};
         m_output_files = simulation::setup_output_files(m_params,
                 output_filebase, m_origami_system, m_ops, m_biases);
-        m_logging_stream = new ofstream {output_filebase + ".out"};
+        m_logging_stream = std::make_unique<ofstream>(output_filebase + ".out");
 
         m_steps = m_equil_steps;
         m_steps = simulate(m_steps);
 
         // Cleanup
         close_output_files();
-        delete m_logging_stream;
     }
 
     void USGCMCSimulation::run_iteration(int n) {
@@ -93,7 +93,7 @@ namespace us {
         string output_filebase {m_params.m_output_filebase + prefix};
         m_output_files = simulation::setup_output_files(m_params,
                 output_filebase, m_origami_system, m_ops, m_biases);
-        m_logging_stream = new ofstream {output_filebase + ".out"};
+        m_logging_stream = std::make_unique<ofstream>(output_filebase + ".out");
 
         m_steps = m_iter_steps;
         clear_grids();
@@ -101,13 +101,12 @@ namespace us {
         fill_grid_sets();
         m_S_n.insert(m_s_i.begin(), m_s_i.end());
         estimate_current_weights();
-        update_grids(n);
-        update_bias(n);
+        update_grids();
+        update_bias();
         output_summary(n);
 
         // Cleanup
         close_output_files();
-        delete m_logging_stream;
         output_weights();
     }
 
@@ -129,7 +128,7 @@ namespace us {
         string output_filebase {m_params.m_output_filebase + postfix};
         m_output_files = simulation::setup_output_files(m_params,
                 output_filebase, m_origami_system, m_ops, m_biases);
-        m_logging_stream = new ofstream {output_filebase + ".out"};
+        m_logging_stream = std::make_unique<ofstream>(output_filebase + ".out");
 
         m_steps = m_prod_steps;
         clear_grids();
@@ -137,26 +136,25 @@ namespace us {
         fill_grid_sets();
         m_S_n.insert(m_s_i.begin(), m_s_i.end());
         estimate_current_weights();
-        update_grids(n);
+        update_grids();
         output_summary(n);
 
         // Cleanup
         close_output_files();
-        delete m_logging_stream;
     }
 
     vector<GridPoint> USGCMCSimulation::get_points() {
         return m_points;
     }
 
-    void USGCMCSimulation::read_weights(string filename) {
+    void USGCMCSimulation::read_weights(string const& filename) {
         ifstream jsonraw {filename, ifstream::binary};
         Json::Value jsonroot;
         jsonraw >> jsonroot;
 
-        for (auto json_entry:jsonroot["biases"]) {
+        for (auto const& json_entry:jsonroot["biases"]) {
             GridPoint point {};
-            for (auto comp: json_entry["point"]) {
+            for (auto const& comp: json_entry["point"]) {
                 point.push_back(comp.asInt());
             }
             double point_bias {json_entry["bias"].asDouble()};
@@ -202,14 +200,14 @@ namespace us {
         weights_file << "}\n";
     }
 
-    void USGCMCSimulation::set_config_from_traj(string filename, int step) {
+    void USGCMCSimulation::set_config_from_traj(string const& filename, int step) {
         OrigamiTrajInputFile traj_inp {filename};
         Chains config {traj_inp.read_config(step)};
         m_origami_system.set_config(config);
     }
 
-    void USGCMCSimulation::set_output_stream(ostream* out_stream) {
-        m_us_stream = out_stream;
+    void USGCMCSimulation::set_output_stream(std::unique_ptr<ostream> out_stream) {
+        m_us_stream = std::move(out_stream);
     }
 
     int USGCMCSimulation::get_grid_dim() {
@@ -230,13 +228,13 @@ namespace us {
     void USGCMCSimulation::estimate_current_weights() {
         // Average bias weights of iteration
         double ave_bias_weight {0};
-        for (auto point: m_s_i) {
+        for (auto const& point: m_s_i) {
             double point_bias {m_grid_bias.calc_bias(point)};
             ave_bias_weight += m_f_i[point] * std::exp(point_bias);
         }
 
         // Calculate for all visited points
-        for (auto point: m_s_i) {
+        for (auto const& point: m_s_i) {
             double point_bias {m_grid_bias.calc_bias(point)};
             double p_n_k {m_f_i[point] * std::exp(point_bias) /
                 ave_bias_weight};
@@ -244,7 +242,7 @@ namespace us {
         }
 
         // Update vector for unvisted points
-        for (auto point: m_old_only_points) {
+        for (auto const& point: m_old_only_points) {
             m_p_i[point] = 0;
         }
     }
@@ -270,8 +268,6 @@ namespace us {
         it = std::set_difference(m_S_n.begin(), m_S_n.end(), m_old_points.begin(),
                 m_old_points.end(), m_old_only_points.begin());
         m_old_only_points.resize(it - m_old_only_points.begin());
-
-        return;
     }
 
     SimpleUSGCMCSimulation::SimpleUSGCMCSimulation(
@@ -282,9 +278,9 @@ namespace us {
             USGCMCSimulation(origami, ops, biases, params) {
     }
 
-    void SimpleUSGCMCSimulation::update_bias(int) {
+    void SimpleUSGCMCSimulation::update_bias() {
         m_old_p_i = m_p_i;
-        for (auto point: m_S_n) {
+        for (auto const& point: m_S_n) {
 
             // No T to be consistent with biases here
             double old_bias {m_E_w[point]};
@@ -316,11 +312,11 @@ namespace us {
         m_grid_bias.replace_biases(m_E_w);
     }
 
-    void SimpleUSGCMCSimulation::update_grids(int) {
-        for (auto point: m_s_i) {
+    void SimpleUSGCMCSimulation::update_grids() {
+        for (auto const& point: m_s_i) {
             m_w_i[point] = (static_cast<double>(m_f_i[point]) / m_steps);
         }
-        for (auto point: m_old_only_points) {
+        for (auto const& point: m_old_only_points) {
             m_w_i[point] = 0;
         }
     }
@@ -329,8 +325,8 @@ namespace us {
         *m_us_stream << "Iteration: " << n << "\n";
         *m_us_stream << "\n";
         *m_us_stream << "Gridpoint w, P, E:\n";
-        for (auto point: m_S_n) {
-            for (auto coor: point) {
+        for (auto const& point: m_S_n) {
+            for (auto const& coor: point) {
                 *m_us_stream << coor << " ";
             }
             *m_us_stream << std::setprecision(3);
@@ -360,11 +356,6 @@ namespace us {
         setup_window_sims(origami);
     }
 
-    MWUSGCMCSimulation::~MWUSGCMCSimulation() {
-        delete m_us_sim;
-        delete m_us_stream;
-    }
-
     void MWUSGCMCSimulation::run() {
         int n;
         m_us_sim->run_equilibration();
@@ -383,17 +374,17 @@ namespace us {
 
     void MWUSGCMCSimulation::setup_window_variables() {
         for (int i {0}; i != m_windows; i++) {
-            m_points.push_back({});
-            m_starting_files.push_back("");
+            m_points.emplace_back();
+            m_starting_files.emplace_back("");
             m_starting_steps.push_back(0);
 
             // Filename bases
             string window_postfix {"_win-"};
-            for (auto j: m_window_mins[i]) {
+            for (auto const& j: m_window_mins[i]) {
                 window_postfix += std::to_string(j);
                 window_postfix += "-";
             }
-            for (auto j: m_window_maxs[i]) {
+            for (auto const& j: m_window_maxs[i]) {
                 window_postfix += "-";
                 window_postfix += std::to_string(j);
             }
@@ -434,7 +425,7 @@ namespace us {
         m_params.m_output_filebase = output_filebase;
 
         // If available read modify filename for input biases
-        if (m_params.m_biases_filebase != "") {
+        if (not m_params.m_biases_filebase.empty()) {
             m_params.m_biases_file = m_params.m_biases_filebase +
                     window_postfix;
             m_params.m_biases_file += ".biases";
@@ -442,7 +433,7 @@ namespace us {
 
         // If available modify filename for seperate starting config for each window
         // Standard names
-        if (m_params.m_restart_traj_filebase != "") {
+        if (not m_params.m_restart_traj_filebase.empty()) {
             m_params.m_restart_traj_filebase += window_postfix;
             m_params.m_restart_traj_file = m_params.m_restart_traj_filebase +
                     m_params.m_restart_traj_postfix;
@@ -456,10 +447,9 @@ namespace us {
         }
 
         // Create simulation objects
-        m_us_sim = new SimpleUSGCMCSimulation {origami, m_ops, m_biases,
-                m_params};
-        m_us_stream = new ofstream {output_filebase + ".out"};
-        m_us_sim->set_output_stream(m_us_stream);
+        m_us_sim = std::make_unique<SimpleUSGCMCSimulation>(origami, m_ops, m_biases,
+                m_params);
+        m_us_sim->set_output_stream(std::make_unique<ofstream>(output_filebase + ".out"));
         m_grid_dim = m_us_sim->get_grid_dim();
     }
 
@@ -473,8 +463,8 @@ namespace us {
             // Must flatten to send
             vector<int> flattened_points {};
             vector<GridPoint> points {m_us_sim->get_points()};
-            for (auto point: points) {
-                for (auto comp: point) {
+            for (auto const& point: points) {
+                for (auto const& comp: point) {
                     flattened_points.push_back(comp);
                 }
             }
@@ -490,7 +480,7 @@ namespace us {
                 vector<GridPoint> points {};
                 size_t j {0};
                 while (j != f_points.size()) {
-                    points.push_back({});
+                    points.emplace_back();
                     for (int k {0}; k != m_grid_dim; k++) {
                         points.back().push_back(f_points[j]);
                         j++;
@@ -562,13 +552,11 @@ namespace us {
                 if (point_sampled) {
                     break;
                 }
-                else {
-                    tried_points.insert(point);
-                    all_points_tried = (tried_points.size() == m_num_points[i]);
-                    if (all_points_tried) {
-                        cout << "Window " << i << " outside of domain\n";
-                        throw SimulationMisuse {};
-                    }
+                tried_points.insert(point);
+                all_points_tried = (tried_points.size() == m_num_points[i]);
+                if (all_points_tried) {
+                    cout << "Window " << i << " outside of domain\n";
+                    throw SimulationMisuse {};
                 }
             }
 
@@ -599,7 +587,7 @@ namespace us {
                 bool point_sampled {m_order_param_to_configs.find(point) !=
                         m_order_param_to_configs.end()};
                 if (point_sampled) {
-                    m_order_param_to_configs[point].push_back({i, step});
+                    m_order_param_to_configs[point].emplace_back(i, step);
                 }
                 else {
                     m_order_param_to_configs[point] = {{i, step}};
@@ -608,7 +596,7 @@ namespace us {
         }
     }
 
-    void MWUSGCMCSimulation::parse_windows_file(string filename) {
+    void MWUSGCMCSimulation::parse_windows_file(string const& filename) {
         ifstream file {filename};
         string window_raw;
 

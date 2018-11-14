@@ -1,6 +1,7 @@
 // constant_temp_simulation.cpp
 
 #include <iostream>
+#include <memory>
 
 #include "constant_temp_simulation.h"
 
@@ -16,7 +17,8 @@ namespace constantTemp {
             GCMCSimulation(origami_system, ops, biases, params),
             m_steps {params.m_ct_steps} {
 
-        m_logging_stream = &cout;
+        std::unique_ptr<std::ostream> logging_stream {&cout};
+        m_logging_stream = std::move(logging_stream);
         m_output_files = simulation::setup_output_files(params,
                 params.m_output_filebase,
                 m_origami_system, m_ops, m_biases);

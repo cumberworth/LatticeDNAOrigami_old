@@ -34,8 +34,8 @@ namespace movetypes {
                     OrigamiSystem& origami_system,
                     RandomGens& random_gens,
                     IdealRandomWalks& ideal_random_walks,
-                    vector<OrigamiOutputFile*> config_files,
-                    string label,
+                    vector<OrigamiOutputFile*> const& config_files,
+                    string const& label,
                     SystemOrderParams& ops,
                     SystemBiases& biases,
                     InputParameters& params);
@@ -60,8 +60,8 @@ namespace movetypes {
                     OrigamiSystem& origami_system,
                     RandomGens& random_gens,
                     IdealRandomWalks& ideal_random_walks,
-                    vector<OrigamiOutputFile*> config_files,
-                    string label,
+                    vector<OrigamiOutputFile*> const& config_files,
+                    string const& label,
                     SystemOrderParams& ops,
                     SystemBiases& biases,
                     InputParameters& params,
@@ -73,7 +73,7 @@ namespace movetypes {
                     MetStapleExchangeMCMovetype&) = delete;
 
             void reset_internal() override;
-            void write_log_summary(ostream* log_stream) override;
+            void write_log_summary(std::unique_ptr<ostream> log_stream) override;
 
         private:
             bool internal_attempt_move() override;
@@ -107,8 +107,8 @@ namespace movetypes {
                     OrigamiSystem& origami_system,
                     RandomGens& random_gens,
                     IdealRandomWalks& ideal_random_walks,
-                    vector<OrigamiOutputFile*> config_files,
-                    string label,
+                    vector<OrigamiOutputFile*> const& config_files,
+                    string const& label,
                     SystemOrderParams& ops,
                     SystemBiases& biases,
                     InputParameters& params);
@@ -117,7 +117,7 @@ namespace movetypes {
             MetStapleRegrowthMCMovetype& operator=(const
                     MetStapleRegrowthMCMovetype&) = delete;
 
-            void write_log_summary(ostream* log_stream) override;
+            void write_log_summary(std::unique_ptr<ostream> log_stream) override;
 
         private:
             bool internal_attempt_move() override;
