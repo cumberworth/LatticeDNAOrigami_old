@@ -1,0 +1,108 @@
+cmake_minimum_required(VERSION 3.12)
+project(latticeDNAOrigami VERSION 1.0 LANGUAGES CXX)
+
+# Build type
+set(default_build_type "Release")
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    message(STATUS "Setting build type to '${default_build_type}' as none was specified.")
+    set(CMAKE_BUILD_TYPE "${default_build_type}" CACHE
+        STRING "Choose the type of build." FORCE)
+    # Set the possible values of build type for cmake-gui
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
+    "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
+endif()
+
+add_executable(latticeDNAOrigami
+    src/ideal_random_walk.cpp
+    src/constant_temp_simulation.cpp
+    src/random_gens.cpp
+    src/us_simulation.cpp
+    src/nearest_neighbour.cpp
+    src/orientation_movetype.cpp
+    src/met_movetypes.cpp
+    src/annealing_simulation.cpp
+    src/order_params.cpp
+    src/domain.cpp
+    src/utility.cpp
+    src/hash.cpp
+    src/top_constraint_points.cpp
+    src/enumerate.cpp
+    src/files.cpp
+    src/cb_movetypes.cpp
+    src/movetypes.cpp
+    src/rg_movetypes.cpp
+    src/simulation.cpp
+    src/bias_functions.cpp
+    src/transform_movetypes.cpp
+    src/parser.cpp
+    src/origami_system.cpp
+    src/main.cpp
+    src/origami_potential.cpp
+    src/ptmc_simulation.cpp
+)
+target_include_directories(latticeDNAOrigami PUBLIC include)
+target_compile_features(latticeDNAOrigami PUBLIC cxx_std_17)
+set_target_properties(latticeDNAOrigami PROPERTIES
+    CXX_EXTENSIONS OFF
+    CXX_CLANG_TIDY "clang-tidy;-checks=boost-*,cppcoreguidelines-*,clang-analyzer-*,misc-*,modernize-*,mpi-*,performance-*,readability-*,clang-diagnostic-*;-warnings-as-errors=*"
+)
+
+# MPI
+find_package(MPI REQUIRED)
+message(STATUS "Run: ${MPIEXEC} ${MPIEXEC_NUMPROC_FLAG} ${MPIEXEC_MAX_NUMPROCS} ${MPIEXEC_PREFLAGS} EXECUTABLE ${MPIEXEC_POSTFLAGS} ARGS")
+target_link_libraries(latticeDNAOrigami PUBLIC MPI::MPI_CXX)
+
+# Boost
+#set(Boost_USE_STATIC_LIBS OFF)
+#set(Boost_USE_MULTITHREADED ON)
+#set(Boost_USE_STATIC_RUNTIME OFF)
+find_package(Boost 1.50 REQUIRED COMPONENTS
+    program_options
+    mpi
+    serialization
+    system
+    filesystem
+)
+message(STATUS "Boost version: ${Boost_VERSION}")
+target_link_libraries(latticeDNAOrigami PUBLIC
+    Boost::filesystem
+    Boost::program_options
+    Boost::mpi
+    Boost::serialization
+    Boost::system
+    Boost::filesystem
+)
+
+# Interprocedular optimization
+include(CheckIPOSupported)
+check_ipo_supported(RESULT result)
+if(result)
+  set_target_properties(latticeDNAOrigami PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
+endif()
+
+# CCache (increased compiliation speed)
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+endif()
+
+install(TARGETS latticeDNAOrigami
+    RUNTIME DESTINATION bin
+)
+
+# jsoncp
+#include(FetchContent)
+#FetchContent_Declare(jsoncpp
+#    GIT_REPOSITORY https://github.com/open-source-parsers/jsoncpp
+#)
+#FetchContent_GetProperties(jsoncpp)
+#if(NOT jsoncpp_POPULATED)
+#    FetchContent_Populate(jsoncpp)
+#    add_subdirectory(${jsoncpp_SOURCE_DIR} ${jsoncpp_BINARY_DIR})
+#endif()
+
+# Compiler warnings
+if(MSVC)
+else()
+    add_compile_options(-Wall -Wextra -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Wunused -Woverloaded-virtual -Wpedantic -Wconversion -Wsign-conversion -Wmisleading-indentation -Wduplicated-cond -Wduplicated-branches -Wlogical-op -Wnull-deference -Wuseless-cast -Wdouble-promotion -Wlifetime -Werror)
+endif()
