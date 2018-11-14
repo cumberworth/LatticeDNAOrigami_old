@@ -1,31 +1,47 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
-"""Extract specified config from traj file to new traj file
-
-The main purpose is to create restart traj files that are small for transfer
-"""
+"""Extract final configurations for restarting REMC runs."""
 
 import argparse
 import pdb
 import sys
 
-from origamipy.origami_io import *
+from origamipy.io import *
+
 
 def main():
+    args = parse_args()
+    swap_inp_filename = '{}.swp'.format(args.inp_filebase)
+    swap_file = UnparsedSingleLineStepInpFile(swap_inp_filename, headerlines=1)
+    swap_out_filename = '{}.swp.restart'.format(args.out_filebase)
+    with open(swap_out_filename, 'w') as out:
+        out.write(swap_file.header)
+        out.write(swap_file.get_last_step())
+
+    for thread in range(args.threads):
+        traj_inp_filename = '{}-{}.trj'.format(args.inp_filebase, thread)
+        traj_file = UnparsedMultiLineStepInpFile(traj_inp_filename)
+        traj_out_filename = '{}-{}.trj.restart'.format(args.out_filebase, thread)
+        with open(traj_out_filename, 'w') as out:
+            out.write(traj_file.get_last_step())
+
+
+def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('inp_filename', type=str, help='Input filename')
-    parser.add_argument('out_filename', type=str, help='Output filename')
-    parser.add_argument('step', type=int, help='Step of config in file')
+    parser.add_argument(
+        'inp_filebase',
+        type=str,
+        help='Input filename')
+    parser.add_argument(
+        'out_filebase',
+        type=str,
+        help='Output filename')
+    parser.add_argument(
+        'threads',
+        type=int,
+        help='Number of threads/replicas')
 
-    args = parser.parse_args()
-
-    inp_filename = args.inp_filename
-    out_filename = args.out_filename
-    step = args.step
-
-    traj_file = PlainTextTrajFile(inp_filename, int(300))
-    out_file = PlainTextTrajOutFile(out_filename)
-    out_file.write_config(traj_file.chains(step), 0)
+    return parser.parse_args()
 
 
 if __name__ == '__main__':

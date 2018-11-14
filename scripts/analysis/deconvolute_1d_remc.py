@@ -15,8 +15,8 @@ def main():
     remc.deconvolute_remc_outputs(all_params, fileinfo, FILETYPES)
 
 
-FILETYPES = ['ene', 'ops', 'trj', 'vcf', 'times', 'ores', 'states', 'staples',
-             'staplestates']
+FILETYPES = ['ene', 'ops', 'trj', 'vcf', 'times', 'ores', 'states']#, 'staples',
+#             'staplestates']
 
 
 def create_exchange_params(temps):

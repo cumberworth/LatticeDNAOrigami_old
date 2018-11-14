@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-"""Take output from count matrices and average"""
+"""Take output from count matrices and average."""
 
 import argparse
 import sys
@@ -24,21 +24,16 @@ def main():
 
 
 def construct_conditions_map(args):
-    stack_biases = []
-    for stack_mult in args.stack_mults:
-        stack_bias = biases.StackingBias(0, stack_mult)
-        stack_biases.append(stack_bias)
-
     conditions_map = {'temp': args.temps,
-                     'staple_m': [0],
-                     'bias': stack_biases}
+                      'staple_m': [0],
+                      'bias': [biases.NoBias()]}
 
     return conditions_map
 
 
 def construct_fileformatter():
-    spec = conditions.ConditionsFileformatSpec(('temp', '{:d}'), ('bias', '{:.1f}'))
-    return conditions.ConditionsFileformatter(spec)
+    specs = [conditions.ConditionsFileformatSpec('temp', '{:d}')]
+    return conditions.ConditionsFileformatter(specs)
 
 
 def create_input_filepathbase(args):
@@ -68,11 +63,6 @@ def parse_args():
             nargs='+',
             type=int,
             help='Temperatures')
-    parser.add_argument(
-            '--stack_mults',
-            nargs='+',
-            type=float,
-            help='Stacking energy multipliers')
 
     return parser.parse_args()
 

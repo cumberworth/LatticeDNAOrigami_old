@@ -102,6 +102,7 @@ class StepsInpFile:
             self._eof = False
             # TODO: use to be implemented method for get_chains
             self._file.seek(0)
+            self._parse_header()
             raise StopIteration
 
     @property
@@ -115,6 +116,9 @@ class StepsInpFile:
         raise NotImplementedError
 
     def _return_step(self):
+        raise NotImplementedError
+
+    def _parse_header(self):
         raise NotImplementedError
 
 
@@ -174,6 +178,9 @@ class TxtTrajInpFile(StepsInpFile):
     def _get_domainsx3_matrix_from_line(self):
         row_major_vector = np.array(self._line.split(), dtype=int)
         return row_major_vector.reshape(len(row_major_vector) // 3, 3).tolist()
+
+    def _parse_header(self):
+        pass
 
 
 class TxtTrajOutFile:
@@ -236,16 +243,31 @@ class UnparsedStepInpFile(StepsInpFile):
         super().__init__(filename)
         self._header = ''
         self._step_chunk = ''
+        self._headerlines = headerlines
 
-        self._parse_header(headerlines)
+        self._parse_header()
 
     @property
     def header(self):
         return self._header
 
-    def _parse_header(self, headerlines):
+    def get_step(self, step):
+        i = 0
+        while i <= step:
+            next(self)
+            i += 1
+
+        return self._step_chunk
+
+    def get_last_step(self):
+        for step in self:
+            pass
+
+        return step
+
+    def _parse_header(self):
         self._next_line()
-        for i in range(headerlines):
+        for i in range(self._headerlines):
             self._header = self._header + self._line
             self._next_line()
 
@@ -254,6 +276,9 @@ class UnparsedStepInpFile(StepsInpFile):
 
     def _next_line(self):
         self._line = next(self._file)
+
+    def _parse_step(self):
+        raise NotImplementedError
 
 
 class UnparsedMultiLineStepInpFile(UnparsedStepInpFile):

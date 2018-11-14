@@ -18,7 +18,7 @@ def set_default_appearance():
     plt.rcParams['font.family'] = 'serif'
     plt.rcParams['font.serif'] = 'Times New Roman'
     plt.rcParams['font.weight'] = 'normal'
-    plt.rcParams['font.size'] = '8'
+    plt.rcParams['font.size'] = '10'
     plt.rcParams['text.usetex'] = False
     plt.rcParams['mathtext.rm'] = 'serif'
     plt.rcParams['mathtext.it'] = 'serif:italic'

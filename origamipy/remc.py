@@ -7,20 +7,10 @@ from origamipy import io
 
 def deconvolute_remc_outputs(all_exchange_params, fileinfo, filetypes):
     swapfile = io.SwapInpFile(fileinfo.inputdir, fileinfo.filebase)
-    all_file_collections = create_file_collections(all_exchange_params,
-                                                   fileinfo, filetypes)
-    for threads_to_replicas in swapfile:
-        for file_collection in all_file_collections:
-            file_collection.deconvolute_and_write_step(threads_to_replicas)
-
-
-def create_file_collections(all_exchange_params, fileinfo, filetypes):
-    all_file_collections = []
     for filetype in filetypes:
         f_collection = FileCollection(all_exchange_params, fileinfo, filetype)
-        all_file_collections.append(f_collection)
-
-    return all_file_collections
+        for threads_to_replicas in swapfile:
+            f_collection.deconvolute_and_write_step(threads_to_replicas)
 
 
 class FileCollection:
@@ -42,7 +32,7 @@ class FileCollection:
         self._write_headers()
 
     def deconvolute_and_write_step(self, threads_to_replicas):
-        for thread, replica in enumerate(threads_to_replicas):
+        for replica, thread in enumerate(threads_to_replicas):
             step = next(self._thread_files[thread])
             self._replica_files[replica].write(step)
 
