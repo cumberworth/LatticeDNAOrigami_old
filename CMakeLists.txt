@@ -13,6 +13,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 add_executable(latticeDNAOrigami
+    apps/main.cpp
     src/ideal_random_walk.cpp
     src/constant_temp_simulation.cpp
     src/random_gens.cpp
@@ -36,11 +37,10 @@ add_executable(latticeDNAOrigami
     src/transform_movetypes.cpp
     src/parser.cpp
     src/origami_system.cpp
-    src/main.cpp
     src/origami_potential.cpp
     src/ptmc_simulation.cpp
 )
-target_include_directories(latticeDNAOrigami PUBLIC include)
+target_include_directories(latticeDNAOrigami PUBLIC include/latticeDNAOrigami)
 target_compile_features(latticeDNAOrigami PUBLIC cxx_std_17)
 set_target_properties(latticeDNAOrigami PROPERTIES
     CXX_EXTENSIONS OFF

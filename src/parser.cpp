@@ -3,8 +3,8 @@
 #include <iostream>
 #include <fstream>
 
-#include "parser.h"
-#include "utility.h"
+#include "parser.hpp"
+#include "utility.hpp"
 
 namespace parser {
 
