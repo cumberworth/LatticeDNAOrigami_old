@@ -1,5 +1,3 @@
-// annealing_simulation.cpp
-
 #include <iostream>
 
 #include "annealing_simulation.hpp"
@@ -15,7 +13,7 @@ AnnealingGCMCSimulation::AnnealingGCMCSimulation(
         SystemOrderParams& ops,
         SystemBiases& biases,
         InputParameters& params):
-        GCMCSimulation(origami_system, ops, biases, params),
+        GCMCSimulation(origami_system, ops, biases, params, std::cout),
         m_max_temp {params.m_max_temp},
         m_min_temp {params.m_min_temp},
         m_temp_interval {params.m_temp_interval},
@@ -26,7 +24,6 @@ AnnealingGCMCSimulation::AnnealingGCMCSimulation(
     if (fmod(m_max_temp - m_min_temp, m_temp_interval) != 0) {
         cout << "Bad temperature interval";
     }
-    m_logging_stream = &cout;
     m_output_files = simulation::setup_output_files(
             params,
             params.m_output_filebase,
@@ -38,7 +35,7 @@ AnnealingGCMCSimulation::AnnealingGCMCSimulation(
 void AnnealingGCMCSimulation::run() {
     double temp {m_max_temp};
     double staple_u {molarity_to_chempot(m_staple_M, temp)};
-    long long int step {0};
+    unsigned long long step {0};
     while (temp >= m_min_temp) {
         m_origami_system.update_temp(temp);
         if (m_constant_staple_M) {

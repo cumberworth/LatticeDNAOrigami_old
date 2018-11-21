@@ -48,19 +48,19 @@ using origami::OrigamiSystem;
 using parser::InputParameters;
 using randomGen::RandomGens;
 
-vector<OrigamiOutputFile*> setup_output_files(
+vector<std::unique_ptr<OrigamiOutputFile>> setup_output_files(
         InputParameters& params,
-        string output_filebase,
+        const string& output_filebase,
         OrigamiSystem& origami,
         SystemOrderParams& ops,
         SystemBiases& biases);
 
 void setup_config_files(
-        const string filebase,
-        const int max_total_staples,
-        const int freq,
+        const string& filebase,
+        const size_t max_total_staples,
+        const size_t freq,
         OrigamiSystem& origami,
-        vector<OrigamiOutputFile*>& files);
+        vector<std::unique_ptr<OrigamiOutputFile>>& files);
 
 class GCMCSimulation {
   public:
@@ -69,82 +69,75 @@ class GCMCSimulation {
             SystemOrderParams& ops,
             SystemBiases& biases,
             InputParameters& params);
-    virtual ~GCMCSimulation();
+    GCMCSimulation(
+            OrigamiSystem& origami_system,
+            SystemOrderParams& ops,
+            SystemBiases& biases,
+            InputParameters& params,
+            ostream& logging_stream);
+    virtual ~GCMCSimulation() {}
     virtual void run() = 0;
 
   protected:
-    // Shared interface
-    virtual void update_internal(long long int step) = 0;
+    void initialize(InputParameters params);
+    virtual void update_internal(unsigned long long step) = 0;
 
-    // Shared methods
     void construct_movetypes(InputParameters& params);
-    MCMovetype* setup_orientation_movetype(
-            int i,
-            string type,
-            string label,
-            OrigamiMovetypeFile& movetypes_file,
-            MCMovetype* movetype);
-    MCMovetype* setup_staple_exchange_movetype(
-            int i,
-            string type,
-            string label,
-            OrigamiMovetypeFile& movetypes_file,
-            MCMovetype* movetype);
-    MCMovetype* setup_staple_regrowth_movetype(
-            int i,
-            string type,
-            string label,
-            OrigamiMovetypeFile& movetypes_file,
-            MCMovetype* movetype);
-    MCMovetype* setup_scaffold_regrowth_movetype(
-            int i,
-            string type,
-            string label,
-            OrigamiMovetypeFile& movetypes_file,
-            MCMovetype* movetype);
-    MCMovetype* setup_scaffold_transform_movetype(
-            int i,
-            string type,
-            string label,
-            OrigamiMovetypeFile& movetypes_file,
-            MCMovetype* movetype);
-    MCMovetype* setup_rg_movetype(
-            int i,
-            string type,
-            string label,
-            OrigamiMovetypeFile& movetypes_file,
-            MCMovetype* movetype);
-    void set_max_dur(long long int dur);
-    long long int simulate(
-            long long int steps,
-            long long int start_step = 0,
+    std::unique_ptr<MCMovetype> setup_orientation_movetype(
+            size_t i,
+            const string& type,
+            string& label,
+            OrigamiMovetypeFile& movetypes_file);
+    std::unique_ptr<MCMovetype> setup_staple_exchange_movetype(
+            size_t i,
+            const string& type,
+            string& label,
+            OrigamiMovetypeFile& movetypes_file);
+    std::unique_ptr<MCMovetype> setup_staple_regrowth_movetype(
+            size_t i,
+            const string& type,
+            string& label,
+            OrigamiMovetypeFile& movetypes_file);
+    std::unique_ptr<MCMovetype> setup_scaffold_regrowth_movetype(
+            size_t i,
+            const string& type,
+            string& label,
+            OrigamiMovetypeFile& movetypes_file);
+    std::unique_ptr<MCMovetype> setup_rg_movetype(
+            size_t i,
+            const string& type,
+            string& label,
+            OrigamiMovetypeFile& movetypes_file);
+    void set_max_dur(unsigned long long dur);
+    unsigned long long simulate(
+            unsigned long long steps,
+            unsigned long long start_step = 0,
             bool summarize = true,
             steady_clock::time_point = steady_clock::now());
     MCMovetype& select_movetype();
     void write_log_entry(
-            const long long int step,
+            const unsigned long long step,
             bool accepted,
             MCMovetype& movetype);
     void write_log_summary();
     void setup_vmd_pipe();
     void pipe_to_vmd();
-    void close_vmd_pipe();
-    void close_output_files();
 
     OrigamiSystem& m_origami_system;
     SystemOrderParams& m_ops;
     SystemBiases& m_biases;
 
-    std::unique_ptr<ostream> m_logging_stream;
-    int m_logging_freq;
-    int m_centering_freq;
-    int m_centering_domain;
-    int m_constraint_check_freq;
-    int m_vmd_pipe_freq;
-    double m_max_duration;
+    ostream& m_logging_stream;
+    ofstream m_logging_file {};
+    size_t m_logging_freq {};
+    size_t m_centering_freq {};
+    size_t m_centering_domain {};
+    size_t m_constraint_check_freq {};
+    size_t m_vmd_pipe_freq {};
+    double m_max_duration {};
     InputParameters& m_params;
-    vector<OrigamiOutputFile*> m_output_files {};
-    vector<OrigamiOutputFile*> m_config_per_move_files {};
+    vector<std::unique_ptr<OrigamiOutputFile>> m_output_files {};
+    vector<std::unique_ptr<OrigamiOutputFile>> m_config_per_move_files {};
     vector<unique_ptr<MCMovetype>> m_movetypes {};
     vector<double> m_movetype_freqs {};
     vector<double> m_cumulative_probs {};
@@ -152,11 +145,11 @@ class GCMCSimulation {
     IdealRandomWalks m_ideal_random_walks {};
 
     // VMD realtime visualization
-    OrigamiVSFOutputFile* vmd_struct_file {nullptr};
-    OrigamiVCFOutputFile* vmd_coors_file {nullptr};
-    OrigamiStateOutputFile* vmd_states_file {nullptr};
-    OrigamiOrientationOutputFile* vmd_ores_file {nullptr};
-    bp::child* vmd_proc {nullptr};
+    std::unique_ptr<OrigamiVSFOutputFile> m_vmd_struct_file {};
+    std::unique_ptr<OrigamiVCFOutputFile> m_vmd_coors_file {};
+    std::unique_ptr<OrigamiStateOutputFile> m_vmd_states_file {};
+    std::unique_ptr<OrigamiOrientationOutputFile> m_vmd_ores_file {};
+    std::unique_ptr<bp::child> vmd_proc {};
 };
 } // namespace simulation
 

@@ -34,7 +34,7 @@ using std::unordered_map;
 using std::valarray;
 using std::vector;
 
-using domainContainer::Domain;
+using domain::Domain;
 using parser::InputParameters;
 using potential::DeltaConfig;
 using potential::OrigamiPotential;
@@ -56,14 +56,13 @@ class OrigamiSystem {
   public:
     // Standard methods
     OrigamiSystem(
-            const vector<vector<int>>& identities,
-            const vector<vector<string>>& sequences,
+            vector<vector<int>>& identities,
+            vector<vector<string>>& sequences,
             const Chains& chains,
             bool cyclic,
             double volume,
             double staple_u,
             InputParameters& params);
-    virtual ~OrigamiSystem();
 
     OrigamiSystem(const OrigamiSystem&) = default;
     OrigamiSystem& operator=(const OrigamiSystem&) = default;
@@ -71,39 +70,39 @@ class OrigamiSystem {
     OrigamiSystem& operator=(OrigamiSystem&&) = default;
 
     // Configuration independent system properties
-    const vector<vector<int>> m_identities; // Domain identities
-    const vector<vector<string>> m_sequences; // Domain sequences
-    double m_temp; // System temperature (K)
-    double m_volume; // System volume (num lattice sites)
-    const double m_cation_M; // Cation concentration (mol/V)
-    double m_staple_u; // Staple chemical potential (K)
-    const bool m_cyclic; // Cyclic scaffold
+    const vector<vector<int>> m_identities {}; // Domain identities
+    const vector<vector<string>> m_sequences {}; // Domain sequences
+    double m_temp {}; // System temperature (K)
+    double m_volume {}; // System volume (num lattice sites)
+    const double m_cation_M {}; // Cation concentration (mol/V)
+    double m_staple_u {}; // Staple chemical potential (K)
+    const bool m_cyclic {}; // Cyclic scaffold
     const int c_scaffold {0}; // Unique chain index of scaffold
 
     // Configuration properties
     orderParams::SystemOrderParams& get_system_order_params();
     biasFunctions::SystemBiases& get_system_biases();
-    vector<Domain*> get_chain(int c_i);
-    vector<vector<Domain*>> get_chains();
-    vector<Domain*> get_last_chain();
-    Domain* get_domain(int c_i, int d_i);
+    vector<Domain>& get_chain(int c_i);
+    vector<vector<Domain>>& get_chains();
+    vector<Domain>& get_last_chain();
+    Domain& get_domain(int c_i, int d_i);
     vector<int> get_staple_counts();
-    int num_staples() const;
-    int num_unique_staples() const;
-    int num_domains();
-    int num_bound_domain_pairs() const;
-    int num_fully_bound_domain_pairs() const;
-    int num_self_bound_domain_pairs() const;
-    int num_misbound_domain_pairs() const;
-    int num_stacked_domain_pairs() const;
-    int num_linear_helix_trips() const;
-    int num_stacked_junct_quads() const;
-    int num_staples_of_ident(int staple_ident) const;
+    size_t num_staples() const;
+    size_t num_unique_staples() const;
+    size_t num_domains();
+    size_t num_bound_domain_pairs() const;
+    size_t num_fully_bound_domain_pairs() const;
+    size_t num_self_bound_domain_pairs() const;
+    size_t num_misbound_domain_pairs() const;
+    size_t num_stacked_domain_pairs() const;
+    size_t num_linear_helix_trips() const;
+    size_t num_stacked_junct_quads() const;
+    size_t num_staples_of_ident(int staple_ident) const;
     vector<int> staples_of_ident(int c_ident);
     vector<int> complementary_scaffold_domains(int staple_ident) const;
     Chains chains() const;
     Occupancy position_occupancy(VectorThree pos) const;
-    Domain* unbound_domain_at(VectorThree pos) const;
+    Domain& unbound_domain_at(VectorThree pos) const;
     bool check_domains_complementary(Domain& cd_i, Domain& cd_j);
     double energy() const;
     void update_enthalpy_and_entropy();
@@ -115,7 +114,7 @@ class OrigamiSystem {
 
     // Constraint checkers
     void check_all_constraints();
-    virtual double check_domain_constraints(
+    double check_domain_constraints(
             Domain& cd_i,
             VectorThree pos,
             VectorThree ore);
@@ -123,30 +122,30 @@ class OrigamiSystem {
     // int check_stacking(Domain& domain);
 
     // Configuration modifiers
-    virtual double unassign_domain(Domain& cd_i);
+    double unassign_domain(Domain& cd_i);
     int add_chain(int c_i_ident);
     int add_chain(int c_i_ident, int uc_i);
-    virtual void delete_chain(int c_i);
+    void delete_chain(int c_i);
     void temp_reduce_staples_by_one();
     void undo_reduce_staples_by_one();
-    virtual double set_checked_domain_config(
+    double set_checked_domain_config(
             Domain& cd_i,
             VectorThree pos,
             VectorThree ore);
-    virtual double set_domain_config(
+    double set_domain_config(
             Domain& cd_i,
-            VectorThree position,
-            VectorThree orientation);
-    virtual void set_domain_orientation(Domain& cd_i, VectorThree ore);
+            VectorThree pos,
+            VectorThree ore);
+    void set_domain_orientation(Domain& cd_i, VectorThree ore);
     void center(int centering_domain);
     void set_all_domains();
     void set_all_domains(Chains config);
-    void set_config(Chains new_config);
+    void set_config(const Chains& chains);
 
     // System state modifiers
     void update_temp(double temp, double stacking_mult = 1);
     void update_staple_u(double u);
-    virtual void update_bias_mult(double) {};
+    void update_bias_mult(double) {};
 
     // Constraints state
     bool m_constraints_violated {false};
@@ -156,7 +155,7 @@ class OrigamiSystem {
 
   protected:
     // Bookeeping stuff, could probably organize better
-    vector<vector<Domain*>> m_domains {}; // Domains grouped by chain
+    vector<vector<Domain>> m_domains {}; // Domains grouped by chain
     int m_num_domains {0}; // Total domains in system
     int m_num_staples {0};
     vector<vector<int>> m_staple_ident_to_scaffold_ds {}; // Staple ID to comp
@@ -181,9 +180,9 @@ class OrigamiSystem {
     unique_ptr<biasFunctions::SystemBiases> m_biases;
 
     double m_energy {0};
-    double m_hyb_enthalpy;
-    double m_hyb_entropy;
-    double m_stacking_energy;
+    double m_hyb_enthalpy {};
+    double m_hyb_entropy {};
+    double m_stacking_energy {};
     OrigamiPotential m_pot;
 
     // Intializers
@@ -206,42 +205,8 @@ class OrigamiSystem {
             VectorThree ore);
 };
 
-class OrigamiSystemWithBias: public OrigamiSystem {
-  public:
-    OrigamiSystemWithBias(
-            const vector<vector<int>>& identities,
-            const vector<vector<string>>& sequences,
-            const Chains& chains,
-            bool cyclic,
-            double volume,
-            double staple_u,
-            InputParameters& params);
-
-    // Constraint checkers
-    double check_domain_constraints(
-            Domain& cd_i,
-            VectorThree pos,
-            VectorThree ore);
-
-    // Configuration modifiers
-    double unassign_domain(Domain& cd_i);
-    // Need to make the base one virtual still
-    // int add_chain(int c_i_ident);
-    // int add_chain(int c_i_ident, int uc_i);
-    void delete_chain(int c_i);
-    double set_checked_domain_config(
-            Domain& cd_i,
-            VectorThree pos,
-            VectorThree ore);
-    double set_domain_config(
-            Domain& cd_i,
-            VectorThree position,
-            VectorThree orientation);
-    // void set_domain_orientation(Domain& cd_i, VectorThree ore);
-};
-
 // Moved from main
-OrigamiSystem* setup_origami(InputParameters& params);
+OrigamiSystem setup_origami(InputParameters& params);
 
 double molarity_to_lattice_volume(double molarity);
 

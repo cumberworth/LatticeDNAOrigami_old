@@ -31,7 +31,7 @@ using origami::OrigamiSystem;
 class OrigamiInputFile {
     // Input file for OrigamiSystem configuration and topology
   public:
-    OrigamiInputFile(string filename);
+    OrigamiInputFile(const string& filename);
     ~OrigamiInputFile() {};
 
     vector<vector<int>> get_identities();
@@ -40,43 +40,43 @@ class OrigamiInputFile {
     bool is_cyclic();
 
   private:
-    void read_file(string filename);
+    void read_file(const string& filename);
 
     vector<vector<int>> m_identities;
     vector<vector<string>> m_sequences;
     vector<Chain> m_chains;
-    bool m_cyclic;
+    bool m_cyclic {};
 };
 
 class OrigamiTrajInputFile {
     // Reading configurations from trajectories
   public:
-    OrigamiTrajInputFile(string filename);
+    OrigamiTrajInputFile(string& filename);
 
-    vector<Chain> read_config(int step);
+    vector<Chain> read_config(unsigned long long step);
 
   private:
-    vector<Chain> internal_read_config(int step);
+    vector<Chain> internal_read_config(unsigned long long step);
     string m_filename;
     ifstream m_file;
 
-    void go_to_step(unsigned int num);
+    void go_to_step(unsigned long long step);
 };
 
 class OrigamiMovetypeFile {
   public:
-    OrigamiMovetypeFile(string filename);
+    OrigamiMovetypeFile(string& filename);
     vector<string> get_types();
     vector<string> get_labels();
     vector<double> get_freqs();
-    bool get_bool_option(int movetype_i, string key);
-    double get_double_option(int movetype_i, string key);
-    vector<double> get_double_vector_option(int movetype_i, string key);
-    string get_string_option(int movetype_i, string key);
-    int get_int_option(int movetype_i, string key);
+    bool get_bool_option(size_t movetype_i, const string& key);
+    double get_double_option(size_t movetype_i, const string& key);
+    vector<double> get_double_vector_option(size_t movetype_i, const string& key);
+    string get_string_option(size_t movetype_i, const string& key);
+    int get_int_option(size_t movetype_i, const string& key);
 
   private:
-    void read_file(string filename);
+    void read_file();
 
     string m_filename;
     Json::Value m_jsonmovetypes {};
@@ -94,11 +94,11 @@ class OrigamiLeveledInput {
     vector<vector<string>> get_tags_by_level();
     vector<vector<string>> get_labels_by_level();
 
-    double get_double_option(int i, int j, string key);
-    string get_string_option(int i, int j, string key);
-    int get_int_option(int i, int j, string key);
-    bool get_bool_option(int i, int j, string key);
-    vector<string> get_vector_string_option(int i, int j, string key);
+    double get_double_option(size_t i, size_t j, const string& key);
+    string get_string_option(size_t i, size_t j, const string& key);
+    int get_int_option(size_t i, size_t j, const string& key);
+    bool get_bool_option(size_t i, size_t j, const string& key);
+    vector<string> get_vector_string_option(size_t i, size_t j, const string& key);
 
   protected:
     string m_filename;
@@ -112,23 +112,23 @@ class OrigamiLeveledInput {
 
 class OrigamiOrderParamsFile: public OrigamiLeveledInput {
   public:
-    OrigamiOrderParamsFile(string filename);
+    OrigamiOrderParamsFile(string& filename);
 
   private:
-    void read_file(string filename);
+    void read_file();
 };
 
 class OrigamiBiasFunctionsFile: public OrigamiLeveledInput {
   public:
     // This repeats most of the code in the above class
     // Should try and take a more general approach to these json files
-    OrigamiBiasFunctionsFile(string filename);
+    OrigamiBiasFunctionsFile(const string& filename);
 
     vector<vector<vector<string>>> get_ops_by_level();
     vector<vector<vector<string>>> get_d_biases_by_level();
 
   private:
-    void read_file(string filename);
+    void read_file(const string& filename);
 
     vector<vector<vector<string>>> m_level_to_ops {};
     vector<vector<vector<string>>> m_level_to_d_biases {};
@@ -137,69 +137,69 @@ class OrigamiBiasFunctionsFile: public OrigamiLeveledInput {
 class OrigamiOutputFile {
   public:
     OrigamiOutputFile(
-            string filename,
-            int write_freq,
-            int max_num_staples,
+            const string& filename,
+            size_t write_freq,
+            size_t max_num_staples,
             OrigamiSystem& origami_system);
     virtual ~OrigamiOutputFile() {};
 
     void open_write_close();
-    virtual void write(long int step, double) = 0;
+    virtual void write(unsigned long long step, double) = 0;
 
-    const string m_filename;
-    const int m_write_freq;
+    const string& m_filename;
+    const size_t m_write_freq;
 
   protected:
     OrigamiSystem& m_origami_system;
     ofstream m_file;
-    int m_max_num_domains;
+    size_t m_max_num_domains;
 };
 
 class OrigamiVSFOutputFile: public OrigamiOutputFile {
     // Write a VSF file of the system
   public:
     using OrigamiOutputFile::OrigamiOutputFile;
-    void write(long int, double);
+    void write(unsigned long long, double);
 };
 
 class OrigamiTrajOutputFile: public OrigamiOutputFile {
     // Trajectory output file for simulation configurations
   public:
     using OrigamiOutputFile::OrigamiOutputFile;
-    void write(long int step, double);
+    void write(unsigned long long step, double);
 };
 
 class OrigamiVCFOutputFile: public OrigamiOutputFile {
     // Output file for simulation configurations compatible with VMD
   public:
     using OrigamiOutputFile::OrigamiOutputFile;
-    void write(long int step, double);
+    void write(unsigned long long step, double);
 };
 
 class OrigamiOrientationOutputFile: public OrigamiOutputFile {
     // Simple format for orientation vector output mainly for vmd viewing
   public:
     using OrigamiOutputFile::OrigamiOutputFile;
-    void write(long int step, double);
+    void write(unsigned long long step, double);
 };
 
 class OrigamiStateOutputFile: public OrigamiOutputFile {
     // Outputs binding state of each domain
   public:
     using OrigamiOutputFile::OrigamiOutputFile;
-    void write(long int step, double);
+    void write(unsigned long long step, double);
 };
 
 class OrigamiEnergiesOutputFile: public OrigamiOutputFile {
   public:
     OrigamiEnergiesOutputFile(
-            string filename,
-            int write_freq,
-            int max_num_staples,
+            const string& filename,
+            size_t write_freq,
+            size_t max_num_staples,
             OrigamiSystem& origami_system,
             SystemBiases& m_biases);
     using OrigamiOutputFile::OrigamiOutputFile;
-    void write(long int step, double);
+    void write(unsigned long long step, double);
 
   private:
     SystemBiases& m_biases;
@@ -208,42 +208,42 @@ class OrigamiEnergiesOutputFile: public OrigamiOutputFile {
 class OrigamiTimesOutputFile: public OrigamiOutputFile {
   public:
     OrigamiTimesOutputFile(
-            string filename,
-            int write_freq,
-            int max_num_staples,
+            const string& filename,
+            size_t write_freq,
+            size_t max_num_staples,
             OrigamiSystem& origami_system);
     using OrigamiOutputFile::OrigamiOutputFile;
-    void write(long int step, double time);
+    void write(unsigned long long step, double time);
 };
 
 class OrigamiCountsOutputFile: public OrigamiOutputFile {
   public:
     using OrigamiOutputFile::OrigamiOutputFile;
-    void write(long int step, double);
+    void write(unsigned long long step, double);
 };
 
 class OrigamiStaplesBoundOutputFile: public OrigamiOutputFile {
   public:
     using OrigamiOutputFile::OrigamiOutputFile;
-    void write(long int step, double);
+    void write(unsigned long long step, double);
 };
 
 class OrigamiStaplesFullyBoundOutputFile: public OrigamiOutputFile {
   public:
     using OrigamiOutputFile::OrigamiOutputFile;
-    void write(long int step, double);
+    void write(unsigned long long step, double);
 };
 
 class OrigamiOrderParamsOutputFile: public OrigamiOutputFile {
   public:
     OrigamiOrderParamsOutputFile(
-            string filename,
-            int write_freq,
-            int max_num_staples,
+            const string& filename,
+            size_t write_freq,
+            size_t max_num_staples,
             OrigamiSystem& origami_system,
             SystemOrderParams& ops,
             vector<string> op_tags);
-    void write(long int step, double);
+    void write(unsigned long long step, double);
 
   private:
     SystemOrderParams& m_ops;

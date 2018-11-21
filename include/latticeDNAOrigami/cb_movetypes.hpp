@@ -2,6 +2,7 @@
 #define CB_MOVETYPES_H
 
 #include <iostream>
+#include <memory>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -29,7 +30,7 @@ using std::string;
 using std::unordered_map;
 using std::vector;
 
-using domainContainer::Domain;
+using domain::Domain;
 using files::OrigamiInputFile;
 using files::OrigamiOutputFile;
 using idealRandomWalk::IdealRandomWalks;
@@ -55,8 +56,8 @@ class CBMCMovetype: virtual public RegrowthMCMovetype {
             OrigamiSystem& origami_system,
             RandomGens& random_gens,
             IdealRandomWalks& ideal_random_walks,
-            vector<OrigamiOutputFile*> config_files,
-            string label,
+            vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+            string& label,
             SystemOrderParams& ops,
             SystemBiases& biases,
             InputParameters& params);
@@ -71,9 +72,9 @@ class CBMCMovetype: virtual public RegrowthMCMovetype {
 
     /** Calculate the CB trial weights and rosenbluth-type weight */
     virtual vector<double> calc_bias(
-            const vector<double> bfactors, // Boltzman weights
+            const vector<double>& bfactors, // Boltzman weights
             const configsT& configs, // Configs
-            Domain* domain) = 0; // Domain being regrown
+            Domain& domain) = 0; // Domain being regrown
 
     /** Calculate the Boltzmann weights for all configurations
      *
@@ -96,8 +97,8 @@ class CBMCMovetype: virtual public RegrowthMCMovetype {
 
     /** Select and set configuration from given configs and weights */
     void select_and_set_new_config(
-            const vector<double> weights, // Weights
-            const configsT configs, // Config
+            const vector<double>& weights, // Weights
+            const configsT& configs, // Config
             Domain& domain); // Domain being regrown
 
     /** Set configuration to old */
@@ -119,6 +120,7 @@ class CBMCMovetype: virtual public RegrowthMCMovetype {
 
     /** Unassign all given domains and store old configurations */
     double unassign_domains(vector<Domain*>);
+    double unassign_domains(vector<Domain>&);
 
     /** Prepare interals for regrowing old configuration */
     void setup_for_regrow_old();
@@ -126,8 +128,8 @@ class CBMCMovetype: virtual public RegrowthMCMovetype {
     /** Update the external bias without adding */
     void update_external_bias();
 
-    long double m_bias {1}; // Rosenbluth-type weight
-    long double m_new_bias {1}; // Storage for new config's Rosenbluth
+    double m_bias {1}; // Rosenbluth-type weight
+    double m_new_bias {1}; // Storage for new config's Rosenbluth
     double m_new_modifier {1}; // Storage for new config's modifier
     bool m_regrow_old {false}; // Regrowing old configuration
 };
@@ -140,8 +142,8 @@ class CBStapleRegrowthMCMovetype: public CBMCMovetype {
             OrigamiSystem& origami_system,
             RandomGens& random_gens,
             IdealRandomWalks& ideal_random_walks,
-            vector<OrigamiOutputFile*> config_files,
-            string label,
+            vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+            string& label,
             SystemOrderParams& ops,
             SystemBiases& biases,
             InputParameters& params);
@@ -149,7 +151,7 @@ class CBStapleRegrowthMCMovetype: public CBMCMovetype {
     CBStapleRegrowthMCMovetype& operator=(const CBStapleRegrowthMCMovetype&) =
             delete;
 
-    void write_log_summary(ostream* log_entry) override;
+    void write_log_summary(ostream& log_stream) override;
 
   private:
     bool internal_attempt_move() override;
@@ -160,14 +162,14 @@ class CBStapleRegrowthMCMovetype: public CBMCMovetype {
 
     /** Calculate the CB trial weights and rosenbluth-type weight */
     vector<double> calc_bias(
-            const vector<double> bfactors, // Boltzman weights
+            const vector<double>& bfactors, // Boltzman weights
             const configsT& configs, // Configs
-            Domain* domain) override; // Domain being regrown
+            Domain& domain) override; // Domain being regrown
 
     /** Set given growthpoint and grow staple */
     void set_growthpoint_and_grow_staple(
             domainPairT growthpoint,
-            vector<Domain*> selected_chain);
+            vector<Domain>& selected_chain);
 
     StapleRegrowthTracking m_tracker {};
     unordered_map<StapleRegrowthTracking, MovetypeTracking> m_tracking {};
@@ -183,13 +185,13 @@ class CTCBRegrowthMCMovetype:
             OrigamiSystem& origami_system,
             RandomGens& random_gens,
             IdealRandomWalks& ideal_random_walks,
-            vector<OrigamiOutputFile*> config_files,
-            string label,
+            vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+            string& label,
             SystemOrderParams& ops,
             SystemBiases& biases,
             InputParameters& params,
-            int num_excluded_staples,
-            int max_regrowth);
+            size_t num_excluded_staples,
+            size_t max_regrowth);
     CTCBRegrowthMCMovetype(const CTCBRegrowthMCMovetype&) = delete;
     CTCBRegrowthMCMovetype& operator=(const CTCBRegrowthMCMovetype&) = delete;
 
@@ -201,12 +203,12 @@ class CTCBRegrowthMCMovetype:
 
     /** Calculate the CB trial weights and rosenbluth-type weight */
     vector<double> calc_bias(
-            const vector<double> bfactors, // Boltzman weights
+            const vector<double>& bfactors, // Boltzman weights
             const configsT& configs, // Configs
-            Domain* domain) override; // Domain being regrown
+            Domain& domain) override; // Domain being regrown
 
     /** Grow given staple and update fixed-end biases */
-    void grow_staple_and_update_endpoints(Domain* growth_domain_old);
+    void grow_staple_and_update_endpoints(Domain* growth_d_old);
 };
 
 /** CTCB regrowth of a contiguous scaffold segment and bound staples */
@@ -217,19 +219,19 @@ class CTCBScaffoldRegrowthMCMovetype: public CTCBRegrowthMCMovetype {
             OrigamiSystem& origami_system,
             RandomGens& random_gens,
             IdealRandomWalks& ideal_random_walks,
-            vector<OrigamiOutputFile*> config_files,
-            string label,
+            vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+            string& label,
             SystemOrderParams& ops,
             SystemBiases& biases,
             InputParameters& params,
-            int num_excluded_staples,
-            int max_regrowth);
+            size_t num_excluded_staples,
+            size_t max_regrowth);
     CTCBScaffoldRegrowthMCMovetype(const CTCBScaffoldRegrowthMCMovetype&) =
             delete;
     CTCBScaffoldRegrowthMCMovetype& operator=(
             const CTCBScaffoldRegrowthMCMovetype&) = delete;
 
-    void write_log_summary(ostream* log_entry) override;
+    void write_log_summary(ostream& log_stream) override;
 
   private:
     bool internal_attempt_move() override;
@@ -247,26 +249,26 @@ class CTCBJumpScaffoldRegrowthMCMovetype: public CTCBRegrowthMCMovetype {
             OrigamiSystem& origami_system,
             RandomGens& random_gens,
             IdealRandomWalks& ideal_random_walks,
-            vector<OrigamiOutputFile*> config_files,
-            string label,
+            vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+            string& label,
             SystemOrderParams& ops,
             SystemBiases& biases,
             InputParameters& params,
-            int num_excluded_staples,
-            int max_regrowth,
-            int max_seg_regrowth);
+            size_t num_excluded_staples,
+            size_t max_regrowth,
+            size_t max_seg_regrowth);
     CTCBJumpScaffoldRegrowthMCMovetype(const CTCBScaffoldRegrowthMCMovetype&) =
             delete;
     CTCBJumpScaffoldRegrowthMCMovetype& operator=(
             const CTCBScaffoldRegrowthMCMovetype&) = delete;
 
-    void write_log_summary(ostream* log_entry) override;
+    void write_log_summary(ostream& log_stream) override;
 
   private:
     bool internal_attempt_move() override;
     virtual void add_tracker(bool accepted) override;
 
-    void set_first_seg_domain(Domain* seg);
+    void set_first_seg_domain(Domain* d_new);
 
     CTCBScaffoldRegrowthTracking m_tracker {};
     unordered_map<CTCBScaffoldRegrowthTracking, MovetypeTracking> m_tracking {};

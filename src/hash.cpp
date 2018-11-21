@@ -1,5 +1,3 @@
-// hash.cpp
-
 #include "hash.hpp"
 
 namespace std {

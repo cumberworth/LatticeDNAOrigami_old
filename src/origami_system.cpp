@@ -1,5 +1,3 @@
-// origami_system.cpp
-
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -12,16 +10,14 @@
 
 namespace origami {
 
-using std::abs;
 using std::cout;
 using std::max_element;
 
 using biasFunctions::SystemBiases;
-using domainContainer::SixteenDomain;
+using domain::Domain;
 using files::OrigamiInputFile;
 using files::OrigamiTrajInputFile;
 using orderParams::SystemOrderParams;
-using utility::NotImplemented;
 using utility::OrigamiMisuse;
 
 bool Chain::operator==(Chain chain_2) {
@@ -29,18 +25,13 @@ bool Chain::operator==(Chain chain_2) {
     bool identity_match {this->identity == chain_2.index};
     bool positions_match {this->positions == chain_2.positions};
     bool orientations_match {this->orientations == chain_2.orientations};
-    if (index_match and identity_match and positions_match and
-        orientations_match) {
-        return true;
-    }
-    else {
-        return false;
-    }
+    return (index_match and identity_match and positions_match and
+        orientations_match);
 }
 
 OrigamiSystem::OrigamiSystem(
-        const vector<vector<int>>& identities,
-        const vector<vector<string>>& sequences,
+        vector<vector<int>>& identities,
+        vector<vector<string>>& sequences,
         const Chains& chains,
         bool cyclic,
         double volume,
@@ -65,51 +56,43 @@ OrigamiSystem::OrigamiSystem(
     m_biases = std::make_unique<SystemBiases>(*this, *m_ops, params);
 }
 
-OrigamiSystem::~OrigamiSystem() {
-    for (auto chain: m_domains) {
-        for (auto domain: chain) {
-            delete domain;
-        }
-    }
-}
+vector<vector<Domain>>& OrigamiSystem::get_chains() { return m_domains; }
 
-vector<vector<Domain*>> OrigamiSystem::get_chains() { return m_domains; }
+vector<Domain>& OrigamiSystem::get_last_chain() { return m_domains.back(); }
 
-vector<Domain*> OrigamiSystem::get_last_chain() { return m_domains.back(); }
+size_t OrigamiSystem::num_staples() const { return m_num_staples; }
 
-int OrigamiSystem::num_staples() const { return m_num_staples; }
+size_t OrigamiSystem::num_domains() { return m_num_domains; }
 
-int OrigamiSystem::num_domains() { return m_num_domains; }
-
-int OrigamiSystem::num_bound_domain_pairs() const {
+size_t OrigamiSystem::num_bound_domain_pairs() const {
     return m_num_bound_domain_pairs;
 }
 
-int OrigamiSystem::num_fully_bound_domain_pairs() const {
+size_t OrigamiSystem::num_fully_bound_domain_pairs() const {
     return m_num_fully_bound_domain_pairs;
 }
 
-int OrigamiSystem::num_self_bound_domain_pairs() const {
+size_t OrigamiSystem::num_self_bound_domain_pairs() const {
     return m_num_self_bound_domain_pairs;
 }
 
-int OrigamiSystem::num_misbound_domain_pairs() const {
+size_t OrigamiSystem::num_misbound_domain_pairs() const {
     return num_bound_domain_pairs() - num_fully_bound_domain_pairs();
 }
 
-int OrigamiSystem::num_stacked_domain_pairs() const {
+size_t OrigamiSystem::num_stacked_domain_pairs() const {
     return m_num_stacked_domain_pairs;
 }
 
-int OrigamiSystem::num_linear_helix_trips() const {
+size_t OrigamiSystem::num_linear_helix_trips() const {
     return m_num_linear_helix_trips;
 }
 
-int OrigamiSystem::num_stacked_junct_quads() const {
+size_t OrigamiSystem::num_stacked_junct_quads() const {
     return m_num_stacked_junct_quads;
 }
 
-int OrigamiSystem::num_staples_of_ident(int staple_ident) const {
+size_t OrigamiSystem::num_staples_of_ident(int staple_ident) const {
     return m_identity_to_index[staple_ident].size();
 }
 
@@ -122,8 +105,8 @@ vector<int> OrigamiSystem::complementary_scaffold_domains(
     return m_staple_ident_to_scaffold_ds[staple_ident];
 }
 
-Domain* OrigamiSystem::unbound_domain_at(VectorThree pos) const {
-    return m_pos_to_unbound_d.at(pos);
+Domain& OrigamiSystem::unbound_domain_at(VectorThree pos) const {
+    return *m_pos_to_unbound_d.at(pos);
 }
 
 bool OrigamiSystem::check_domains_complementary(Domain& cd_i, Domain& cd_j) {
@@ -136,30 +119,30 @@ SystemOrderParams& OrigamiSystem::get_system_order_params() { return *m_ops; }
 
 SystemBiases& OrigamiSystem::get_system_biases() { return *m_biases; }
 
-vector<Domain*> OrigamiSystem::get_chain(int c_i) {
-    int c_i_index {utility::index(m_chain_indices, c_i)};
+vector<Domain>& OrigamiSystem::get_chain(int c_i) {
+    size_t c_i_index {utility::index(m_chain_indices, c_i)};
     return m_domains[c_i_index];
 }
 
-Domain* OrigamiSystem::get_domain(int c_i, int d_i) {
+Domain& OrigamiSystem::get_domain(int c_i, int d_i) {
     return get_chain(c_i)[d_i];
 }
 
 vector<int> OrigamiSystem::get_staple_counts() {
     vector<int> staple_counts(m_identities.size() - 1, 0);
-    for (size_t c_i {1}; c_i != m_domains.size(); c_i++) {
-        int c_ident {m_domains[c_i][0]->m_c_ident};
-        staple_counts[c_ident - 1]++;
+    for (size_t c_i {1}; c_i != m_domains.size(); ++c_i) {
+        int c_ident {m_domains[c_i][0].m_c_ident};
+        ++staple_counts[c_ident - 1];
     }
 
     return staple_counts;
 }
 
-int OrigamiSystem::num_unique_staples() const {
+size_t OrigamiSystem::num_unique_staples() const {
     int unique_staple_count {0};
-    for (auto indices: m_identity_to_index) {
-        if (indices.size() > 0) {
-            unique_staple_count++;
+    for (const auto& indices: m_identity_to_index) {
+        if (not indices.empty()) {
+            ++unique_staple_count;
         }
     }
 
@@ -170,14 +153,14 @@ int OrigamiSystem::num_unique_staples() const {
 Chains OrigamiSystem::chains() const {
     // Return chains data structure for current config
     Chains chains;
-    for (size_t i {0}; i != m_domains.size(); i++) {
+    for (size_t i {0}; i != m_domains.size(); ++i) {
         int c_i_ident {m_chain_identities.at(i)};
         int c_i {m_chain_indices.at(i)};
         vector<VectorThree> positions;
         vector<VectorThree> orientations;
-        for (auto domain: m_domains[i]) {
-            positions.push_back(domain->m_pos);
-            orientations.push_back(domain->m_ore);
+        for (const auto& domain: m_domains[i]) {
+            positions.push_back(domain.m_pos);
+            orientations.push_back(domain.m_ore);
         }
         Chain chain {c_i, c_i_ident, positions, orientations};
         chains.push_back(chain);
@@ -200,20 +183,20 @@ void OrigamiSystem::update_enthalpy_and_entropy() {
     m_hyb_enthalpy = 0;
     m_hyb_entropy = 0;
     set<Domain*> accounted_domains; // Domains whose energy is already counted
-    for (auto chain: m_domains) {
-        for (auto domain: chain) {
-            Occupancy state {domain->m_state};
+    for (const auto& chain: m_domains) {
+        for (const auto& domain: chain) {
+            Occupancy state {domain.m_state};
             if (state == Occupancy::bound or state == Occupancy::misbound) {
                 if (find(accounted_domains.begin(),
                          accounted_domains.end(),
-                         domain) == accounted_domains.end()) {
-                    Domain& bound_domain {*domain->m_bound_domain};
+                         &domain) == accounted_domains.end()) {
+                    Domain& bound_domain {*domain.m_bound_domain};
 
                     m_hyb_enthalpy +=
-                            m_pot.hybridization_enthalpy(*domain, bound_domain);
+                            m_pot.hybridization_enthalpy(domain, bound_domain);
                     m_hyb_entropy +=
-                            m_pot.hybridization_entropy(*domain, bound_domain);
-                    accounted_domains.insert(domain->m_bound_domain);
+                            m_pot.hybridization_entropy(domain, bound_domain);
+                    accounted_domains.insert(domain.m_bound_domain);
                 }
             }
         }
@@ -228,12 +211,7 @@ double OrigamiSystem::hybridization_entropy() { return m_hyb_entropy; }
 double OrigamiSystem::stacking_energy() { return m_stacking_energy; }
 
 bool OrigamiSystem::configuration_fully_set() {
-    if (m_num_unassigned_domains == 0) {
-        return true;
-    }
-    else {
-        return false;
-    }
+    return m_num_unassigned_domains == 0;
 }
 
 int OrigamiSystem::num_unassigned_domains() { return m_num_unassigned_domains; }
@@ -242,23 +220,22 @@ void OrigamiSystem::check_all_constraints() {
 
     // Unassign everything (and check nothing was already unassigned)
     if (m_num_unassigned_domains != 0) {
+        cout << "Not all domains assigned.\n";
         throw OrigamiMisuse {};
     }
-    for (auto chain: m_domains) {
-        for (auto domain: chain) {
-            if (domain->m_state == Occupancy::unassigned) {
-                cout << "Domain unassigned after move complete\n";
+    for (auto& chain: m_domains) {
+        for (auto& domain: chain) {
+            if (domain.m_state == Occupancy::unassigned) {
+                cout << "Domain unassigned after move complete.\n";
                 throw OrigamiMisuse {};
             }
-            else {
-                unassign_domain(*domain);
-            }
+            unassign_domain(domain);
         }
     }
 
     // Check that number of stacked pairs is consistent
     if (m_num_stacked_domain_pairs != 0) {
-        cout << "Stack count inconsistency\n";
+        cout << "Stack count inconsistency.\n";
         cout << m_num_stacked_domain_pairs << "\n";
         set_all_domains();
         throw OrigamiMisuse {};
@@ -267,31 +244,35 @@ void OrigamiSystem::check_all_constraints() {
     // Check that energy has returned to 0 (eps is totally arbitrary)
     double eps {0.000001};
     if (m_energy < -eps or m_energy > eps) {
-        cout << "Inconsistency in system energy\n";
+        cout << "Inconsistency in system energy.\n";
         cout << m_energy << "\n";
         set_all_domains();
         throw OrigamiMisuse {};
     }
-    else {
 
-        // Prevent rounding errors from building up
-        m_energy = 0;
-    }
+    // Prevent rounding errors from building up
+    m_energy = 0;
 
     // Reset configuration
-    set_all_domains();
+    try {
+        set_all_domains();
+    }
+    catch (OrigamiMisuse&) {
+        cout << "Problem when setting domains again.\n";
+        throw;
+    }
 }
 
-void OrigamiSystem::set_config(Chains chains) {
+void OrigamiSystem::set_config(const Chains& chains) {
 
     // Unassign and delete everything but scaffold
-    for (auto chain: m_domains) {
-        for (auto domain: chain) {
-            unassign_domain(*domain);
+    for (auto& chain: m_domains) {
+        for (auto& domain: chain) {
+            unassign_domain(domain);
         }
     }
-    for (int i {static_cast<int>(m_domains.size() - 1)}; i != 0; i--) {
-        delete_chain(m_domains[i][0]->m_c);
+    for (int i {static_cast<int>(m_domains.size() - 1)}; i != 0; --i) {
+        delete_chain(m_domains[i][0].m_c);
     }
 
     initialize_staples(chains);
@@ -311,18 +292,16 @@ double OrigamiSystem::check_domain_constraints(
 }
 
 void OrigamiSystem::check_distance_constraints() {
-    for (auto chain: m_domains) {
-        for (auto domain: chain) {
-            Domain* next_domain {*domain + 1};
-            if (next_domain == nullptr) {
+    for (auto& chain: m_domains) {
+        for (auto& domain: chain) {
+            if (not domain.next_domain_exists()) {
                 continue;
             }
-            else {
-                VectorThree dist {next_domain->m_pos - domain->m_pos};
-                if (dist.abssum() != 1) {
-                    cout << "Contiguous domains not on adjacent sites\n";
-                    throw OrigamiMisuse {};
-                }
+            Domain& next_domain {domain.get_next_domain()};
+            VectorThree dist {next_domain.m_pos - domain.m_pos};
+            if (dist.abssum() != 1) {
+                cout << "Contiguous domains not on adjacent sites\n";
+                throw OrigamiMisuse {};
             }
         }
     }
@@ -334,7 +313,7 @@ double OrigamiSystem::unassign_domain(Domain& cd_i) {
     m_num_stacked_domain_pairs += (delta_config.stacked_pairs / 2);
     m_num_linear_helix_trips += delta_config.linear_helices;
     m_num_stacked_junct_quads += delta_config.stacked_juncts;
-    m_num_unassigned_domains++;
+    ++m_num_unassigned_domains;
 
     return delta_config.e;
 }
@@ -352,35 +331,27 @@ int OrigamiSystem::add_chain(int c_i_ident, int c_i) {
     m_chain_identities.push_back(c_i_ident);
 
     int chain_length {static_cast<int>(m_identities[c_i_ident].size())};
-    m_domains.push_back({});
-    m_num_staples++;
+    m_domains.emplace_back();
+    m_domains.back().reserve(chain_length);
+    ++m_num_staples;
     Domain* prev_domain {nullptr};
-    for (int d_i {0}; d_i != chain_length; d_i++) {
+    for (int d_i {0}; d_i != chain_length; ++d_i) {
         int d_i_ident {m_identities[c_i_ident][d_i]};
-        Domain* domain;
-        // Assume that all domains are 16
-        //            size_t domain_size {m_sequences[c_i_ident][d_i].size()};
-        //            if (domain_size == 16 or domain_size == 15) {
-        domain = new SixteenDomain {
-                c_i, c_i_ident, d_i, d_i_ident, chain_length};
-        //            }
-        //           else {
-        //              throw NotImplemented {};
-        //         }
+        m_domains.back().emplace_back(c_i, c_i_ident, d_i, d_i_ident, chain_length);
+        Domain& domain {m_domains.back().back()};
 
         // Set forward and backwards domains
         if (prev_domain != nullptr) {
-            prev_domain->m_forward_domain = domain;
+            prev_domain->m_next_domain = &domain;
         }
 
-        domain->m_backward_domain = prev_domain;
-        domain->m_forward_domain = nullptr;
+        domain.m_prev_domain = prev_domain;
+        domain.m_next_domain = nullptr;
 
-        m_domains.back().push_back(domain);
-        prev_domain = domain;
+        prev_domain = &domain;
 
-        m_num_domains++;
-        m_num_unassigned_domains++;
+        ++m_num_domains;
+        ++m_num_unassigned_domains;
     }
 
     return c_i;
@@ -389,27 +360,25 @@ int OrigamiSystem::add_chain(int c_i_ident, int c_i) {
 void OrigamiSystem::delete_chain(int c_i) {
     // Delete chain c_i_
 
-    int c_i_index {utility::index(m_chain_indices, c_i)};
+    size_t c_i_index {utility::index(m_chain_indices, c_i)};
     int c_i_ident {m_chain_identities[c_i_index]};
 
     // Index in m_identity_to_index of given index and type
-    int j {utility::index(m_identity_to_index[c_i_ident], c_i)};
+    size_t j {utility::index(m_identity_to_index[c_i_ident], c_i)};
     m_identity_to_index[c_i_ident].erase(
             m_identity_to_index[c_i_ident].begin() + j);
     m_chain_indices.erase(m_chain_indices.begin() + c_i_index);
     m_chain_identities.erase(m_chain_identities.begin() + c_i_index);
-    m_num_domains -= m_domains[c_i_index].size();
-    m_num_staples--;
-    for (auto domain: m_domains[c_i_index]) {
-        delete domain;
-        m_num_unassigned_domains--;
-    }
+    auto chain_length {m_domains[c_i_index].size()};
+    m_num_domains -= chain_length;
+    --m_num_staples;
+    m_num_unassigned_domains -= chain_length;
     m_domains.erase(m_domains.begin() + c_i_index);
 }
 
-void OrigamiSystem::temp_reduce_staples_by_one() { m_num_staples--; }
+void OrigamiSystem::temp_reduce_staples_by_one() { --m_num_staples; }
 
-void OrigamiSystem::undo_reduce_staples_by_one() { m_num_staples++; }
+void OrigamiSystem::undo_reduce_staples_by_one() { ++m_num_staples; }
 
 double OrigamiSystem::set_checked_domain_config(
         Domain& cd_i,
@@ -433,7 +402,7 @@ double OrigamiSystem::set_checked_domain_config(
         m_num_stacked_junct_quads += delta_config.stacked_juncts;
     }
     m_energy += delta_e;
-    m_num_unassigned_domains--;
+    --m_num_unassigned_domains;
     return delta_e;
 }
 
@@ -457,7 +426,7 @@ double OrigamiSystem::set_domain_config(
         m_num_stacked_domain_pairs += (delta_config.stacked_pairs / 2);
         m_num_linear_helix_trips += delta_config.linear_helices;
         m_num_stacked_junct_quads += delta_config.stacked_juncts;
-        m_num_unassigned_domains--;
+        --m_num_unassigned_domains;
     }
     return delta_config.e;
 }
@@ -478,14 +447,14 @@ void OrigamiSystem::center(int centering_domain) {
     // The maps that go from a position to something need to be reset
     unordered_map<VectorThree, Domain*> pos_to_unbound_d {};
     unordered_map<VectorThree, Occupancy> position_occupancies {};
-    VectorThree refpos {m_domains[0][centering_domain]->m_pos};
-    for (auto chain: m_domains) {
-        for (auto domain: chain) {
-            VectorThree new_pos {domain->m_pos - refpos};
-            pos_to_unbound_d[new_pos] = m_pos_to_unbound_d[domain->m_pos];
+    VectorThree refpos {m_domains[0][centering_domain].m_pos};
+    for (auto& chain: m_domains) {
+        for (auto& domain: chain) {
+            VectorThree new_pos {domain.m_pos - refpos};
+            pos_to_unbound_d[new_pos] = m_pos_to_unbound_d[domain.m_pos];
             position_occupancies[new_pos] =
-                    m_position_occupancies[domain->m_pos];
-            domain->m_pos = new_pos;
+                    m_position_occupancies[domain.m_pos];
+            domain.m_pos = new_pos;
         }
     }
     m_pos_to_unbound_d = pos_to_unbound_d;
@@ -494,12 +463,12 @@ void OrigamiSystem::center(int centering_domain) {
 
 void OrigamiSystem::set_all_domains() {
     // Use current positions and orientations
-    for (auto chain: m_domains) {
-        for (auto domain: chain) {
-            set_domain_config(*domain, domain->m_pos, domain->m_ore);
+    for (auto& chain: m_domains) {
+        for (auto& domain: chain) {
+            set_domain_config(domain, domain.m_pos, domain.m_ore);
             if (m_constraints_violated) {
                 cout << "Constaints in violation after move complete\n";
-                set_domain_config(*domain, domain->m_pos, domain->m_ore);
+                set_domain_config(domain, domain.m_pos, domain.m_ore);
                 throw OrigamiMisuse {};
             }
         }
@@ -511,25 +480,25 @@ void OrigamiSystem::set_all_domains(Chains config) {
     // Use given positions and orientations
 
     // Set position and orientation of domains
-    for (size_t i {0}; i != config.size(); i++) {
+    for (size_t i {0}; i != config.size(); ++i) {
         Chain chain {config[i]};
         int num_domains {static_cast<int>(m_domains[i].size())};
-        for (int d_i {0}; d_i != num_domains; d_i++) {
-            Domain* domain {m_domains[i][d_i]};
+        for (int d_i {0}; d_i != num_domains; ++d_i) {
+            Domain& domain {m_domains[i][d_i]};
             VectorThree pos = chain.positions[d_i];
             VectorThree ore = chain.orientations[d_i];
-            domain->m_pos = pos;
-            domain->m_ore = ore;
+            domain.m_pos = pos;
+            domain.m_ore = ore;
         }
     }
 
     // Set all domains and check all constraints
-    for (auto chain: m_domains) {
-        for (auto domain: chain) {
-            set_domain_config(*domain, domain->m_pos, domain->m_ore);
+    for (auto& chain: m_domains) {
+        for (auto& domain: chain) {
+            set_domain_config(domain, domain.m_pos, domain.m_ore);
             if (m_constraints_violated) {
                 cout << "Constaints in violation after move complete\n";
-                set_domain_config(*domain, domain->m_pos, domain->m_ore);
+                set_domain_config(domain, domain.m_pos, domain.m_ore);
                 throw OrigamiMisuse {};
             }
         }
@@ -559,10 +528,10 @@ void OrigamiSystem::update_staple_u(double u) {
 void OrigamiSystem::initialize_complementary_associations() {
     // Intialize staple identity to complementary scaffold domains container
     // Staple identities are 1 indexed (scaffold is 0)
-    m_staple_ident_to_scaffold_ds.push_back({});
-    m_identity_to_index.push_back({});
+    m_staple_ident_to_scaffold_ds.emplace_back();
+    m_identity_to_index.emplace_back();
     for (unsigned int i {1}; i != m_identities.size(); ++i) {
-        m_identity_to_index.push_back({});
+        m_identity_to_index.emplace_back();
         vector<int> staple {m_identities[i]};
         vector<int> scaffold_d_is {};
         for (auto staple_d_i: staple) {
@@ -576,7 +545,7 @@ void OrigamiSystem::initialize_complementary_associations() {
                 scaffold_d_is.push_back(0);
             }
             else {
-                int scaffold_d_i {
+                size_t scaffold_d_i {
                         utility::index(m_identities[c_scaffold], -staple_d_i)};
                 scaffold_d_is.push_back(scaffold_d_i);
             }
@@ -588,7 +557,7 @@ void OrigamiSystem::initialize_complementary_associations() {
 void OrigamiSystem::initialize_staples(Chains chains) {
 
     // Create domain objects
-    for (size_t i {1}; i != chains.size(); i++) {
+    for (size_t i {1}; i != chains.size(); ++i) {
         Chain chain {chains[i]};
         int c_i {chain.index};
         int c_i_ident {chain.identity};
@@ -604,14 +573,14 @@ void OrigamiSystem::initialize_scaffold(Chain scaffold_chain) {
     int c_i {scaffold_chain.index};
     int c_i_ident {scaffold_chain.identity};
     add_chain(c_i_ident, c_i);
-    m_num_staples--;
+    --m_num_staples;
 
     // Make scaffold chain domains modular if cyclic
     if (m_cyclic) {
-        Domain* first_domain {m_domains[c_i][0]};
-        Domain* last_domain {m_domains[c_i].back()};
-        last_domain->m_forward_domain = first_domain;
-        first_domain->m_backward_domain = last_domain;
+        Domain& first_domain {m_domains[c_i][0]};
+        Domain& last_domain {m_domains[c_i].back()};
+        last_domain.m_next_domain = &first_domain;
+        first_domain.m_prev_domain = &last_domain;
     }
 }
 
@@ -643,7 +612,7 @@ DeltaConfig OrigamiSystem::internal_unassign_domain(Domain& cd_i) {
     case Occupancy::unassigned:
 
         // Allows for double unassignment
-        m_num_unassigned_domains--;
+        --m_num_unassigned_domains;
         break;
     }
     return delta_config;
@@ -684,14 +653,14 @@ void OrigamiSystem::update_occupancies(Domain& cd_i, VectorThree pos) {
 
     switch (occupancy) {
     case Occupancy::unbound: {
-        Domain* cd_j {unbound_domain_at(pos)};
+        Domain& cd_j {unbound_domain_at(pos)};
         m_num_bound_domain_pairs += 1;
-        if (cd_i.m_d_ident == -cd_j->m_d_ident) {
+        if (cd_i.m_d_ident == -cd_j.m_d_ident) {
             new_state = Occupancy::bound;
             m_num_fully_bound_domain_pairs += 1;
         }
         else {
-            if (cd_i.m_c == cd_j->m_c) {
+            if (cd_i.m_c == cd_j.m_c) {
                 m_num_self_bound_domain_pairs += 1;
             }
             new_state = Occupancy::misbound;
@@ -699,10 +668,10 @@ void OrigamiSystem::update_occupancies(Domain& cd_i, VectorThree pos) {
 
         m_pos_to_unbound_d.erase(pos);
         cd_i.m_state = new_state;
-        cd_j->m_state = new_state;
+        cd_j.m_state = new_state;
         m_position_occupancies[pos] = new_state;
-        cd_j->m_bound_domain = &cd_i;
-        cd_i.m_bound_domain = cd_j;
+        cd_j.m_bound_domain = &cd_i;
+        cd_i.m_bound_domain = &cd_j;
         break;
     }
     case Occupancy::unassigned:
@@ -719,9 +688,9 @@ void OrigamiSystem::update_occupancies(Domain& cd_i, VectorThree pos) {
 
 void OrigamiSystem::update_energy() {
     // Recalculate total system energy with new energy tables
-    for (auto chain: m_domains) {
-        for (auto domain: chain) {
-            unassign_domain(*domain);
+    for (auto& chain: m_domains) {
+        for (auto& domain: chain) {
+            unassign_domain(domain);
         }
     }
     m_energy = 0;
@@ -740,11 +709,11 @@ DeltaConfig OrigamiSystem::internal_check_domain_constraints(
     switch (occupancy) {
     case Occupancy::bound:
         m_constraints_violated = true;
-        m_num_unassigned_domains++;
+        ++m_num_unassigned_domains;
         break;
     case Occupancy::misbound:
         m_constraints_violated = true;
-        m_num_unassigned_domains++;
+        ++m_num_unassigned_domains;
         break;
     case Occupancy::unbound:
         update_domain(cd_i, pos, ore);
@@ -758,96 +727,6 @@ DeltaConfig OrigamiSystem::internal_check_domain_constraints(
     }
     return delta_config;
 }
-
-OrigamiSystemWithBias::OrigamiSystemWithBias(
-        const vector<vector<int>>& identities,
-        const vector<vector<string>>& sequences,
-        const Chains& chains,
-        bool cyclic,
-        double volume,
-        double staple_u,
-        InputParameters& params):
-        OrigamiSystem(
-                identities,
-                sequences,
-                chains,
-                cyclic,
-                volume,
-                staple_u,
-                params) {}
-
-double OrigamiSystemWithBias::check_domain_constraints(
-        Domain& cd_i,
-        VectorThree pos,
-        VectorThree ore) {
-
-    double delta_e {OrigamiSystem::check_domain_constraints(cd_i, pos, ore)};
-
-    // Determine what state would be if bound
-    Occupancy state;
-    Occupancy pos_state {position_occupancy(pos)};
-    if (pos_state == Occupancy::unassigned) {
-        state = Occupancy::unbound;
-    }
-    else if (pos_state == Occupancy::unbound) {
-        if (m_pot.check_domains_complementary(*unbound_domain_at(pos), cd_i)) {
-            state = Occupancy::bound;
-        }
-        else {
-            state = Occupancy::misbound;
-        }
-    }
-    else {
-        state = Occupancy::unassigned;
-    }
-
-    m_ops->check_one_domain(cd_i, pos, ore, state);
-    delta_e += m_biases->check_one_domain(cd_i);
-
-    return delta_e;
-}
-
-void OrigamiSystemWithBias::delete_chain(int c_i) {
-    OrigamiSystem::delete_chain(c_i);
-    // Potentially update ops here
-}
-
-double OrigamiSystemWithBias::unassign_domain(Domain& cd_i) {
-    double delta_e {OrigamiSystem::unassign_domain(cd_i)};
-    m_ops->update_one_domain(cd_i);
-    delta_e += m_biases->calc_one_domain(cd_i);
-
-    return delta_e;
-}
-
-double OrigamiSystemWithBias::set_checked_domain_config(
-        Domain& cd_i,
-        VectorThree pos,
-        VectorThree ore) {
-    double delta_e {OrigamiSystem::set_checked_domain_config(cd_i, pos, ore)};
-
-    // If you change this to somehow use the checked value, lot's to check
-    m_ops->update_one_domain(cd_i);
-    delta_e += m_biases->calc_one_domain(cd_i);
-
-    return delta_e;
-}
-
-double OrigamiSystemWithBias::set_domain_config(
-        Domain& cd_i,
-        VectorThree pos,
-        VectorThree ore) {
-    double delta_e {OrigamiSystem::set_domain_config(cd_i, pos, ore)};
-    delta_e += m_biases->calc_one_domain(cd_i);
-
-    return delta_e;
-}
-
-// void set_domain_orientation(Domain& cd_i, VectorThree ore) {
-//    delta_e {OrigamiSystem::set_domain_config(cd_i, pos, ore)};
-//    m_ops->update_one_domain(cd_i);
-//    delta_e += m_biases->calc_one_domain(cd_i);
-//}
 
 double molarity_to_lattice_volume(double molarity) {
     // Volume is in units of number of lattice sites.
@@ -869,14 +748,14 @@ double chempot_to_volume(double chempot, double temp) {
     return exp(-chempot / temp);
 }
 
-OrigamiSystem* setup_origami(InputParameters& params) {
+OrigamiSystem setup_origami(InputParameters& params) {
 
     OrigamiInputFile origami_input {params.m_origami_input_filename};
     vector<vector<int>> identities {origami_input.get_identities()};
     vector<vector<string>> sequences {origami_input.get_sequences()};
     vector<Chain> configs = origami_input.get_config();
     bool cyclic {origami_input.is_cyclic()};
-    if (params.m_restart_traj_file != "") {
+    if (not params.m_restart_traj_file.empty()) {
         OrigamiTrajInputFile traj_file {params.m_restart_traj_file};
         configs = traj_file.read_config(params.m_restart_step);
     }
@@ -887,25 +766,14 @@ OrigamiSystem* setup_origami(InputParameters& params) {
     staple_u *= params.m_staple_u_mult;
     double volume {chempot_to_volume(staple_u, params.m_temp)};
 
-    OrigamiSystem* origami;
-    if (params.m_domain_update_biases_present) {
-        origami = new OrigamiSystemWithBias {identities,
-                                             sequences,
-                                             configs,
-                                             cyclic,
-                                             volume,
-                                             staple_u,
-                                             params};
-    }
-    else {
-        origami = new OrigamiSystem {identities,
-                                     sequences,
-                                     configs,
-                                     cyclic,
-                                     volume,
-                                     staple_u,
-                                     params};
-    }
+    OrigamiSystem origami {
+            identities,
+            sequences,
+            configs,
+            cyclic,
+            volume,
+            staple_u,
+            params};
 
     return origami;
 }

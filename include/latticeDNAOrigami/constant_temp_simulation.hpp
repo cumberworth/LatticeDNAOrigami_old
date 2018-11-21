@@ -28,17 +28,17 @@ class ConstantTGCMCSimulation: public GCMCSimulation {
             InputParameters& params);
     void run() { simulate(m_steps); }
     vector<double> get_energies();
-    vector<int> get_staples();
-    vector<int> get_domains();
+    vector<size_t> get_staples();
+    vector<size_t> get_domains();
 
-    int m_op_freq {0};
+    size_t m_op_freq {0};
 
   private:
-    void update_internal(long long int step);
-    long long int m_steps;
+    void update_internal(unsigned long long step);
+    unsigned long long m_steps;
     vector<double> m_enes {};
-    vector<int> m_staples {};
-    vector<int> m_domains {};
+    vector<size_t> m_staples {};
+    vector<size_t> m_domains {};
 };
 } // namespace constantTemp
 

@@ -1,5 +1,3 @@
-// met_movetypes.cpp
-
 #include <map>
 #include <set>
 #include <utility>
@@ -18,8 +16,8 @@ MetMCMovetype::MetMCMovetype(
         OrigamiSystem& origami_system,
         RandomGens& random_gens,
         IdealRandomWalks& ideal_random_walks,
-        vector<OrigamiOutputFile*> const& config_files,
-        string const& label,
+        vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+        string& label,
         SystemOrderParams& ops,
         SystemBiases& biases,
         InputParameters& params):
@@ -70,13 +68,13 @@ void MetMCMovetype::add_external_bias() {
     m_delta_e += ex_bias;
 }
 
-void MetMCMovetype::unassign_domains(vector<Domain*> domains) {
-    for (auto domain: domains) {
-        pair<int, int> key {domain->m_c, domain->m_d};
-        m_prev_pos[key] = domain->m_pos;
-        m_prev_ore[key] = domain->m_ore;
+void MetMCMovetype::unassign_domains(vector<Domain>& domains) {
+    for (auto& domain: domains) {
+        pair<int, int> key {domain.m_c, domain.m_d};
+        m_prev_pos[key] = domain.m_pos;
+        m_prev_ore[key] = domain.m_ore;
         m_modified_domains.push_back(key);
-        m_delta_e += m_origami_system.unassign_domain(*domain);
+        m_delta_e += m_origami_system.unassign_domain(domain);
     }
 }
 
@@ -84,8 +82,8 @@ MetStapleExchangeMCMovetype::MetStapleExchangeMCMovetype(
         OrigamiSystem& origami_system,
         RandomGens& random_gens,
         IdealRandomWalks& ideal_random_walks,
-        vector<OrigamiOutputFile*> const& config_files,
-        string const& label,
+        vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+        string& label,
         SystemOrderParams& ops,
         SystemBiases& biases,
         InputParameters& params,
@@ -137,9 +135,8 @@ void MetStapleExchangeMCMovetype::reset_internal() {
     m_staple_bound = false;
 }
 
-void MetStapleExchangeMCMovetype::write_log_summary(
-        std::unique_ptr<ostream> log_stream) {
-    write_log_summary_header(std::move(log_stream));
+void MetStapleExchangeMCMovetype::write_log_summary(ostream& log_stream) {
+    write_log_summary_header(log_stream);
 
     // Insertion of each staple type
     map<int, int> insertion_attempts {};
@@ -161,27 +158,27 @@ void MetStapleExchangeMCMovetype::write_log_summary(
         }
     }
 
-    *log_stream << "       Exchange multipliers\n        ";
+    log_stream << "       Exchange multipliers\n        ";
     for (size_t i {0}; i != staple_types.size(); i++) {
-        *log_stream << m_exchange_mults[i];
-        *log_stream << ", ";
+        log_stream << m_exchange_mults[i];
+        log_stream << ", ";
     }
-    *log_stream << "\n";
+    log_stream << "\n";
 
     for (auto st: staple_types) {
-        *log_stream << "    Staple type: " << st << "\n";
+        log_stream << "    Staple type: " << st << "\n";
         int iats {insertion_attempts[st]};
         int iacs {insertion_accepts[st]};
         float ifreq {static_cast<float>(iacs) / iats};
-        *log_stream << "        Insertion attempts: " << iats << "\n";
-        *log_stream << "        Insertion accepts: " << iacs << "\n";
-        *log_stream << "        Insertion frequency: " << ifreq << "\n";
+        log_stream << "        Insertion attempts: " << iats << "\n";
+        log_stream << "        Insertion accepts: " << iacs << "\n";
+        log_stream << "        Insertion frequency: " << ifreq << "\n";
         int dats {deletion_attempts[st]};
         int dacs {deletion_accepts[st]};
         float dfreq {static_cast<float>(dacs) / dats};
-        *log_stream << "        Deletion attempts: " << dats << "\n";
-        *log_stream << "        Deletion accepts: " << dacs << "\n";
-        *log_stream << "        Deletion frequency: " << dfreq << "\n";
+        log_stream << "        Deletion attempts: " << dats << "\n";
+        log_stream << "        Deletion accepts: " << dacs << "\n";
+        log_stream << "        Deletion frequency: " << dfreq << "\n";
     }
 }
 
@@ -211,11 +208,13 @@ bool MetStapleExchangeMCMovetype::staple_insertion_accepted(
 
     add_external_bias();
     double boltz_factor {exp(-m_delta_e)};
-    int Ni_new {m_origami_system.num_staples_of_ident(c_i_ident)};
+    size_t Ni_new {m_origami_system.num_staples_of_ident(c_i_ident)};
 
     // Correct for extra states from additional staple domains
-    size_t staple_length {m_origami_system.m_identities[c_i_ident].size()};
-    int extra_df {2 * static_cast<int>(staple_length) - 1 - preconstrained_df};
+    size_t staple_length {
+            m_origami_system.m_identities[static_cast<size_t>(c_i_ident)]
+                    .size()};
+    unsigned long extra_df {2 * staple_length - 1 - preconstrained_df};
     double extra_states {staple_length * pow(6, extra_df)};
     double pratio {extra_states / Ni_new * boltz_factor};
 
@@ -228,12 +227,14 @@ bool MetStapleExchangeMCMovetype::staple_insertion_accepted(
     // Exchange probability multiplier
     bool accepted;
     if (m_staple_bound) {
-        m_modifier *= m_exchange_mults[c_i_ident - 1];
+        m_modifier *=
+                m_exchange_mults[static_cast<size_t>(c_i_ident) - 1];
 
         // Check if nonsensical probabilities will result
         if (m_modifier * fmin(1, pratio) > 1) {
             if (m_adaptive_exchange) {
-                m_exchange_mults[c_i_ident - 1] /= 10;
+                m_exchange_mults[static_cast<size_t>(c_i_ident) - 1] /=
+                        10;
                 accepted = false;
             }
             else if (m_allow_nonsensical_ps) {
@@ -264,10 +265,12 @@ bool MetStapleExchangeMCMovetype::staple_deletion_accepted(
     add_external_bias();
     m_origami_system.undo_reduce_staples_by_one();
     double boltz_factor {exp(-m_delta_e)};
-    int Ni {m_origami_system.num_staples_of_ident(c_i_ident)};
+    size_t Ni {m_origami_system.num_staples_of_ident(c_i_ident)};
 
     // Correct for extra states from additional staple domains
-    size_t staple_length {m_origami_system.m_identities[c_i_ident].size()};
+    size_t staple_length {
+            m_origami_system.m_identities[static_cast<size_t>(c_i_ident)]
+                    .size()};
     double extra_df {2 * static_cast<double>(staple_length) - 1 -
                      preconstrained_df};
     double extra_states {staple_length * pow(6, extra_df)};
@@ -282,13 +285,15 @@ bool MetStapleExchangeMCMovetype::staple_deletion_accepted(
     // Exchange probability multiplier
     bool accepted;
     if (m_staple_bound) {
-        m_modifier *= m_exchange_mults[c_i_ident - 1];
+        m_modifier *=
+                m_exchange_mults[static_cast<size_t>(c_i_ident) - 1];
 
         // Check if nonsensical probabilities will result
         if (m_modifier * fmin(1, pratio) > 1) {
             if (m_adaptive_exchange) {
                 cout << c_i_ident << m_modifier << " " << pratio << "\n";
-                m_exchange_mults[c_i_ident - 1] /= 10;
+                m_exchange_mults[static_cast<size_t>(c_i_ident) - 1] /=
+                        10;
                 accepted = false;
             }
             else if (m_allow_nonsensical_ps) {
@@ -330,7 +335,7 @@ bool MetStapleExchangeMCMovetype::insert_staple() {
     m_added_chains.push_back(c_i);
 
     // Assume that add_chain always adds to end of m_domains
-    vector<Domain*> selected_chain {m_origami_system.get_last_chain()};
+    vector<Domain>& selected_chain {m_origami_system.get_last_chain()};
 
     // Select growth points on chains
     pair<Domain*, Domain*> growthpoint {select_new_growthpoint(selected_chain)};
@@ -345,10 +350,9 @@ bool MetStapleExchangeMCMovetype::insert_staple() {
         return accepted;
     }
 
-    vector<Domain*> staple {m_origami_system.get_chain(c_i)};
-    for (size_t i {0}; i != staple.size(); i++) {
-        Domain* d {staple[i]};
-        if (d->m_state == Occupancy::bound) {
+    vector<Domain>& staple {m_origami_system.get_chain(c_i)};
+    for (const auto& d: staple) {
+        if (d.m_state == Occupancy::bound) {
             m_staple_bound = true;
             break;
         }
@@ -371,20 +375,19 @@ bool MetStapleExchangeMCMovetype::delete_staple() {
     }
 
     // Reject if staple is connector
-    vector<Domain*> staple {m_origami_system.get_chain(c_i)};
+    vector<Domain>& staple {m_origami_system.get_chain(c_i)};
     if (staple_is_connector(staple)) {
         return accepted;
     }
-    for (size_t i {0}; i != staple.size(); i++) {
-        Domain* d {staple[i]};
-        if (d->m_state == Occupancy::bound) {
+    for (const auto& d: staple) {
+        if (d.m_state == Occupancy::bound) {
             m_staple_bound = true;
             break;
         }
     }
 
     // Unassign domains and test acceptance
-    int num_staple_bd {num_bound_staple_domains(staple)};
+    size_t num_staple_bd {num_bound_staple_domains(staple)};
     unassign_domains(staple);
     accepted = staple_deletion_accepted(c_i_ident, num_staple_bd);
     if (accepted) {
@@ -398,8 +401,8 @@ MetStapleRegrowthMCMovetype::MetStapleRegrowthMCMovetype(
         OrigamiSystem& origami_system,
         RandomGens& random_gens,
         IdealRandomWalks& ideal_random_walks,
-        vector<OrigamiOutputFile*> const& config_files,
-        string const& label,
+        vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+        string& label,
         SystemOrderParams& ops,
         SystemBiases& biases,
         InputParameters& params):
@@ -431,9 +434,8 @@ MetStapleRegrowthMCMovetype::MetStapleRegrowthMCMovetype(
                 biases,
                 params) {}
 
-void MetStapleRegrowthMCMovetype::write_log_summary(
-        std::unique_ptr<ostream> log_stream) {
-    write_log_summary_header(std::move(log_stream));
+void MetStapleRegrowthMCMovetype::write_log_summary(ostream& log_stream) {
+    write_log_summary_header(log_stream);
 
     // Insertion of each staple type
     map<int, int> attempts {};
@@ -450,13 +452,13 @@ void MetStapleRegrowthMCMovetype::write_log_summary(
     }
 
     for (auto st: staple_types) {
-        *log_stream << "    Staple type: " << st << "\n";
+        log_stream << "    Staple type: " << st << "\n";
         int ats {attempts[st]};
         int acs {accepts[st]};
         double freq {static_cast<double>(acs) / ats};
-        *log_stream << "        Attempts: " << ats << "\n";
-        *log_stream << "        Accepts: " << acs << "\n";
-        *log_stream << "        Frequency: " << freq << "\n";
+        log_stream << "        Attempts: " << ats << "\n";
+        log_stream << "        Accepts: " << acs << "\n";
+        log_stream << "        Frequency: " << freq << "\n";
     }
 }
 
@@ -470,10 +472,10 @@ bool MetStapleRegrowthMCMovetype::internal_attempt_move() {
     }
 
     // Select a staple to regrow
-    int c_i_index {
-            m_random_gens.uniform_int(1, m_origami_system.num_staples())};
-    vector<Domain*> selected_chain {m_origami_system.get_chains()[c_i_index]};
-    m_tracker.staple_type = selected_chain[0]->m_c_ident;
+    size_t c_i_index {static_cast<size_t>(m_random_gens.uniform_int(
+            1, static_cast<int>(m_origami_system.num_staples())))};
+    vector<Domain>& selected_chain {m_origami_system.get_chains()[c_i_index]};
+    m_tracker.staple_type = selected_chain[0].m_c_ident;
 
     // Reject if staple is connector
     if (staple_is_connector(selected_chain)) {
@@ -498,7 +500,7 @@ bool MetStapleRegrowthMCMovetype::internal_attempt_move() {
     }
 
     add_external_bias();
-    int new_num_staple_bd {num_bound_staple_domains(selected_chain)};
+    size_t new_num_staple_bd {num_bound_staple_domains(selected_chain)};
     double boltz_factor {exp(-(m_delta_e))};
     double pratio {boltz_factor * bound_domains.size() / new_num_staple_bd};
     accepted = test_acceptance(pratio);

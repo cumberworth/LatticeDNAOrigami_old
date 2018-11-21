@@ -1,5 +1,3 @@
-// ptmc_simulation.cpp
-
 #include <chrono>
 #include <sstream>
 #include <string>
@@ -33,7 +31,7 @@ PTGCMCSimulation::PTGCMCSimulation(
     string string_rank {std::to_string(m_rank)};
 
     // Update starting configs if restarting
-    if (m_params.m_restart_traj_filebase != "") {
+    if (not m_params.m_restart_traj_filebase.empty()) {
         string filename {params.m_restart_traj_filebase + "-" + string_rank +
                          params.m_restart_traj_postfix};
         OrigamiTrajInputFile traj_inp {filename};
@@ -44,13 +42,13 @@ PTGCMCSimulation::PTGCMCSimulation(
     string output_filebase {params.m_output_filebase + "-" + string_rank};
     m_output_files = simulation::setup_output_files(
             params, output_filebase, m_origami_system, m_ops, m_biases);
-    m_logging_stream = new ofstream {output_filebase + ".out"};
+    m_logging_file.open(output_filebase + ".out");
 
     // Initialize quantity index to replica index vectors
     if (m_rank == m_master_rep) {
 
         // For now just take last line of restart file
-        if (params.m_restart_swap_file != "") {
+        if (not params.m_restart_swap_file.empty()) {
             string q_to_repi_str;
             std::ifstream swap_file {params.m_restart_swap_file};
             string line;
@@ -58,14 +56,14 @@ PTGCMCSimulation::PTGCMCSimulation(
                 q_to_repi_str = line;
             }
             std::stringstream q_to_repi_sstream {q_to_repi_str};
-            for (int i {0}; i != m_num_reps; i++) {
-                int repi;
+            for (size_t i {0}; i != m_num_reps; i++) {
+                size_t repi;
                 q_to_repi_sstream >> repi;
                 m_q_to_repi.push_back(repi);
             }
         }
         else {
-            for (int i {0}; i != m_num_reps; i++) {
+            for (size_t i {0}; i != m_num_reps; i++) {
                 m_q_to_repi.push_back(i);
             }
         }
@@ -75,7 +73,7 @@ PTGCMCSimulation::PTGCMCSimulation(
 void PTGCMCSimulation::initialize_swap_file(InputParameters& params) {
     if (m_rank == m_master_rep) {
         m_swapfile.open(params.m_output_filebase + ".swp");
-        for (int rep {0}; rep != m_num_reps; rep++) {
+        for (size_t rep {0}; rep != m_num_reps; rep++) {
             for (auto q_i: m_exchange_q_is) {
                 m_swapfile << m_control_qs[q_i][rep];
                 m_swapfile << "/";
@@ -87,10 +85,10 @@ void PTGCMCSimulation::initialize_swap_file(InputParameters& params) {
 }
 
 void PTGCMCSimulation::run() {
-    long long int step {0};
+    unsigned long long step {0};
 
     auto start = steady_clock::now();
-    for (int swap_i {1}; swap_i != m_swaps + 1; swap_i++) {
+    for (unsigned long long swap_i {1}; swap_i != m_swaps + 1; swap_i++) {
 
         // Update origami system with current replica's quantities
         update_control_qs();
@@ -145,14 +143,14 @@ void PTGCMCSimulation::update_dependent_qs() {
     m_replica_dependent_qs[m_stacking_i] = D_stacking;
 }
 
-void PTGCMCSimulation::slave_send(int swap_i) {
+void PTGCMCSimulation::slave_send(size_t swap_i) {
     for (size_t q_i {0}; q_i != m_replica_dependent_qs.size(); q_i++) {
         double q {m_replica_dependent_qs[q_i]};
         m_world.send(m_master_rep, swap_i, q);
     }
 }
 
-bool PTGCMCSimulation::slave_receive(int swap_i) {
+bool PTGCMCSimulation::slave_receive(size_t swap_i) {
     for (auto i: m_exchange_q_is) {
         m_world.recv(m_master_rep, swap_i, m_replica_control_qs[i]);
         if (m_replica_control_qs[i] == 999.0) {
@@ -164,10 +162,10 @@ bool PTGCMCSimulation::slave_receive(int swap_i) {
 }
 
 void PTGCMCSimulation::master_receive(
-        int swap_i,
+        size_t swap_i,
         vector<vector<double>>& dependent_qs) {
     master_get_dependent_qs(dependent_qs);
-    for (int rep_i {1}; rep_i != m_num_reps; rep_i++) {
+    for (size_t rep_i {1}; rep_i != m_num_reps; rep_i++) {
         for (size_t i {0}; i != dependent_qs.size(); i++) {
             double q;
             m_world.recv(rep_i, swap_i, q);
@@ -176,9 +174,9 @@ void PTGCMCSimulation::master_receive(
     }
 }
 
-void PTGCMCSimulation::master_send(int swap_i) {
-    for (int q_i {0}; q_i != m_num_reps; q_i++) {
-        int rep_i {m_q_to_repi[q_i]};
+void PTGCMCSimulation::master_send(size_t swap_i) {
+    for (size_t q_i {0}; q_i != m_num_reps; q_i++) {
+        size_t rep_i {m_q_to_repi[q_i]};
         if (rep_i == m_master_rep) {
             for (auto i: m_exchange_q_is) {
                 m_replica_control_qs[i] = m_control_qs[i][q_i];
@@ -192,17 +190,15 @@ void PTGCMCSimulation::master_send(int swap_i) {
     }
 }
 
-void PTGCMCSimulation::master_send_kill(int swap_i) {
-    for (int q_i {0}; q_i != m_num_reps; q_i++) {
-        int rep_i {m_q_to_repi[q_i]};
+void PTGCMCSimulation::master_send_kill(size_t swap_i) {
+    for (size_t q_i {0}; q_i != m_num_reps; q_i++) {
+        size_t rep_i {m_q_to_repi[q_i]};
         if (rep_i == m_master_rep) {
             continue;
         }
-        else {
-            for (size_t i {0}; i != m_exchange_q_is.size(); i++) {
-                double msg {999.0};
-                m_world.send(rep_i, swap_i, msg);
-            }
+        for (size_t i {0}; i != m_exchange_q_is.size(); i++) {
+            double msg {999.0};
+            m_world.send(rep_i, swap_i, msg);
         }
     }
 }
@@ -223,12 +219,7 @@ bool PTGCMCSimulation::test_acceptance(double p_accept) {
     }
     else {
         double prob {m_random_gens.uniform_real()};
-        if (p_accept > prob) {
-            accept = true;
-        }
-        else {
-            accept = false;
-        }
+        return p_accept > prob;
     }
 
     return accept;
@@ -270,7 +261,7 @@ double PTGCMCSimulation::calc_acceptance_p(
     return p_accept;
 }
 
-void PTGCMCSimulation::write_swap_entry(long long int step) {
+void PTGCMCSimulation::write_swap_entry(unsigned long long step) {
     if (step % m_config_output_freq == 0) {
         for (auto repi: m_q_to_repi) {
             m_swapfile << repi << " ";
@@ -299,8 +290,8 @@ void OneDPTGCMCSimulation::initialize_control_qs(InputParameters& params) {
         m_control_qs.push_back(params.m_temps);
 
         // Chemical potentials and volumes
-        m_control_qs.push_back({});
-        for (int i {0}; i != m_num_reps; i++) {
+        m_control_qs.emplace_back();
+        for (size_t i {0}; i != m_num_reps; i++) {
 
             // Calculate chemical potential of each replica if constant
             // staple concentration
@@ -323,7 +314,7 @@ void OneDPTGCMCSimulation::initialize_control_qs(InputParameters& params) {
 
     // Initialize quantities of each replica (updating on origami happens
     // in run)
-    for (int i {0}; i != m_num_reps; i++) {
+    for (size_t i {0}; i != m_num_reps; i++) {
         if (m_rank == i) {
             m_replica_control_qs[m_temp_i] = params.m_temps[i];
             m_replica_control_qs[m_bias_i] = params.m_bias_mults[i];
@@ -349,15 +340,15 @@ void OneDPTGCMCSimulation::initialize_control_qs(InputParameters& params) {
     }
 }
 
-void OneDPTGCMCSimulation::attempt_exchange(int swap_i) {
+void OneDPTGCMCSimulation::attempt_exchange(size_t swap_i) {
 
     // Collect results from all replicas
     vector<vector<double>> dependent_qs {{}, {}, {}, {}};
     master_receive(swap_i, dependent_qs);
 
     // Iterate through pairs in current set and attempt swap
-    int swap_set {swap_i % 2};
-    for (int i {swap_set}; i < (m_num_reps - 1); i += 2) {
+    size_t swap_set {swap_i % 2};
+    for (size_t i {swap_set}; i < (m_num_reps - 1); i += 2) {
         m_attempt_count[i]++;
 
         // Collect values
@@ -365,16 +356,16 @@ void OneDPTGCMCSimulation::attempt_exchange(int swap_i) {
         for (auto control_q: m_control_qs) {
             double q_1 {control_q[i]};
             double q_2 {control_q[i + 1]};
-            control_q_pairs.push_back({q_1, q_2});
+            control_q_pairs.emplace_back(q_1, q_2);
         }
 
-        int repi1 {m_q_to_repi[i]};
-        int repi2 {m_q_to_repi[i + 1]};
+        size_t repi1 {m_q_to_repi[i]};
+        size_t repi2 {m_q_to_repi[i + 1]};
         vector<pair<double, double>> dependent_q_pairs {};
         for (auto dependent_q: dependent_qs) {
             double q_1 {dependent_q[repi1]};
             double q_2 {dependent_q[repi2]};
-            dependent_q_pairs.push_back({q_1, q_2});
+            dependent_q_pairs.emplace_back(q_1, q_2);
         }
 
         double p_accept {calc_acceptance_p(control_q_pairs, dependent_q_pairs)};
@@ -412,16 +403,16 @@ TwoDPTGCMCSimulation::TwoDPTGCMCSimulation(
         SystemBiases& biases,
         InputParameters& params):
         PTGCMCSimulation(origami_system, ops, biases, params),
-        m_v1_dim {static_cast<int>(params.m_temps.size())},
-        m_v2_dim {static_cast<int>(params.m_stacking_mults.size())},
+        m_v1_dim {params.m_temps.size()},
+        m_v2_dim {params.m_stacking_mults.size()},
         m_v1s {params.m_temps},
         m_v2s {params.m_stacking_mults},
         m_attempt_count(
                 2,
-                vector<vector<int>>(m_v1_dim, vector<int>(m_v2_dim, 0))),
+                vector<vector<size_t>>(m_v1_dim, vector<size_t>(m_v2_dim, 0))),
         m_swap_count(
                 2,
-                vector<vector<int>>(m_v1_dim, vector<int>(m_v2_dim, 0))) {
+                vector<vector<size_t>>(m_v1_dim, vector<size_t>(m_v2_dim, 0))) {
 
     initialize_control_qs(params);
     m_exchange_q_is.push_back(m_temp_i);
@@ -466,8 +457,8 @@ void TwoDPTGCMCSimulation::initialize_control_qs(InputParameters& params) {
         m_control_qs.push_back(staple_us);
 
         // Biases
-        vector<double> bias_mults(temps.size(), 1);
-        m_control_qs.push_back(bias_mults);
+        vector<double> bias_mults_local(temps.size(), 1);
+        m_control_qs.push_back(bias_mults_local);
 
         // Stacks
         m_control_qs.push_back(stacking_mults);
@@ -481,26 +472,26 @@ void TwoDPTGCMCSimulation::initialize_control_qs(InputParameters& params) {
     m_replica_control_qs[m_stacking_mult_i] = stacking_mults[m_rank];
 }
 
-void TwoDPTGCMCSimulation::attempt_exchange(int swap_i) {
+void TwoDPTGCMCSimulation::attempt_exchange(size_t swap_i) {
 
     // Collect results from all replicas
     vector<vector<double>> dependent_qs {{}, {}, {}, {}};
     master_receive(swap_i, dependent_qs);
 
     // Iterate through pairs in current set and attempt swap
-    int swap_set {swap_i % 4};
-    int swap_v {swap_i % 2};
-    int i_start {m_i_starts[swap_set]};
-    int j_start {m_j_starts[swap_set]};
-    int i_incr {m_i_incrs[swap_set]};
-    int j_incr {m_j_incrs[swap_set]};
-    int i_end {m_i_ends[swap_set]};
-    int j_end {m_j_ends[swap_set]};
-    int rep_incr {m_rep_incrs[swap_set]};
-    for (int i {i_start}; i < (i_end); i += i_incr) {
-        for (int j {j_start}; j < (j_end); j += j_incr) {
-            int rep_i {i * m_v2_dim + j};
-            int rep_j {rep_i + rep_incr};
+    size_t swap_set {swap_i % 4};
+    size_t swap_v {swap_i % 2};
+    size_t i_start {m_i_starts[swap_set]};
+    size_t j_start {m_j_starts[swap_set]};
+    size_t i_incr {m_i_incrs[swap_set]};
+    size_t j_incr {m_j_incrs[swap_set]};
+    size_t i_end {m_i_ends[swap_set]};
+    size_t j_end {m_j_ends[swap_set]};
+    size_t rep_incr {m_rep_incrs[swap_set]};
+    for (size_t i {i_start}; i < (i_end); i += i_incr) {
+        for (size_t j {j_start}; j < (j_end); j += j_incr) {
+            size_t rep_i {i * m_v2_dim + j};
+            size_t rep_j {rep_i + rep_incr};
             m_attempt_count[swap_v][i][j]++;
 
             // Collect values
@@ -508,16 +499,16 @@ void TwoDPTGCMCSimulation::attempt_exchange(int swap_i) {
             for (auto control_q: m_control_qs) {
                 double q_1 {control_q[rep_i]};
                 double q_2 {control_q[rep_j]};
-                control_q_pairs.push_back({q_1, q_2});
+                control_q_pairs.emplace_back(q_1, q_2);
             }
 
-            int repi1 {m_q_to_repi[rep_i]};
-            int repi2 {m_q_to_repi[rep_j]};
+            size_t repi1 {m_q_to_repi[rep_i]};
+            size_t repi2 {m_q_to_repi[rep_j]};
             vector<pair<double, double>> dependent_q_pairs {};
             for (auto dependent_q: dependent_qs) {
                 double q_1 {dependent_q[repi1]};
                 double q_2 {dependent_q[repi2]};
-                dependent_q_pairs.push_back({q_1, q_2});
+                dependent_q_pairs.emplace_back(q_1, q_2);
             }
 
             double p_accept {
@@ -539,13 +530,13 @@ void TwoDPTGCMCSimulation::attempt_exchange(int swap_i) {
 
 void TwoDPTGCMCSimulation::write_acceptance_freqs() {
 
-    for (int v1_i {0}; v1_i != (m_v1_dim - 1); v1_i++) {
-        for (int v2_i {0}; v2_i != m_v2_dim; v2_i++) {
+    for (size_t v1_i {0}; v1_i != (m_v1_dim - 1); v1_i++) {
+        for (size_t v2_i {0}; v2_i != m_v2_dim; v2_i++) {
             cout << m_v1s[v1_i] << " ";
             cout << m_v1s[v1_i + 1] << " ";
             cout << m_v2s[v2_i] << " ";
-            int swap_count {m_swap_count[0][v1_i][v2_i]};
-            int attempt_count {m_attempt_count[0][v1_i][v2_i]};
+            size_t swap_count {m_swap_count[0][v1_i][v2_i]};
+            size_t attempt_count {m_attempt_count[0][v1_i][v2_i]};
             cout << swap_count << " ";
             cout << attempt_count << " ";
             cout << (static_cast<double>(swap_count) / attempt_count) << " ";
@@ -554,13 +545,13 @@ void TwoDPTGCMCSimulation::write_acceptance_freqs() {
     }
     cout << "\n";
 
-    for (int v2_i {0}; v2_i != (m_v2_dim - 1); v2_i++) {
-        for (int v1_i {0}; v1_i != m_v1_dim; v1_i++) {
+    for (size_t v2_i {0}; v2_i != (m_v2_dim - 1); v2_i++) {
+        for (size_t v1_i {0}; v1_i != m_v1_dim; v1_i++) {
             cout << m_v2s[v2_i] << " ";
             cout << m_v2s[v2_i + 1] << " ";
             cout << m_v1s[v1_i] << " ";
-            int swap_count {m_swap_count[1][v1_i][v2_i]};
-            int attempt_count {m_attempt_count[1][v1_i][v2_i]};
+            size_t swap_count {m_swap_count[1][v1_i][v2_i]};
+            size_t attempt_count {m_attempt_count[1][v1_i][v2_i]};
             cout << swap_count << " ";
             cout << attempt_count << " ";
             cout << (static_cast<double>(swap_count) / attempt_count) << " ";

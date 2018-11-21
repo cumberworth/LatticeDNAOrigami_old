@@ -38,7 +38,7 @@ using origami::OrigamiSystem;
 using parser::InputParameters;
 using simulation::GCMCSimulation;
 
-using GridPoint = vector<int>;
+using GridPoint = vector<unsigned int>;
 using SetOfGridPoints = set<GridPoint>;
 using ArrayOfSets = vector<SetOfGridPoints>;
 using GridInts = unordered_map<GridPoint, int>;
@@ -169,8 +169,8 @@ class MWUSGCMCSimulation: public GCMCSimulation {
     std::unique_ptr<ofstream> m_us_stream {nullptr};
 
     std::unique_ptr<USGCMCSimulation> m_us_sim {nullptr};
-    int m_windows {0};
-    int m_grid_dim {0};
+    unsigned int m_windows {0};
+    unsigned int m_grid_dim {0};
     vector<string> m_window_bias_tags {};
     vector<GridPoint> m_window_mins {};
     vector<GridPoint> m_window_maxs {};

@@ -1,5 +1,3 @@
-// ideal_random_walk.cpp
-
 #include <algorithm>
 #include <fstream>
 
@@ -14,7 +12,7 @@ using boost::math::factorial;
 long double IdealRandomWalks::num_walks(
         VectorThree start_pos,
         VectorThree end_pos,
-        int steps) {
+        unsigned int steps) {
 
     // Check stored values
     VectorThree DR {end_pos - start_pos};
@@ -28,12 +26,13 @@ long double IdealRandomWalks::num_walks(
     int DX {DR[0]};
     int DY {DR[1]};
     int DZ {DR[2]};
-    int Nminus {(steps - DX - DY - DZ) / 2};
-    int Nplus {(steps - DX - DY + DZ) / 2};
+    auto cast_steps {static_cast<int>(steps)};
+    int Nminus {(cast_steps - DX - DY - DZ) / 2};
+    int Nplus {(cast_steps - DX - DY + DZ) / 2};
     long double walks {0};
 
     int DR_sum {DX + DY + DZ};
-    if (DR_sum > steps or (steps - DR_sum) % 2 != 0) {
+    if (DR_sum > cast_steps or (cast_steps - DR_sum) % 2 != 0) {
 
         // Add entry
         m_num_walks[walk_key] = walks;
@@ -43,25 +42,25 @@ long double IdealRandomWalks::num_walks(
     // Need some negative steps to reach a negative location
     for (int ybar {0}; ybar != Nminus + 1; ybar++) {
         for (int xbar {0}; xbar != Nminus + 1 - ybar; xbar++) {
-            auto f1 {factorial<long double>(steps)};
-            auto f2 {factorial<long double>(xbar)};
+            auto f1 {factorial<long double>(static_cast<unsigned int>(steps))};
+            auto f2 {factorial<long double>(static_cast<unsigned int>(xbar))};
             if (xbar + DX < 0) {
                 continue;
             }
 
-            auto f3 {factorial<long double>(xbar + DX)};
-            auto f4 {factorial<long double>(ybar)};
+            auto f3 {factorial<long double>(static_cast<unsigned int>(xbar + DX))};
+            auto f4 {factorial<long double>(static_cast<unsigned int>(ybar))};
             if (ybar + DY < 0) {
                 continue;
             }
 
-            auto f5 {factorial<long double>(ybar + DY)};
-            auto f6 {factorial<long double>(Nminus - xbar - ybar)};
+            auto f5 {factorial<long double>(static_cast<unsigned int>(ybar + DY))};
+            auto f6 {factorial<long double>(static_cast<unsigned int>(Nminus - xbar - ybar))};
             if (Nplus - xbar - ybar < 0) {
                 continue;
             }
 
-            auto f7 {factorial<long double>(Nplus - xbar - ybar)};
+            auto f7 {factorial<long double>(static_cast<unsigned int>(Nplus - xbar - ybar))};
             walks += f1 / (f2 * f3 * f4 * f5 * f6 * f7);
         }
     }

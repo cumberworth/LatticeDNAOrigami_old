@@ -1,5 +1,3 @@
-// order_params.cpp
-
 #include <numeric>
 #include <utility>
 
@@ -8,7 +6,6 @@
 
 namespace orderParams {
 
-using std::abs;
 using std::cout;
 using std::set;
 
@@ -29,7 +26,7 @@ DistOrderParam::DistOrderParam(
         m_domain_1 {domain_1},
         m_domain_2 {domain_2} {
 
-    m_label = label;
+    m_label = std::move(label);
     calc_param();
 }
 
@@ -79,7 +76,7 @@ AdjacentSiteOrderParam::AdjacentSiteOrderParam(
         m_domain_1 {domain_1},
         m_domain_2 {domain_2} {
 
-    m_label = label;
+    m_label = std::move(label);
     calc_param();
 }
 
@@ -125,7 +122,8 @@ int AdjacentSiteOrderParam::check_param(
         else {
             m_checked_param = 0;
         }
-        m_checked_param = m_defined = true;
+        m_defined = true;
+        m_checked_param = 1;
     }
     else {
         m_defined = false;
@@ -135,10 +133,10 @@ int AdjacentSiteOrderParam::check_param(
 }
 
 SumOrderParam::SumOrderParam(
-        vector<reference_wrapper<OrderParam>> ops,
+        vector<reference_wrapper<OrderParam>>& ops,
         string label):
-        m_ops {ops} {
-    m_label = label;
+        m_ops {std::move(ops)} {
+    m_label = std::move(label);
     calc_param();
 }
 
@@ -188,13 +186,13 @@ NumStaplesOrderParam::NumStaplesOrderParam(
         string label):
         m_origami {origami} {
 
-    m_label = label;
+    m_label = std::move(label);
     calc_param();
     m_defined = true;
 }
 
 int NumStaplesOrderParam::calc_param() {
-    m_param = m_origami.num_staples();
+    m_param = static_cast<int>(m_origami.num_staples());
 
     return m_param;
 }
@@ -205,7 +203,7 @@ int NumStaplesOrderParam::check_param(
         VectorThree,
         Occupancy) {
 
-    m_checked_param = m_origami.num_staples();
+    m_checked_param = static_cast<int>(m_origami.num_staples());
 
     return m_checked_param;
 }
@@ -217,13 +215,13 @@ NumStaplesTypeOrderParam::NumStaplesTypeOrderParam(
         m_origami {origami} {
 
     m_c_ident = c_ident;
-    m_label = label;
+    m_label = std::move(label);
     calc_param();
     m_defined = true;
 }
 
 int NumStaplesTypeOrderParam::calc_param() {
-    m_param = m_origami.staples_of_ident(m_c_ident).size();
+    m_param = static_cast<int>(m_origami.staples_of_ident(m_c_ident).size());
 
     return m_param;
 }
@@ -245,7 +243,7 @@ StapleTypeFullyBoundOrderParam::StapleTypeFullyBoundOrderParam(
         m_origami {origami} {
 
     m_c_ident = c_ident;
-    m_label = label;
+    m_label = std::move(label);
     calc_param();
     m_defined = true;
 }
@@ -254,8 +252,8 @@ int StapleTypeFullyBoundOrderParam::calc_param() {
     m_param = 0;
     for (auto staple_i: m_origami.staples_of_ident(m_c_ident)) {
         bool fully_bound {true};
-        for (auto domain: m_origami.get_chain(staple_i)) {
-            if (domain->m_state != Occupancy::bound) {
+        for (const auto& domain: m_origami.get_chain(staple_i)) {
+            if (domain.m_state != Occupancy::bound) {
                 fully_bound = false;
                 break;
             }
@@ -284,13 +282,13 @@ NumBoundDomainPairsOrderParam::NumBoundDomainPairsOrderParam(
         string label):
         m_origami {origami} {
 
-    m_label = label;
+    m_label = std::move(label);
     calc_param();
     m_defined = true;
 }
 
 int NumBoundDomainPairsOrderParam::calc_param() {
-    m_param = m_origami.num_fully_bound_domain_pairs();
+    m_param = static_cast<int>(m_origami.num_fully_bound_domain_pairs());
 
     return m_param;
 }
@@ -303,7 +301,7 @@ int NumBoundDomainPairsOrderParam::check_param(
 
     if (state != Occupancy::unassigned) {
         m_defined = true;
-        int num_domain_pairs = m_origami.num_fully_bound_domain_pairs();
+        int num_domain_pairs = static_cast<int>(m_origami.num_fully_bound_domain_pairs());
         if (state == Occupancy::bound) {
             m_checked_param = num_domain_pairs + 1;
         }
@@ -320,13 +318,13 @@ NumMisboundDomainPairsOrderParam::NumMisboundDomainPairsOrderParam(
         string label):
         m_origami {origami} {
 
-    m_label = label;
+    m_label = std::move(label);
     calc_param();
     m_defined = true;
 }
 
 int NumMisboundDomainPairsOrderParam::calc_param() {
-    m_param = m_origami.num_misbound_domain_pairs();
+    m_param = static_cast<int>(m_origami.num_misbound_domain_pairs());
 
     return m_param;
 }
@@ -339,7 +337,7 @@ int NumMisboundDomainPairsOrderParam::check_param(
 
     if (state != Occupancy::unassigned) {
         m_defined = true;
-        int num_domain_pairs = m_origami.num_misbound_domain_pairs();
+        int num_domain_pairs = static_cast<int>(m_origami.num_misbound_domain_pairs());
         if (state == Occupancy::misbound) {
             m_checked_param = num_domain_pairs + 1;
         }
@@ -356,13 +354,13 @@ NumStackedPairsOrderParam::NumStackedPairsOrderParam(
         string label):
         m_origami {origami} {
 
-    m_label = label;
+    m_label = std::move(label);
     calc_param();
     m_defined = true;
 }
 
 int NumStackedPairsOrderParam::calc_param() {
-    m_param = m_origami.num_stacked_domain_pairs();
+    m_param = static_cast<int>(m_origami.num_stacked_domain_pairs());
 
     return m_param;
 }
@@ -390,13 +388,13 @@ NumLinearHelicesOrderParam::NumLinearHelicesOrderParam(
         string label):
         m_origami {origami} {
 
-    m_label = label;
+    m_label = std::move(label);
     calc_param();
     m_defined = true;
 }
 
 int NumLinearHelicesOrderParam::calc_param() {
-    m_param = m_origami.num_linear_helix_trips();
+    m_param = static_cast<int>(m_origami.num_linear_helix_trips());
 
     return m_param;
 }
@@ -424,13 +422,13 @@ NumStackedJunctsOrderParam::NumStackedJunctsOrderParam(
         string label):
         m_origami {origami} {
 
-    m_label = label;
+    m_label = std::move(label);
     calc_param();
     m_defined = true;
 }
 
 int NumStackedJunctsOrderParam::calc_param() {
-    m_param = m_origami.num_stacked_junct_quads();
+    m_param = static_cast<int>(m_origami.num_stacked_junct_quads());
 
     return m_param;
 }
@@ -460,21 +458,21 @@ SystemOrderParams::SystemOrderParams(
 
     // Setup dependency table
     vector<pair<int, int>> keys {};
-    for (auto chain: origami.get_chains()) {
-        for (auto domain: chain) {
-            pair<int, int> key {domain->m_c, domain->m_d};
+    for (const auto& chain: origami.get_chains()) {
+        for (const auto& domain: chain) {
+            pair<int, int> key {domain.m_c, domain.m_d};
             m_domain_update_ops[key] = {};
             keys.push_back(key);
         }
     }
 
-    if (params.m_ops_filename != "") {
+    if (not params.m_ops_filename.empty()) {
         setup_ops(params.m_ops_filename, keys);
     }
 }
 
 void SystemOrderParams::setup_ops(
-        string ops_filename,
+        string& ops_filename,
         vector<pair<int, int>> keys) {
 
     OrigamiOrderParamsFile ops_file {ops_filename};
@@ -482,8 +480,8 @@ void SystemOrderParams::setup_ops(
     vector<vector<string>> level_to_tags {ops_file.get_tags_by_level()};
     vector<vector<string>> level_to_labels {ops_file.get_labels_by_level()};
     for (size_t i {0}; i != level_to_types.size(); i++) {
-        m_level_to_ops.push_back({});
-        m_move_update_ops.push_back({});
+        m_level_to_ops.emplace_back();
+        m_move_update_ops.emplace_back();
         m_levels++;
         for (auto key: keys) {
             m_domain_update_ops[key].push_back({});
@@ -504,8 +502,8 @@ void SystemOrderParams::setup_ops(
                 int d2i {ops_file.get_int_option(i, j, "domain2")};
                 d_domains.insert({c1i, d1i});
                 d_domains.insert({c2i, d2i});
-                Domain& d1 {*m_origami.get_domain(c1i, d1i)};
-                Domain& d2 {*m_origami.get_domain(c2i, d2i)};
+                Domain& d1 {m_origami.get_domain(c1i, d1i)};
+                Domain& d2 {m_origami.get_domain(c2i, d2i)};
                 if (type == "Dist") {
                     op = new DistOrderParam {d1, d2, label};
                 }
@@ -521,9 +519,9 @@ void SystemOrderParams::setup_ops(
                         ops_file.get_vector_string_option(i, j, "ops")};
                 vector<reference_wrapper<OrderParam>> d_ops {};
                 update_per_domain = true;
-                for (auto d_tag: op_tags_to_sum) {
+                for (const auto& d_tag: op_tags_to_sum) {
                     vector<pair<int, int>> vd_domains {m_tag_to_domains[d_tag]};
-                    if (vd_domains.size() == 0) {
+                    if (vd_domains.empty()) {
                         update_per_domain = false;
                     }
                     for (auto d_domain: vd_domains) {
@@ -581,16 +579,16 @@ void SystemOrderParams::setup_ops(
     }
 }
 
-OrderParam& SystemOrderParams::get_order_param(string tag) {
+OrderParam& SystemOrderParams::get_order_param(const string& tag) {
     return m_tag_to_op.at(tag);
 }
 
-vector<pair<int, int>> SystemOrderParams::get_dependent_domains(string tag) {
+vector<pair<int, int>> SystemOrderParams::get_dependent_domains(const string& tag) {
     return m_tag_to_domains[tag];
 }
 
 void SystemOrderParams::update_all_params() {
-    for (auto& level: m_level_to_ops) {
+    for (const auto& level: m_level_to_ops) {
         for (auto& op: level) {
             op->calc_param();
         }
@@ -598,7 +596,7 @@ void SystemOrderParams::update_all_params() {
 }
 
 void SystemOrderParams::update_move_params() {
-    for (auto level: m_move_update_ops) {
+    for (const auto& level: m_move_update_ops) {
         for (auto op: level) {
             op.get().calc_param();
         }
@@ -608,7 +606,7 @@ void SystemOrderParams::update_move_params() {
 void SystemOrderParams::update_one_domain(Domain& domain) {
 
     pair<int, int> key {domain.m_c, domain.m_d};
-    for (auto level: m_domain_update_ops[key]) {
+    for (const auto& level: m_domain_update_ops[key]) {
         for (auto op: level) {
             op.get().calc_param();
         }
@@ -622,7 +620,7 @@ void SystemOrderParams::check_one_domain(
         Occupancy state) {
 
     pair<int, int> key {domain.m_c, domain.m_d};
-    for (auto level: m_domain_update_ops[key]) {
+    for (const auto& level: m_domain_update_ops[key]) {
         for (auto op: level) {
             op.get().check_param(domain, pos, ore, state);
         }

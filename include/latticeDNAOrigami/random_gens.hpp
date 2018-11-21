@@ -15,16 +15,15 @@ using std::unordered_map;
 class RandomGens {
   public:
     RandomGens();
-    ~RandomGens();
 
-    void set_seed(int seed);
+    void set_seed(unsigned int seed);
     double uniform_real();
     int uniform_int(int lower, int upper);
 
   private:
     std::mt19937_64 m_random_engine {};
     std::uniform_real_distribution<double> m_uniform_real_dist;
-    unordered_map<pair<int, int>, std::uniform_int_distribution<int>&>
+    unordered_map<pair<int, int>, std::uniform_int_distribution<int>>
             m_uniform_int_dists {};
 };
 } // namespace randomGen

@@ -1,5 +1,3 @@
-// parser.cpp
-
 #include <iostream>
 #include <fstream>
 
@@ -83,13 +81,13 @@ namespace parser {
                 po::value<double>(&m_misbinding_s)->default_value(1),
                 "Hybridization entropy for misbound domains")
             ("min_total_staples",
-                po::value<int>(&m_min_total_staples)->default_value(0),
+                po::value<size_t>(&m_min_total_staples)->default_value(0),
                 "Min number of total staples")
             ("max_total_staples",
-                po::value<int>(&m_max_total_staples)->default_value(999),
+                po::value<size_t>(&m_max_total_staples)->default_value(999),
                 "Max number of total staples")
             ("max_type_staples",
-                po::value<int>(&m_max_type_staples)->default_value(999),
+                po::value<size_t>(&m_max_type_staples)->default_value(999),
                 "Max number of staples of a given type")
             ("excluded_staples",
                 po::value<string>(),
@@ -126,7 +124,7 @@ namespace parser {
         po::options_description sim_options {"General simulation options"};
         sim_options.add_options()
             ("random_seed",
-                po::value<int>(&m_random_seed)->default_value(-1),
+                po::value<size_t>(&m_random_seed)->default_value(0),
                 "Seed for random number generator")
             ("movetype_file",
                 po::value<string>(&m_movetype_filename),
@@ -147,7 +145,7 @@ namespace parser {
                 po::value<string>(),
                 "Trajectory restart files for each replicate")
             ("restart_step",
-                po::value<int>(&m_restart_step)->default_value(0),
+                po::value<unsigned long long>(&m_restart_step)->default_value(0),
                 "Step to restart from")
             ("restart_steps",
                 po::value<string>(),
@@ -156,13 +154,13 @@ namespace parser {
                 po::value<string>(&m_vmd_file_dir)->default_value(""),
                 "Directory containing VMD scripts for viewing simulations")
             ("centering_freq",
-                po::value<int>(&m_centering_freq)->default_value(0),
+                po::value<size_t>(&m_centering_freq)->default_value(0),
                 "Centering frequency")
             ("centering_domain",
-                po::value<int>(&m_centering_domain)->default_value(0),
+                po::value<size_t>(&m_centering_domain)->default_value(0),
                 "Domain to center on")
             ("constraint_check_freq",
-                po::value<int>(&m_constraint_check_freq)->default_value(0),
+                po::value<size_t>(&m_constraint_check_freq)->default_value(0),
                 "Constraint check frequency")
             ("allow_nonsensical_ps",
                 po::value<bool>(&m_allow_nonsensical_ps)->default_value(false),
@@ -176,7 +174,7 @@ namespace parser {
         po::options_description cons_t_options {"Constant temperature options"};
         cons_t_options.add_options()
             ("ct_steps",
-                po::value<long long int>(&m_ct_steps)->default_value(0),
+                po::value<unsigned long long>(&m_ct_steps)->default_value(0),
                 "Number of MC steps")
         ;
         displayed_options.add(cons_t_options);
@@ -193,7 +191,7 @@ namespace parser {
                 po::value<double>(&m_temp_interval)->default_value(1),
                 "Temperature interval for annealing")
             ("steps_per_temp",
-                po::value<long long int>(&m_steps_per_temp)->default_value(0),
+                po::value<unsigned long long>(&m_steps_per_temp)->default_value(0),
                 "Steps per temperature in annealing")
         ;
         displayed_options.add(annealing_options);
@@ -204,16 +202,16 @@ namespace parser {
                 po::value<string>(),
                 "Temperature list")
             ("num_reps",
-                po::value<int>(&m_num_reps)->default_value(1),
+                po::value<size_t>(&m_num_reps)->default_value(1),
                 "Number of replicas")
             ("swaps",
-                po::value<long long int>(&m_swaps)->default_value(0),
+                po::value<unsigned long long>(&m_swaps)->default_value(0),
                 "Number of swaps")
             ("max_pt_dur",
                 po::value<double>(&m_max_pt_dur)->default_value(10e9),
                 "Maximum duration (s)")
             ("exchange_interval",
-                po::value<int>(&m_exchange_interval)->default_value(0),
+                po::value<size_t>(&m_exchange_interval)->default_value(0),
                 "Steps between exchange attempts")
             ("chem_pot_mults",
                 po::value<string>(),
@@ -236,28 +234,28 @@ namespace parser {
                 po::value<string>(&m_us_grid_bias_tag)->default_value(""),
                 "Tag of grid bias function to use for US")
             ("max_num_iters",
-                po::value<int>(&m_max_num_iters)->default_value(0),
+                po::value<size_t>(&m_max_num_iters)->default_value(0),
                 "Number of iterations")
             ("max_D_bias",
                 po::value<double>(&m_max_D_bias)->default_value(0),
                 "Max change in bias per iteration")
             ("equil_steps",
-                po::value<long long int>(&m_equil_steps)->default_value(0),
+                po::value<unsigned long long>(&m_equil_steps)->default_value(0),
                 "Number of equilibration steps")
             ("max_equil_dur",
-                po::value<long long int>(&m_max_equil_dur)->default_value(0),
+                po::value<unsigned long long>(&m_max_equil_dur)->default_value(0),
                 "Maximum duration of equilibration (s)")
             ("iter_steps",
-                po::value<long long int>(&m_iter_steps)->default_value(0),
+                po::value<unsigned long long>(&m_iter_steps)->default_value(0),
                 "Number of steps per iteration")
             ("max_iter_dur",
-                po::value<long long int>(&m_max_iter_dur)->default_value(0),
+                po::value<unsigned long long>(&m_max_iter_dur)->default_value(0),
                 "Maximum duration of each iteration (s)")
             ("prod_steps",
-                po::value<long long int>(&m_prod_steps)->default_value(0),
+                po::value<unsigned long long>(&m_prod_steps)->default_value(0),
                 "Number of production steps")
             ("max_prod_dur",
-                po::value<long long int>(&m_max_prod_dur)->default_value(0),
+                po::value<unsigned long long>(&m_max_prod_dur)->default_value(0),
                 "Maximum duration of production (s)")
             ("max_rel_P_diff",
                 po::value<double>(&m_max_rel_P_diff)->default_value(0.1),
@@ -289,34 +287,34 @@ namespace parser {
                 po::value<string>(&m_output_filebase)->default_value(""),
                 "Base name for output files")
             ("logging_freq",
-                po::value<int>(&m_logging_freq)->default_value(0),
+                po::value<size_t>(&m_logging_freq)->default_value(0),
                 "Logging frequency")
             ("configs_output_freq",
-                po::value<int>(&m_configs_output_freq)->default_value(0),
+                po::value<size_t>(&m_configs_output_freq)->default_value(0),
                 "Configuration output write frequency")
             ("vtf_output_freq",
-                po::value<int>(&m_vtf_output_freq)->default_value(0),
+                po::value<size_t>(&m_vtf_output_freq)->default_value(0),
                 "Configuration output write frequency")
             ("vcf_per_domain",
                 po::value<bool>(&m_vcf_per_domain)->default_value(false),
                 "Write a VCF entry for every domain grown")
             ("counts_output_freq",
-                po::value<int>(&m_counts_output_freq)->default_value(0),
+                po::value<size_t>(&m_counts_output_freq)->default_value(0),
                 "Counts output write frequency")
             ("times_output_freq",
-                po::value<int>(&m_times_output_freq)->default_value(0),
+                po::value<size_t>(&m_times_output_freq)->default_value(0),
                 "Step timing output write frequency")
             ("energies_output_freq",
-                po::value<int>(&m_energies_output_freq)->default_value(0),
+                po::value<size_t>(&m_energies_output_freq)->default_value(0),
                 "Energies output write frequency")
             ("ops_to_output",
                 po::value<string>(),
                 "Order parameters to output to file")
             ("order_params_output_freq",
-                po::value<int>(&m_order_params_output_freq)->default_value(0),
+                po::value<size_t>(&m_order_params_output_freq)->default_value(0),
                 "Order parameters write frequency")
             ("vmd_pipe_freq",
-                po::value<int>(&m_vmd_pipe_freq)->default_value(0),
+                po::value<size_t>(&m_vmd_pipe_freq)->default_value(0),
                 "Realtime VMD visualization updating frequency")
             ("create_vmd_instance",
                 po::value<bool>(&m_create_vmd_instance)->default_value(false),
@@ -328,13 +326,13 @@ namespace parser {
         po::variables_map vm;
         po::store(po::parse_command_line(argc, argv, displayed_options), vm);
         po::notify(vm);
-        if (vm.count("help")) {
+        if (vm.count("help") != 0) {
             cout << "\n";
             cout << displayed_options;
             cout << "\n";
             exit(1);
         }
-        if (not vm.count("parameter_filename")) {
+        if (vm.count("parameter_filename") == 0) {
             cout << "Input parameter file must be provided.\n";
             exit(1);
         }
@@ -347,34 +345,34 @@ namespace parser {
         process_custom_types(vm);
     }
 
-    void InputParameters::process_custom_types(po::variables_map vm) {
-        if (vm.count("excluded_staples")) {
+    void InputParameters::process_custom_types(const po::variables_map& vm) {
+        if (vm.count("excluded_staples") != 0) {
             string excluded_staples_s {vm["excluded_staples"].as<string>()};
             m_excluded_staples = string_to_int_vector(excluded_staples_s);
         }
-        if (vm.count("restart_traj_files")) {
+        if (vm.count("restart_traj_files") != 0) {
             string file_s = vm["restart_traj_files"].as<string>();
             m_restart_traj_files = string_to_string_vector(file_s);
         }
-        if (vm.count("temps")) {
+        if (vm.count("temps") != 0) {
             string temps_s = vm["temps"].as<string>();
             m_temps = string_to_double_vector(temps_s);
         }
-        if (vm.count("chem_pot_mults")) {
+        if (vm.count("chem_pot_mults") != 0) {
             string chem_pot_mults_s = vm["chem_pot_mults"].as<string>();
             m_chem_pot_mults = string_to_double_vector(chem_pot_mults_s);
         }
-        if (vm.count("bias_mults")) {
+        if (vm.count("bias_mults") != 0) {
             string bias_mults_s {vm["bias_mults"].as<string>()};
             m_bias_mults = string_to_double_vector(bias_mults_s);
         }
-        if (vm.count("stacking_mults")) {
+        if (vm.count("stacking_mults") != 0) {
             string stacking_mults_s {vm["stacking_mults"].as<string>()};
             m_stacking_mults = string_to_double_vector(stacking_mults_s);
         }
-        if (vm.count("ops_to_output")) {
+        if (vm.count("ops_to_output") != 0) {
             string ops_to_output_s {vm["ops_to_output"].as<string>()};
-            if (ops_to_output_s != "") {
+            if (not ops_to_output_s.empty()) {
                 m_ops_to_output = string_to_string_vector(ops_to_output_s);
             }
         }

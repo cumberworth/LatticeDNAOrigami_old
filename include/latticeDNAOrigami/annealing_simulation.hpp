@@ -27,11 +27,11 @@ class AnnealingGCMCSimulation: public GCMCSimulation {
     double m_max_temp;
     double m_min_temp;
     double m_temp_interval;
-    long long int m_steps_per_temp;
+    unsigned long long m_steps_per_temp;
     double m_staple_M;
     bool m_constant_staple_M;
 
-    void update_internal(long long int) {};
+    void update_internal(unsigned long long) {};
 };
 } // namespace annealing
 

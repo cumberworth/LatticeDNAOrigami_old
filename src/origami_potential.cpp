@@ -1,5 +1,4 @@
-// origami_potential.cpp
-
+#include <cstdarg>
 #include <fstream>
 #include <iostream>
 #include <utility>
@@ -9,18 +8,18 @@
 #include <boost/serialization/unordered_map.hpp>
 #include <boost/serialization/utility.hpp>
 
-#include "origami_potential.hpp"
 #include "nearest_neighbour.hpp"
+#include "origami_potential.hpp"
 
 namespace potential {
 
 using std::cout;
 
-using nearestNeighbour::calc_comp_seq;
-using utility::Occupancy;
 using utility::OrigamiMisuse;
 
-bool check_domain_orientations_opposing(Domain& cd_i, Domain& cd_j) {
+bool check_domain_orientations_opposing(
+        const Domain& cd_i,
+        const Domain& cd_j) {
     bool domain_orientations_opposing {true};
     if (cd_i.m_ore != -cd_j.m_ore) {
         domain_orientations_opposing = false;
@@ -29,387 +28,29 @@ bool check_domain_orientations_opposing(Domain& cd_i, Domain& cd_j) {
     return domain_orientations_opposing;
 }
 
-bool check_domains_exist_and_bound(vector<Domain*> cdv) {
-    bool exists_and_bound {true};
-    for (auto cd: cdv) {
-        if (cd == nullptr) {
-            exists_and_bound = false;
-            break;
-        }
-        bool cd_bound {cd->m_state == Occupancy::bound};
-        if (not cd_bound) {
-            exists_and_bound = false;
-            break;
-        }
-    }
+bool doubly_contiguous_helix(const Domain& cd_1, const Domain& cd_2) {
 
-    return exists_and_bound;
-}
-
-bool doubly_contiguous_helix(Domain* cd_1, Domain* cd_2) {
-
-    if (not check_domains_exist_and_bound({cd_1, cd_2})) {
+    if (not (cd_1.bound_domain_exists() and cd_2.bound_domain_exists())) {
         return false;
     }
 
-    if (cd_1->m_c != cd_2->m_c or cd_2->m_d != cd_1->m_d + 1) {
+    if (cd_1.m_c != cd_2.m_c or cd_2.m_d != cd_1.m_d + 1) {
         return false;
     }
-    Domain* cd_bound_1 {cd_1->m_bound_domain};
-    Domain* cd_bound_2 {cd_2->m_bound_domain};
-    if (cd_bound_1->m_c != cd_bound_2->m_c) {
-        return false;
-    }
-
-    if (cd_bound_2->m_d == cd_bound_1->m_d + 1) {
-        return true;
-    }
-
-    return false;
-}
-
-BindingPotential::BindingPotential(OrigamiPotential& pot): m_pot {pot} {}
-
-DeltaConfig BindingPotential::check_stacking(Domain& cd_i, Domain& cd_j) {
-    m_delta_config = {};
-    internal_check_stacking(cd_i, cd_j);
-
-    return m_delta_config;
-}
-
-void BindingPotential::internal_check_stacking(Domain& cd_i, Domain& cd_j) {
-
-    // Loop through relevant pairs
-    for (auto cd: {&cd_i, &cd_j}) {
-        for (int i: {-1, 0}) {
-            Domain* cd_1 {*cd + i};
-            Domain* cd_2 {*cd + (i + 1)};
-            if (not check_domains_exist_and_bound({cd_1, cd_2})) {
-                continue;
-            }
-            Domain& cd_bound_1 {*cd_1->m_bound_domain};
-            Domain& cd_bound_2 {*cd_2->m_bound_domain};
-            bool bound_same_chain {cd_bound_1.m_c == cd_bound_2.m_c};
-            bool doubly_contig = false;
-            if (bound_same_chain and (cd_bound_1.m_d == cd_bound_2.m_d - 1)) {
-                doubly_contig = true;
-            }
-            check_pair_stacking(cd_1, cd_2, doubly_contig);
-        }
-    }
-}
-
-DeltaConfig RestrictiveBindingPotential::bind_domains(
-        Domain& cd_i,
-        Domain& cd_j) {
-
-    // cd_i is new
-    m_delta_config = {};
-    m_constraints_violated = true;
-    if (not check_domain_orientations_opposing(cd_i, cd_j)) {
-        return {0, 0};
-    }
-    if (not check_domain_pair_constraints(cd_i)) {
-        return {0, 0};
-    }
-    if (not check_domain_pair_constraints(cd_j)) {
-        return {0, 0};
-    }
-
-    // Missed one linear helix check per chain
-    if (not check_linear_helix_rear(cd_i)) {
-        return {0, 0};
-    }
-    if (not check_linear_helix_rear(cd_j)) {
-        return {0, 0};
-    }
-
-    // Missed two contiguous junction checks per chain
-    if (not check_junction_front(cd_i)) {
-        return {0, 0};
-    }
-    if (not check_junction_front(cd_j)) {
-        return {0, 0};
-    }
-    if (not check_junction_rear(cd_i)) {
-        return {0, 0};
-    }
-    if (not check_junction_rear(cd_j)) {
-        return {0, 0};
-    }
-
-    // Collect energies
-    m_constraints_violated = false;
-    internal_check_stacking(cd_i, cd_j);
-    m_delta_config.e += m_pot.hybridization_energy(cd_i, cd_j);
-
-    return m_delta_config;
-}
-
-bool RestrictiveBindingPotential::check_domain_pair_constraints(Domain& cd_i) {
-
-    // Check both pairs
-    bool pair_constraints_obeyed {true};
-    for (int i: {-1, 0}) {
-        Domain* cd_1 {cd_i + i};
-        Domain* cd_2 {cd_i + (i + 1)};
-        if (not check_domains_exist_and_bound({cd_1, cd_2})) {
-            continue;
-        }
-        if (not check_helical_constraints(*cd_1, *cd_2)) {
-            pair_constraints_obeyed = false;
-            break;
-        }
-    }
-
-    return pair_constraints_obeyed;
-}
-
-bool RestrictiveBindingPotential::check_helical_constraints(
-        Domain& cd_1,
-        Domain& cd_2) {
-
-    // Given that d1 and d2 exist and are bound
-    bool helical_constraints_obeyed {true};
-
-    // Calculate next domain vector
-    VectorThree ndr {cd_2.m_pos - cd_1.m_pos};
-
-    Domain& cd_bound_1 {*cd_1.m_bound_domain};
-    Domain& cd_bound_2 {*cd_2.m_bound_domain};
-    bool bound_same_chain {cd_bound_1.m_c == cd_bound_2.m_c};
-
-    // New helix case
-    if (cd_1.m_ore == ndr) {
-
-        // Check parallel helix constraint
-        if (not(cd_1.m_ore == cd_2.m_ore)) {
-            helical_constraints_obeyed = false;
-        }
-
-        // Check doubly contiguous constraint
-        if (helical_constraints_obeyed and bound_same_chain) {
-            if (cd_bound_1.m_d == cd_bound_2.m_d - 1) {
-                helical_constraints_obeyed = false;
-            }
-            else {
-                if (not check_doubly_contiguous_junction(cd_1, cd_2)) {
-                    helical_constraints_obeyed = false;
-                }
-            }
-        }
-    }
-
-    // Non-physical case
-    else if (cd_1.m_ore == -ndr) {
-        helical_constraints_obeyed = false;
-    }
-
-    // Same helix case
-    else {
-
-        // Check double contiguous constraint
-        if (bound_same_chain) {
-            if (cd_bound_1.m_d == cd_bound_2.m_d + 1) {
-                helical_constraints_obeyed = false;
-            }
-        }
-        if (cd_1.check_twist_constraint(ndr, cd_2)) {
-            if (not check_linear_helix(ndr, cd_2)) {
-                helical_constraints_obeyed = false;
-            }
-        }
-        else {
-            helical_constraints_obeyed = false;
-        }
-    }
-    return helical_constraints_obeyed;
-}
-
-bool RestrictiveBindingPotential::check_linear_helix(
-        VectorThree ndr_1,
-        Domain& cd_2) {
-
-    bool linear_if_helix {true};
-    Domain* cd_3 {cd_2 + 1};
-    if (not check_domains_exist_and_bound({cd_3})) {
-        return linear_if_helix;
-    }
-
-    // Third domain part of new helix
-    VectorThree ndr_2 {cd_3->m_pos - cd_2.m_pos};
-    if (ndr_2 == cd_2.m_ore) {
-        return linear_if_helix;
-    }
-
-    // Third domain linear
-    if (ndr_1 == ndr_2) {
-        // Can only be used if I have a way increase it when setting a checked
-        // domain
-        // m_delta_config.linear_helices += 1;
-        return linear_if_helix;
-    }
-
-    linear_if_helix = false;
-    return linear_if_helix;
-}
-
-bool RestrictiveBindingPotential::check_linear_helix_rear(Domain& cd_3) {
-    // Check linear helix constraints given rear domain exists and bound
-    bool linear_if_helix {true};
-    Domain* cd_2 {cd_3 + -1};
-    Domain* cd_1 {cd_3 + -2};
-    if (not check_domains_exist_and_bound({cd_1, cd_2})) {
-        return linear_if_helix;
-    }
-
-    VectorThree ndr_1 {cd_2->m_pos - cd_1->m_pos};
-    VectorThree ndr_2 {cd_3.m_pos - cd_2->m_pos};
-    VectorThree ore_1 {cd_1->m_ore};
-    VectorThree ore_2 {cd_2->m_ore};
-    // Domains 1 and 2 are junction
-    if (ndr_1 == ore_1) {
-        return linear_if_helix;
-    }
-
-    // Domains 2 and 3 are junction
-    if (ndr_2 == ore_2) {
-        return linear_if_helix;
-    }
-
-    // Domains are linear
-    if (ndr_1 == ndr_2) {
-        // Can only be used if I have a way increase it when setting a checked
-        // domain
-        // m_delta_config.linear_helices += 1;
-        return linear_if_helix;
-    }
-
-    linear_if_helix = false;
-    return linear_if_helix;
-}
-
-bool RestrictiveBindingPotential::check_doubly_contiguous_junction(
-        Domain& cd_2,
-        Domain& cd_3) {
-
-    // Already know d_2 and d_3 are doubly contiguous junction
-    bool junction_constraints_obeyed {true};
-    Domain* cd_1 {cd_2 + -1};
-    Domain* cd_4 {cd_3 + 1};
-    if (not check_domains_exist_and_bound({cd_1, cd_4})) {
-        return junction_constraints_obeyed;
-    }
-    junction_constraints_obeyed =
-            check_doubly_contiguous_junction(*cd_1, cd_2, cd_3, *cd_4);
-    return junction_constraints_obeyed;
-}
-
-bool RestrictiveBindingPotential::doubly_contiguous_junction(
-        Domain& cd_1,
-        Domain& cd_2) {
-
-    // Given that d1 and d2 exist and are bound and contiguous
-
-    // Check doubly contiguous
-    Domain& cd_bound_1 {*cd_1.m_bound_domain};
-    Domain& cd_bound_2 {*cd_2.m_bound_domain};
+    const Domain& cd_bound_1 {cd_1.get_bound_domain()};
+    const Domain& cd_bound_2 {cd_2.get_bound_domain()};
     if (cd_bound_1.m_c != cd_bound_2.m_c) {
         return false;
     }
 
-    if (cd_bound_2.m_d != cd_bound_1.m_d - 1) {
-        return false;
-    }
-
-    // Check junction
-    VectorThree ndr {cd_2.m_pos - cd_1.m_pos};
-    VectorThree ore_1 {cd_1.m_ore};
-    if (ndr != ore_1) {
-
-        // To be clear, this is only used to check for changes in junction
-        // constraints; if it's been set before the local constraints were okay
-        return false;
-    }
-
-    return true;
+    return cd_bound_2.m_d == cd_bound_1.m_d + 1;
 }
 
-bool RestrictiveBindingPotential::check_doubly_contiguous_junction(
-        Domain& cd_1,
-        Domain& cd_2,
-        Domain& cd_3,
-        Domain& cd_4) {
+BindingPotential::BindingPotential(OrigamiPotential& pot): m_pot {pot} {}
 
-    bool junction_constraints_obeyed;
-    VectorThree ndr_1 {cd_2.m_pos - cd_1.m_pos};
-    VectorThree ndr_3 {cd_4.m_pos - cd_3.m_pos};
-
-    if (ndr_1 == -ndr_3 or ndr_1 == cd_1.m_ore or ndr_3 == cd_3.m_ore) {
-        junction_constraints_obeyed = true;
-    }
-    else {
-        junction_constraints_obeyed = false;
-    }
-
-    return junction_constraints_obeyed;
-}
-
-bool RestrictiveBindingPotential::check_junction_front(Domain& cd_1) {
-    bool junction_constraints_obeyed {true};
-    Domain* cd_2 {cd_1 + 1};
-    Domain* cd_3 {cd_1 + 2};
-    Domain* cd_4 {cd_1 + 3};
-    if (not check_domains_exist_and_bound({cd_2, cd_3, cd_4})) {
-        return junction_constraints_obeyed;
-    }
-
-    if (not doubly_contiguous_junction(*cd_2, *cd_3)) {
-        return junction_constraints_obeyed;
-    }
-
-    return check_doubly_contiguous_junction(cd_1, *cd_2, *cd_3, *cd_4);
-}
-
-bool RestrictiveBindingPotential::check_junction_rear(Domain& cd_4) {
-    // Check junction given d4 exists
-    bool junction_constraints_obeyed {true};
-    Domain* cd_3 {cd_4 + -1};
-    Domain* cd_2 {cd_4 + -2};
-    Domain* cd_1 {cd_4 + -3};
-    if (not check_domains_exist_and_bound({cd_1, cd_2, cd_3})) {
-        return junction_constraints_obeyed;
-    }
-
-    if (not doubly_contiguous_junction(*cd_2, *cd_3)) {
-        return junction_constraints_obeyed;
-    }
-
-    return check_doubly_contiguous_junction(*cd_1, *cd_2, *cd_3, cd_4);
-}
-
-void RestrictiveBindingPotential::check_pair_stacking(
-        Domain* cd_1,
-        Domain* cd_2,
-        bool doubly_contig) {
-
-    VectorThree ndr {cd_2->m_pos - cd_1->m_pos};
-    if (ndr == cd_1->m_ore) {
-        ;
-    }
-    else {
-        double delta_e {m_pot.stacking_energy(*cd_1, *cd_2)};
-        if (doubly_contig) {
-            delta_e /= 2;
-        }
-        else {
-            m_delta_config.stacked_pairs += 2;
-        }
-        m_delta_config.e += delta_e;
-    }
-}
-
-DeltaConfig FlexibleBindingPotential::bind_domains(Domain& cd_i, Domain& cd_j) {
+DeltaConfig BindingPotential::bind_domains(
+        const Domain& cd_i,
+        const Domain& cd_j) {
 
     m_delta_config = {};
     m_constraints_violated = false;
@@ -419,136 +60,13 @@ DeltaConfig FlexibleBindingPotential::bind_domains(Domain& cd_i, Domain& cd_j) {
     }
 
     // Loop through relevant pairs
-    for (auto cd: {&cd_i, &cd_j}) {
-        check_constraints(cd);
-        if (m_constraints_violated) {
-            return {};
-        }
-    }
-    m_delta_config.e += m_pot.hybridization_energy(cd_i, cd_j);
-
-    return m_delta_config;
-}
-
-bool FlexibleBindingPotential::check_regular_pair_constraints(
-        Domain* cd_1,
-        Domain* cd_2,
-        int i) {
-
-    bool stacked {false};
-    check_edge_pair_junction(cd_1, cd_2, i);
-    if (not m_constraints_violated) {
-        if (check_pair_stacked(cd_1, cd_2)) {
-            stacked = true;
-            m_delta_config.e += m_pot.stacking_energy(*cd_1, *cd_2);
-            m_delta_config.stacked_pairs += 2;
-        }
-    }
-
-    return stacked;
-}
-
-bool FlexibleBindingPotential::check_possible_doubly_contig_helix(
-        Domain* cd_1,
-        Domain* cd_2) {
-
-    bool stacked {false};
-    VectorThree ndr {cd_2->m_pos - cd_1->m_pos};
-    if (ndr == cd_1->m_ore or ndr == -cd_1->m_ore) {
-        m_constraints_violated = true;
-    }
-    else if (cd_1->check_twist_constraint(ndr, *cd_2)) {
-        stacked = true;
-
-        // I have to divide this by two so that I don't overcount
-        m_delta_config.e += m_pot.stacking_energy(*cd_1, *cd_2) / 2;
-        m_delta_config.stacked_pairs += 1;
-    }
-    else {
-        m_constraints_violated = true;
-    }
-
-    return stacked;
-}
-
-bool FlexibleBindingPotential::check_pair_stacked(Domain* cd_1, Domain* cd_2) {
-
-    bool stacked {false};
-    VectorThree ndr {cd_2->m_pos - cd_1->m_pos};
-    if (ndr != cd_1->m_ore and ndr != -cd_1->m_ore) {
-        stacked = cd_1->check_twist_constraint(ndr, *cd_2);
-    }
-
-    return stacked;
-}
-
-void FlexibleBindingPotential::check_possible_doubly_contig_junction(
-        Domain* cd_1,
-        Domain* cd_2) {
-
-    VectorThree ndr {cd_2->m_pos - cd_1->m_pos};
-    if (cd_1->m_ore == ndr) {
-        Domain* cd_j1 {*cd_1 + -1};
-        Domain* cd_j4 {*cd_2 + 1};
-        if (check_domains_exist_and_bound({cd_j1, cd_j4})) {
-            check_doubly_contig_junction(cd_j1, cd_1, cd_2, cd_j4);
-        }
-    }
-    else {
-        m_constraints_violated = true;
-    }
-}
-
-void FlexibleBindingPotential::check_edge_pair_junction(
-        Domain* cd_1,
-        Domain* cd_2,
-        int i) {
-
-    Domain* cd_j1;
-    Domain* cd_j2;
-    Domain* cd_j3;
-    Domain* cd_j4;
-    if (i == -1) {
-        cd_j1 = *cd_1 + -2;
-        cd_j2 = *cd_1 + -1;
-        cd_j3 = cd_1;
-        cd_j4 = cd_2;
-    }
-    else {
-        cd_j1 = cd_1;
-        cd_j2 = cd_2;
-        cd_j3 = *cd_2 + 1;
-        cd_j4 = *cd_2 + 2;
-    }
-    if (check_domains_exist_and_bound({cd_j1, cd_j2, cd_j3, cd_j4})) {
-        Domain& cd_bound_j2 {*cd_j2->m_bound_domain};
-        Domain& cd_bound_j3 {*cd_j3->m_bound_domain};
-        bool bound_same_chain {cd_bound_j2.m_c == cd_bound_j3.m_c};
-        if (bound_same_chain) {
-            if ((cd_bound_j2.m_d == cd_bound_j3.m_d + 1)) {
-                check_doubly_contig_junction(cd_j1, cd_j2, cd_j3, cd_j4);
-            }
-        }
-    }
-}
-
-DeltaConfig LinearFlexibleBindingPotential::bind_domains(
-        Domain& cd_i,
-        Domain& cd_j) {
-
-    m_delta_config = {};
-    m_constraints_violated = false;
-    if (not check_domain_orientations_opposing(cd_i, cd_j)) {
-        m_constraints_violated = true;
+    check_constraints(cd_i);
+    if (m_constraints_violated) {
         return {};
     }
-
-    // Loop through relevant pairs
-    for (auto cd: {&cd_i, &cd_j}) {
-        check_constraints(cd);
-        if (m_constraints_violated) {
-            return {};
-        }
+    check_constraints(cd_j);
+    if (m_constraints_violated) {
+        return {};
     }
     check_central_linear_helix(cd_i, cd_j);
     m_delta_config.e += m_pot.hybridization_energy(cd_i, cd_j);
@@ -556,82 +74,40 @@ DeltaConfig LinearFlexibleBindingPotential::bind_domains(
     return m_delta_config;
 }
 
-void LinearFlexibleBindingPotential::check_central_linear_helix(
-        Domain& cd_i,
-        Domain& cd_j) {
-
-    Domain* cd_h1 {cd_i + -1};
-    Domain* cd_h2 {&cd_i};
-    Domain* cd_h3;
-    for (auto j: {-1, 1}) {
-        cd_h3 = cd_j + j;
-        if (check_domains_exist_and_bound({cd_h1, cd_h3})) {
-            if (check_pair_stacked(cd_h1, cd_h2) and
-                check_pair_stacked(cd_h2, cd_h3->m_bound_domain)) {
-
-                if (not doubly_contiguous_helix(cd_h1, cd_h2) and
-                    not doubly_contiguous_helix(cd_h2, (*cd_h2 + 1))) {
-                    check_linear_helix(cd_h1, cd_h2, cd_h3);
-                }
-            }
-        }
-    }
-
-    cd_h2 = &cd_i;
-    cd_h3 = cd_i + 1;
-    for (auto j: {-1, 1}) {
-        cd_h1 = cd_j + j;
-        if (check_domains_exist_and_bound({cd_h1, cd_h3})) {
-            if (check_pair_stacked(cd_h1->m_bound_domain, cd_h2) and
-                check_pair_stacked(cd_h2, cd_h3)) {
-
-                if (not doubly_contiguous_helix(cd_h2, cd_h3) and
-                    not doubly_contiguous_helix((*cd_h2 + -1), cd_h2)) {
-                    check_linear_helix(cd_h1, cd_h2, cd_h3);
-                }
-            }
-        }
-    }
-}
-
-DeltaConfig LinearFlexibleBindingPotential::check_stacking(
-        Domain& cd_i,
-        Domain& cd_j) {
+DeltaConfig BindingPotential::check_stacking(
+        const Domain& cd_i,
+        const Domain& cd_j) {
 
     m_delta_config = {};
     m_constraints_violated = false;
-    for (auto cd: {&cd_i, &cd_j}) {
-        check_constraints(cd);
-    }
+    check_constraints(cd_i);
+    check_constraints(cd_j);
     check_central_linear_helix(cd_i, cd_j);
 
     return m_delta_config;
 }
 
-// BAD LAZY JUST HERE TO PREVENT WARNINGS
-void LinearFlexibleBindingPotential::check_pair_stacking(
-        Domain*,
-        Domain*,
-        bool) {
-    // BULLSHIT
-    std::cout << "This better not be called\n";
-}
-
-void LinearFlexibleBindingPotential::check_constraints(Domain* cd) {
+void BindingPotential::check_constraints(const Domain& cd) {
 
     vector<bool> pairs_stacked {false, false};
     for (int i: {-1, 0}) {
-        Domain* cd_1 {*cd + i};
-        Domain* cd_2 {*cd + (i + 1)};
-        if (not check_domains_exist_and_bound({cd_1, cd_2})) {
+        if (not cd.contig_domain_exists(i)) {
+            continue;
+        }
+        const Domain& cd_1 {cd.get_contig_domain(i)};
+        if (not cd_1.next_domain_exists()) {
+            continue;
+        }
+        const Domain& cd_2 {cd_1.get_next_domain()};
+        if (not (cd_1.bound_domain_exists() and cd_2.bound_domain_exists())) {
             continue;
         }
 
         // This assumes that the staples are at most 2 domains long
         // Othewise I would have to check the edge pair regardless of
         // whether the core was doubly contiguous
-        Domain& cd_bound_1 {*cd_1->m_bound_domain};
-        Domain& cd_bound_2 {*cd_2->m_bound_domain};
+        const Domain& cd_bound_1 {cd_1.get_bound_domain()};
+        const Domain& cd_bound_2 {cd_2.get_bound_domain()};
         bool bound_same_chain {cd_bound_1.m_c == cd_bound_2.m_c};
         bool stacked {false};
         if (bound_same_chain) {
@@ -661,147 +137,65 @@ void LinearFlexibleBindingPotential::check_constraints(Domain* cd) {
             stacked = check_regular_pair_constraints(cd_1, cd_2, i);
         }
         if (stacked) {
-            check_linear_helix(cd_1, cd_2, i);
+            check_linear_helix(&cd_1, &cd_2, i);
             pairs_stacked[i + 1] = true;
         }
         if (m_constraints_violated) {
             return;
         }
     }
-    if (pairs_stacked[0] and pairs_stacked[1]) {
-        check_linear_helix(*cd + -1, cd, *cd + 1);
+    if (pairs_stacked[0] and pairs_stacked[1] and cd.prev_domain_exists() and
+        cd.next_domain_exists()) {
+        check_linear_helix(&cd.get_prev_domain(), &cd, &cd.get_next_domain());
     }
 }
 
-void LinearFlexibleBindingPotential::check_doubly_contig_junction(
-        Domain* cd_1,
-        Domain* cd_2,
-        Domain* cd_3,
-        Domain* cd_4) {
+bool BindingPotential::check_possible_doubly_contig_helix(
+        const Domain& cd_1,
+        const Domain& cd_2) {
 
-    VectorThree ndr_1 {cd_2->m_pos - cd_1->m_pos};
-    VectorThree ndr_2 {cd_3->m_pos - cd_2->m_pos};
-    VectorThree ndr_3 {cd_4->m_pos - cd_3->m_pos};
-
-    // Check that the domains are not on opposite sides of the junction
-    if (ndr_1 != ndr_2 and ndr_1 == ndr_3) {
+    bool stacked {false};
+    VectorThree ndr {cd_2.m_pos - cd_1.m_pos};
+    if (ndr == cd_1.m_ore or ndr == -cd_1.m_ore) {
         m_constraints_violated = true;
     }
-    else {
-        if (check_pair_stacked(cd_1, cd_2) and check_pair_stacked(cd_3, cd_4)) {
-            if (ndr_1 == -ndr_3) {
-                m_delta_config.stacked_juncts += 1;
-            }
-            else {
-                m_delta_config.e -= m_pot.stacking_energy(*cd_1, *cd_2) / 2;
-                m_delta_config.e -= m_pot.stacking_energy(*cd_3, *cd_4) / 2;
-                m_delta_config.stacked_pairs -= 2;
-            }
-        }
-    }
-}
+    else if (cd_1.check_twist_constraint(ndr, cd_2)) {
+        stacked = true;
 
-void LinearFlexibleBindingPotential::check_linear_helix(
-        Domain* cd_h1,
-        Domain* cd_h2,
-        Domain* cd_h3) {
-
-    VectorThree ndr_1 {cd_h2->m_pos - cd_h1->m_pos};
-    VectorThree ndr_2 {cd_h3->m_pos - cd_h2->m_pos};
-    if (ndr_1 == ndr_2) {
-        m_delta_config.linear_helices += 1;
+        // I have to divide this by two so that I don't overcount
+        m_delta_config.e += m_pot.stacking_energy(cd_1, cd_2) / 2;
+        m_delta_config.stacked_pairs += 1;
     }
     else {
-        m_delta_config.e -= m_pot.stacking_energy(*cd_h1, *cd_h2) / 2;
-        m_delta_config.e -= m_pot.stacking_energy(*cd_h2, *cd_h3) / 2;
-        m_delta_config.stacked_pairs -= 2;
+        m_constraints_violated = true;
     }
+
+    return stacked;
 }
 
-void LinearFlexibleBindingPotential::check_linear_helix(
-        Domain* cd_1,
-        Domain* cd_2,
-        int i) {
-
-    Domain* cd_h1;
-    Domain* cd_h2;
-    Domain* cd_h3;
-    if (i == -1) {
-        cd_h2 = cd_1;
-        cd_h3 = cd_2;
-
-        // Check same chain
-        cd_h1 = *cd_1 + -1;
-        if (check_domains_exist_and_bound({cd_h1})) {
-            if (check_pair_stacked(cd_h1, cd_h2)) {
-                check_linear_helix(cd_h1, cd_h2, cd_h3);
-            }
-        }
-
-        // Check helices that extend to bound chain
-        for (auto j: {-1, 1}) {
-            cd_h1 = *(cd_1->m_bound_domain) + j;
-            if (check_domains_exist_and_bound({cd_h1})) {
-                if (check_pair_stacked(cd_h1->m_bound_domain, cd_h2)) {
-                    if (not doubly_contiguous_helix(cd_h2, cd_h3) and
-                        not doubly_contiguous_helix((*cd_h2 + -1), cd_h2)) {
-                        check_linear_helix(cd_h1, cd_h2, cd_h3);
-                    }
-                }
-            }
-        }
-    }
-
-    else {
-        cd_h2 = cd_2;
-        cd_h1 = cd_1;
-
-        // Check same chain
-        cd_h3 = *cd_2 + 1;
-        if (check_domains_exist_and_bound({cd_h3})) {
-            if (check_pair_stacked(cd_h2, cd_h3)) {
-                check_linear_helix(cd_h1, cd_h2, cd_h3);
-            }
-        }
-
-        // Check helices that extend to bound chain
-        for (auto j: {-1, 1}) {
-            cd_h3 = *(cd_2->m_bound_domain) + j;
-            if (check_domains_exist_and_bound({cd_h3})) {
-                if (check_pair_stacked(cd_h2, cd_h3->m_bound_domain)) {
-                    if (not doubly_contiguous_helix(cd_h1, cd_h2) and
-                        not doubly_contiguous_helix(cd_h2, (*cd_h2 + 1))) {
-                        check_linear_helix(cd_h1, cd_h2, cd_h3);
-                    }
-                }
-            }
-        }
-    }
-}
-
-void LinearFlexibleBindingPotential::check_forward_single_junction(
-        Domain* cd_1,
-        Domain* cd_2) {
+void BindingPotential::check_forward_single_junction(
+        const Domain& cd_1,
+        const Domain& cd_2) {
 
     // Passed domains are the first junction pair
-    Domain* cd_j1 {cd_1};
-    Domain* cd_j2 {cd_2};
-    Domain* cd_j3;
-    Domain* cd_j4;
-    Domain* cd_k1;
-    Domain* cd_k2;
+    const Domain* cd_j1 {&cd_1};
+    const Domain* cd_j2 {&cd_2};
+    const Domain* cd_j3;
+    const Domain* cd_j4;
+    const Domain* cd_k1;
+    const Domain* cd_k2;
 
     // Find possible kink pair combinations
-    vector<pair<Domain*, Domain*>> first_sel {};
+    vector<pair<const Domain*, const Domain*>> first_sel {};
 
     // Add kink pair that is the same chain as the first junction pair
-    first_sel.push_back({cd_j2, cd_j2->m_forward_domain});
+    first_sel.emplace_back(cd_j2, cd_j2->m_next_domain);
 
     // Add kink pairs that are on the chain bound to j2
     Domain* cd_j1_bound {cd_j1->m_bound_domain};
     Domain* cd_j2_bound {cd_j2->m_bound_domain};
-    Domain* cd_j2_bound_for {cd_j2_bound->m_forward_domain};
-    Domain* cd_j2_bound_bac {cd_j2_bound->m_backward_domain};
+    Domain* cd_j2_bound_for {cd_j2_bound->m_next_domain};
+    Domain* cd_j2_bound_bac {cd_j2_bound->m_prev_domain};
     if (cd_j1_bound->m_c == cd_j2_bound->m_c) {
         int diff {cd_j2_bound->m_d - cd_j1_bound->m_d};
 
@@ -813,29 +207,29 @@ void LinearFlexibleBindingPotential::check_forward_single_junction(
         // Doubly contiguous cannot be single strand kink
         if (diff == 1) {
 
-            first_sel.push_back({cd_j2_bound, cd_j2_bound_for});
+            first_sel.emplace_back(cd_j2_bound, cd_j2_bound_for);
         }
         else if (diff == -1) {
-            first_sel.push_back({cd_j2_bound, cd_j2_bound_bac});
+            first_sel.emplace_back(cd_j2_bound, cd_j2_bound_bac);
         }
         else {
-            first_sel.push_back({cd_j2_bound, cd_j2_bound_for});
-            first_sel.push_back({cd_j2_bound, cd_j2_bound_bac});
+            first_sel.emplace_back(cd_j2_bound, cd_j2_bound_for);
+            first_sel.emplace_back(cd_j2_bound, cd_j2_bound_bac);
         }
     }
     else {
-        first_sel.push_back({cd_j2_bound, cd_j2_bound_for});
-        first_sel.push_back({cd_j2_bound, cd_j2_bound_bac});
+        first_sel.emplace_back(cd_j2_bound, cd_j2_bound_for);
+        first_sel.emplace_back(cd_j2_bound, cd_j2_bound_bac);
     }
     for (auto sel1: first_sel) {
         cd_k1 = sel1.first;
         cd_k2 = sel1.second;
-        if (not check_domains_exist_and_bound({cd_k2})) {
+        if (not check_domains_exist_and_bound(cd_k2)) {
             continue;
         }
 
         // If kink is stacked, not a kink
-        if (check_pair_stacked(cd_k1, cd_k2)) {
+        if (check_pair_stacked(*cd_k1, *cd_k2)) {
             continue;
         }
 
@@ -846,271 +240,77 @@ void LinearFlexibleBindingPotential::check_forward_single_junction(
         }
 
         // Find possible second junction pairs
-        vector<pair<Domain*, Domain*>> second_sel {};
+        vector<pair<const Domain*, const Domain*>> second_sel {};
 
         // Add junction that is on the same chain as the kink pair
         int dir {cd_k2->m_d - cd_k1->m_d};
-        Domain* cd_k2_next {*cd_k2 + dir};
-        second_sel.push_back({cd_k2, cd_k2_next});
 
         // Add junction pairs that are on chain bound to k2
-        Domain* cd_k2_bound {cd_k2->m_bound_domain};
-        Domain* cd_k2_bound_for {cd_k2_bound->m_forward_domain};
-        Domain* cd_k2_bound_bac {cd_k2_bound->m_backward_domain};
-        if (check_domains_exist_and_bound({cd_k2_next})) {
+        const Domain* cd_k2_bound {cd_k2->m_bound_domain};
+        const Domain* cd_k2_bound_for {cd_k2_bound->m_next_domain};
+        const Domain* cd_k2_bound_bac {cd_k2_bound->m_prev_domain};
+        if (cd_k2->contig_domain_exists(dir)) {
+            const Domain* cd_k2_next {&cd_k2->get_contig_domain(dir)};
+            second_sel.emplace_back(cd_k2, cd_k2_next);
+            if (cd_k2_next->bound_domain_exists()) {
 
-            // If j3 and j4 are doubly contiguous, then this will be double
-            // counted
-            Domain* cd_k2_next_bound {cd_k2_next->m_bound_domain};
-            if (cd_k2_bound_for != cd_k2_next_bound) {
-                second_sel.push_back({cd_k2_bound, cd_k2_bound_for});
-            }
-            if (cd_k2_bound_bac != cd_k2_next_bound) {
-                second_sel.push_back({cd_k2_bound, cd_k2_bound_bac});
+                // If j3 and j4 are doubly contiguous, then this will be double
+                // counted
+                Domain* cd_k2_next_bound {cd_k2_next->m_bound_domain};
+                if (cd_k2_bound_for != cd_k2_next_bound) {
+                    second_sel.emplace_back(cd_k2_bound, cd_k2_bound_for);
+                }
+                if (cd_k2_bound_bac != cd_k2_next_bound) {
+                    second_sel.emplace_back(cd_k2_bound, cd_k2_bound_bac);
+                }
             }
         }
         else {
-            second_sel.push_back({cd_k2_bound, cd_k2_bound_for});
-            second_sel.push_back({cd_k2_bound, cd_k2_bound_bac});
+            second_sel.emplace_back(cd_k2_bound, cd_k2_bound_for);
+            second_sel.emplace_back(cd_k2_bound, cd_k2_bound_bac);
         }
         for (auto sel2: second_sel) {
             cd_j3 = sel2.first;
             cd_j4 = sel2.second;
-            if (not check_domains_exist_and_bound({cd_j4})) {
+            if (not check_domains_exist_and_bound(cd_j4)) {
                 continue;
             }
-            // cout << "Check forward\n";
             check_single_junction(cd_j1, cd_j2, cd_j3, cd_j4, cd_k1, cd_k2);
         }
     }
 }
 
-void LinearFlexibleBindingPotential::check_backward_single_junction(
-        Domain* cd_1,
-        Domain* cd_2) {
+bool BindingPotential::check_pair_stacked(
+        const Domain& cd_1,
+        const Domain& cd_2) {
 
-    // Passed domains are the second junction pair
-    Domain* cd_j1;
-    Domain* cd_j2;
-    Domain* cd_j3 {cd_1};
-    Domain* cd_j4 {cd_2};
-    Domain* cd_k1;
-    Domain* cd_k2;
-
-    // Find possible kink pair combinations
-    vector<pair<Domain*, Domain*>> first_sel {};
-
-    // Add kink pair that is the same chain as the first junction pair
-    first_sel.push_back({cd_j3, cd_j3->m_backward_domain});
-
-    // Add kink pairs that are on the chain bound to j3
-    Domain* cd_j3_bound {cd_j3->m_bound_domain};
-    Domain* cd_j4_bound {cd_j4->m_bound_domain};
-    Domain* cd_j3_bound_for {cd_j3_bound->m_forward_domain};
-    Domain* cd_j3_bound_bac {cd_j3_bound->m_backward_domain};
-    if (cd_j3->m_bound_domain->m_c == cd_j4->m_bound_domain->m_c) {
-        int diff {cd_j4_bound->m_d - cd_j3_bound->m_d};
-
-        // Must prevent double counting
-        if (abs(diff) == 1 and cd_j3->m_c > cd_j3_bound->m_c) {
-            return;
-        }
-        // Doubly contiguous cannot be single strand kink
-        if (diff == 1) {
-            first_sel.push_back({cd_j3_bound, cd_j3_bound_for});
-        }
-        else if (diff == -1) {
-            first_sel.push_back({cd_j3_bound, cd_j3_bound_bac});
-        }
-        else {
-            first_sel.push_back({cd_j3_bound, cd_j3_bound_for});
-            first_sel.push_back({cd_j3_bound, cd_j3_bound_bac});
-        }
+    bool stacked {false};
+    VectorThree ndr {cd_2.m_pos - cd_1.m_pos};
+    if (ndr != cd_1.m_ore and ndr != -cd_1.m_ore) {
+        stacked = cd_1.check_twist_constraint(ndr, cd_2);
     }
-    else {
-        first_sel.push_back({cd_j3_bound, cd_j3_bound_for});
-        first_sel.push_back({cd_j3_bound, cd_j3_bound_bac});
-    }
-    for (auto sel1: first_sel) {
-        cd_k2 = sel1.first;
-        cd_k1 = sel1.second;
-        if (not check_domains_exist_and_bound({cd_k1})) {
-            continue;
-        }
 
-        // If kink is stacked, not a kink
-        if (check_pair_stacked(cd_k1, cd_k2)) {
-            continue;
-        }
-
-        // If k1 and k2 are doubly contiguous, skip
-        if (cd_k1->m_bound_domain->m_c == cd_k2->m_bound_domain->m_c and
-            abs(cd_k1->m_bound_domain->m_d - cd_k2->m_bound_domain->m_d) == 1) {
-            continue;
-        }
-
-        // Find possible second junction pairs
-        vector<pair<Domain*, Domain*>> second_sel {};
-
-        // Add junction that is on the same chain as the kink pair
-        int dir {cd_k1->m_d - cd_k2->m_d};
-        Domain* cd_k1_next {*cd_k1 + dir};
-        second_sel.push_back({cd_k1, cd_k1_next});
-
-        // Add junction pairs that are on chain bound to k2
-        Domain* cd_k1_bound {cd_k1->m_bound_domain};
-        Domain* cd_k1_bound_for {cd_k1_bound->m_forward_domain};
-        Domain* cd_k1_bound_bac {cd_k1_bound->m_backward_domain};
-        if (check_domains_exist_and_bound({cd_k1_next})) {
-
-            // If j1 and j2 are doubly contiguous, then this will be double
-            // counted
-            Domain* cd_k1_next_bound {cd_k1_next->m_bound_domain};
-            if (cd_k1_bound_for != cd_k1_next_bound) {
-                second_sel.push_back({cd_k1_bound, cd_k1_bound_for});
-            }
-            if (cd_k1_bound_bac != cd_k1_next_bound) {
-                second_sel.push_back({cd_k1_bound, cd_k1_bound_bac});
-            }
-        }
-        else {
-            second_sel.push_back({cd_k1_bound, cd_k1_bound_for});
-            second_sel.push_back({cd_k1_bound, cd_k1_bound_bac});
-        }
-        for (auto sel2: second_sel) {
-            cd_j2 = sel2.first;
-            cd_j1 = sel2.second;
-            if (not check_domains_exist_and_bound({cd_j1})) {
-                continue;
-            }
-            // cout << "Check backward\n";
-            check_single_junction(cd_j1, cd_j2, cd_j3, cd_j4, cd_k1, cd_k2);
-        }
-    }
+    return stacked;
 }
 
-void LinearFlexibleBindingPotential::check_central_single_junction(
-        Domain* cd_1,
-        Domain* cd_2) {
-
-    // Passed domains are the kink pair
-    Domain* cd_j1;
-    Domain* cd_j2;
-    Domain* cd_j3;
-    Domain* cd_j4;
-    Domain* cd_k1 {cd_1};
-    Domain* cd_k2 {cd_2};
-
-    // Kinked pair cannot be doubly contiguous
-    if (cd_k1->m_bound_domain->m_c == cd_k2->m_bound_domain->m_c and
-        abs(cd_k1->m_bound_domain->m_d - cd_k2->m_bound_domain->m_d) == 1) {
-        return;
-    }
-
-    // Find possible first junction pairs
-    vector<pair<Domain*, Domain*>> first_sel {};
-
-    // Add first junction pair that is on the same chain as the kink pair
-    Domain* cd_k1_bac {cd_k1->m_backward_domain};
-    first_sel.push_back({cd_k1, cd_k1_bac});
-
-    // Add first junction pairs bound to k1
-    Domain* cd_k1_bound {cd_k1->m_bound_domain};
-    Domain* cd_k1_bound_for {cd_k1_bound->m_forward_domain};
-    Domain* cd_k1_bound_bac {cd_k1_bound->m_backward_domain};
-    if (check_domains_exist_and_bound({cd_k1_bac})) {
-
-        // If j1 and j2 are doubly contiguous, then this will be double
-        // counted
-        Domain* cd_k1_bac_bound {cd_k1_bac->m_bound_domain};
-        if (cd_k1_bound_for != cd_k1_bac_bound) {
-            first_sel.push_back({cd_k1_bound, cd_k1_bound_for});
-        }
-        if (cd_k1_bound_bac != cd_k1_bac_bound) {
-            first_sel.push_back({cd_k1_bound, cd_k1_bound_bac});
-        }
-    }
-    else {
-        first_sel.push_back({cd_k1_bound, cd_k1_bound_for});
-        first_sel.push_back({cd_k1_bound, cd_k1_bound_bac});
-    }
-    for (auto sel1: first_sel) {
-        cd_j2 = sel1.first;
-        cd_j1 = sel1.second;
-        if (not check_domains_exist_and_bound({cd_j1})) {
-            continue;
-        }
-
-        // Find possible second junction pairs
-        vector<pair<Domain*, Domain*>> second_sel {};
-
-        // Add junction pair that is on the same chain as the kink pair
-        Domain* cd_k2_for {cd_k2->m_forward_domain};
-        second_sel.push_back({cd_k2, cd_k2_for});
-
-        // Add junction pairs that are on chain bound to k2
-        Domain* cd_k2_bound {cd_k2->m_bound_domain};
-        Domain* cd_k2_bound_for {cd_k2_bound->m_forward_domain};
-        Domain* cd_k2_bound_bac {cd_k2_bound->m_backward_domain};
-        if (check_domains_exist_and_bound({cd_k2_for})) {
-
-            // If j3 and j4 are doubly contiguous, then this will be double
-            // counted
-            Domain* cd_k2_for_bound {cd_k2_for->m_bound_domain};
-            if (cd_k2_bound_for != cd_k2_for_bound) {
-                second_sel.push_back({cd_k2_bound, cd_k2_bound_for});
-            }
-            if (cd_k2_bound_bac != cd_k2_for_bound) {
-                second_sel.push_back({cd_k2_bound, cd_k2_bound_bac});
-            }
-        }
-        else {
-            second_sel.push_back({cd_k2_bound, cd_k2_bound_for});
-            second_sel.push_back({cd_k2_bound, cd_k2_bound_bac});
-        }
-        for (auto sel2: second_sel) {
-            cd_j3 = sel2.first;
-            cd_j4 = sel2.second;
-            if (not check_domains_exist_and_bound({cd_j4})) {
-                continue;
-            }
-            // cout << "Check central\n";
-            check_single_junction(cd_j1, cd_j2, cd_j3, cd_j4, cd_k1, cd_k2);
-        }
-    }
-}
-
-void LinearFlexibleBindingPotential::check_single_junction(
-        Domain* cd_j1,
-        Domain* cd_j2,
-        Domain* cd_j3,
-        Domain* cd_j4,
-        Domain* cd_k1,
-        Domain* cd_k2) {
+void BindingPotential::check_single_junction(
+        const Domain* cd_j1,
+        const Domain* cd_j2,
+        const Domain* cd_j3,
+        const Domain* cd_j4,
+        const Domain* cd_k1,
+        const Domain* cd_k2) {
 
     // Put domains in order along chain
-    Domain* hold;
     if (cd_j1->m_d > cd_j2->m_d) {
-        hold = cd_j1;
-        cd_j1 = cd_j2;
-        cd_j2 = hold;
+        std::swap(cd_j1, cd_j2);
     }
     if (cd_j3->m_d > cd_j4->m_d) {
-        hold = cd_j3;
-        cd_j3 = cd_j4;
-        cd_j4 = hold;
+        std::swap(cd_j3, cd_j4);
     }
     if (cd_k1->m_d > cd_k2->m_d) {
-        hold = cd_k1;
-        cd_k1 = cd_k2;
-        cd_k2 = hold;
+        std::swap(cd_k1, cd_k2);
     }
-    // cout << "j1: " << cd_j1->m_c << "," << cd_j1->m_d << " ";
-    // cout << "j2: " << cd_j2->m_c << "," << cd_j2->m_d << " ";
-    // cout << "j3: " << cd_j3->m_c << "," << cd_j3->m_d << " ";
-    // cout << "j4: " << cd_j4->m_c << "," << cd_j4->m_d << " ";
-    // cout << "k1: " << cd_k1->m_c << "," << cd_k1->m_d << " ";
-    // cout << "k2: " << cd_k2->m_c << "," << cd_k2->m_d << "\n";
     VectorThree ndr_k1 {cd_k2->m_pos - cd_k1->m_pos};
 
     // Check if kinked pair forms crossover angle
@@ -1123,31 +323,173 @@ void LinearFlexibleBindingPotential::check_single_junction(
         // domain vector are parallel (sign is unimportant here)
         if ((ndr_1 != ndr_k1 and ndr_1 != -ndr_k1) and
             (ndr_1 == ndr_3 or ndr_1 == -ndr_3)) {
-            if (check_pair_stacked(cd_j1, cd_j2) and
-                check_pair_stacked(cd_j3, cd_j4)) {
+            if (check_pair_stacked(*cd_j1, *cd_j2) and
+                check_pair_stacked(*cd_j3, *cd_j4)) {
                 m_delta_config.e -= m_pot.stacking_energy(*cd_j1, *cd_j2) / 2;
                 m_delta_config.e -= m_pot.stacking_energy(*cd_j3, *cd_j4) / 2;
                 m_delta_config.stacked_pairs -= 2;
                 // cout << "unstack\n";
             }
-            else {
-                // cout << "First or last pair unstacked\n";
-            }
         }
-        else {
-            // cout << "Kink next domain vector is parallel or antiparallel to
-            // first next domain vector or first and third next domain vectors
-            // are not parallel and not antiparallel\n";
-        }
-    }
-    else {
-        // cout << "Kink has correct crossover\n";
     }
 }
 
-bool ConKinkLinearFlexibleBindingPotential::check_regular_pair_constraints(
-        Domain* cd_1,
-        Domain* cd_2,
+void BindingPotential::check_backward_single_junction(
+        const Domain& cd_1,
+        const Domain& cd_2) {
+
+    // Passed domains are the second junction pair
+    const Domain* cd_j1;
+    const Domain* cd_j2;
+    const Domain* cd_j3 {&cd_1};
+    const Domain* cd_j4 {&cd_2};
+    const Domain* cd_k1;
+    const Domain* cd_k2;
+
+    // Find possible kink pair combinations
+    vector<pair<const Domain*, const Domain*>> first_sel {};
+
+    // Add kink pair that is the same chain as the first junction pair
+    first_sel.emplace_back(cd_j3, cd_j3->m_prev_domain);
+
+    // Add kink pairs that are on the chain bound to j3
+    const Domain* cd_j3_bound {cd_j3->m_bound_domain};
+    const Domain* cd_j4_bound {cd_j4->m_bound_domain};
+    const Domain* cd_j3_bound_for {cd_j3_bound->m_next_domain};
+    const Domain* cd_j3_bound_bac {cd_j3_bound->m_prev_domain};
+    if (cd_j3->m_bound_domain->m_c == cd_j4->m_bound_domain->m_c) {
+        int diff {cd_j4_bound->m_d - cd_j3_bound->m_d};
+
+        // Must prevent double counting
+        if (abs(diff) == 1 and cd_j3->m_c > cd_j3_bound->m_c) {
+            return;
+        }
+        // Doubly contiguous cannot be single strand kink
+        if (diff == 1) {
+            first_sel.emplace_back(cd_j3_bound, cd_j3_bound_for);
+        }
+        else if (diff == -1) {
+            first_sel.emplace_back(cd_j3_bound, cd_j3_bound_bac);
+        }
+        else {
+            first_sel.emplace_back(cd_j3_bound, cd_j3_bound_for);
+            first_sel.emplace_back(cd_j3_bound, cd_j3_bound_bac);
+        }
+    }
+    else {
+        first_sel.emplace_back(cd_j3_bound, cd_j3_bound_for);
+        first_sel.emplace_back(cd_j3_bound, cd_j3_bound_bac);
+    }
+    for (auto sel1: first_sel) {
+        cd_k2 = sel1.first;
+        cd_k1 = sel1.second;
+        if (not check_domains_exist_and_bound(cd_k1)) {
+            continue;
+        }
+
+        // If kink is stacked, not a kink
+        if (check_pair_stacked(*cd_k1, *cd_k2)) {
+            continue;
+        }
+
+        // If k1 and k2 are doubly contiguous, skip
+        if (cd_k1->m_bound_domain->m_c == cd_k2->m_bound_domain->m_c and
+            abs(cd_k1->m_bound_domain->m_d - cd_k2->m_bound_domain->m_d) == 1) {
+            continue;
+        }
+
+        // Find possible second junction pairs
+        vector<pair<const Domain*, const Domain*>> second_sel {};
+
+        // Add junction that is on the same chain as the kink pair
+        int dir {cd_k1->m_d - cd_k2->m_d};
+
+        // Add junction pairs that are on chain bound to k2
+        Domain* cd_k1_bound {cd_k1->m_bound_domain};
+        Domain* cd_k1_bound_for {cd_k1_bound->m_next_domain};
+        Domain* cd_k1_bound_bac {cd_k1_bound->m_prev_domain};
+        if (cd_k1->contig_domain_exists(dir)) {
+            const Domain* cd_k1_next {&cd_k1->get_contig_domain(dir)};
+            second_sel.emplace_back(cd_k1, cd_k1_next);
+            if (cd_k1_next->bound_domain_exists()) {
+
+                // If j1 and j2 are doubly contiguous, then this will be double
+                // counted
+                Domain* cd_k1_next_bound {cd_k1_next->m_bound_domain};
+                if (cd_k1_bound_for != cd_k1_next_bound) {
+                    second_sel.emplace_back(cd_k1_bound, cd_k1_bound_for);
+                }
+                if (cd_k1_bound_bac != cd_k1_next_bound) {
+                    second_sel.emplace_back(cd_k1_bound, cd_k1_bound_bac);
+                }
+            }
+        }
+        else {
+            second_sel.emplace_back(cd_k1_bound, cd_k1_bound_for);
+            second_sel.emplace_back(cd_k1_bound, cd_k1_bound_bac);
+        }
+        for (auto sel2: second_sel) {
+            cd_j2 = sel2.first;
+            cd_j1 = sel2.second;
+            if (not check_domains_exist_and_bound(cd_j1)) {
+                continue;
+            }
+            // cout << "Check backward\n";
+            check_single_junction(cd_j1, cd_j2, cd_j3, cd_j4, cd_k1, cd_k2);
+        }
+    }
+}
+
+void BindingPotential::check_possible_doubly_contig_junction(
+        const Domain& cd_1,
+        const Domain& cd_2) {
+
+    VectorThree ndr {cd_2.m_pos - cd_1.m_pos};
+    if (cd_1.m_ore == ndr) {
+        if (cd_1.prev_domain_exists() and cd_2.next_domain_exists()) {
+            const Domain& cd_j1 {cd_1.get_prev_domain()};
+            const Domain& cd_j4 {cd_2.get_next_domain()};
+            if (cd_j1.bound_domain_exists() and cd_j4.bound_domain_exists()) {
+                check_doubly_contig_junction(cd_j1, cd_1, cd_2, cd_j4);
+            }
+        }
+    }
+    else {
+        m_constraints_violated = true;
+    }
+}
+
+void BindingPotential::check_doubly_contig_junction(
+        const Domain& cd_1,
+        const Domain& cd_2,
+        const Domain& cd_3,
+        const Domain& cd_4) {
+
+    VectorThree ndr_1 {cd_2.m_pos - cd_1.m_pos};
+    VectorThree ndr_2 {cd_3.m_pos - cd_2.m_pos};
+    VectorThree ndr_3 {cd_4.m_pos - cd_3.m_pos};
+
+    // Check that the domains are not on opposite sides of the junction
+    if (ndr_1 != ndr_2 and ndr_1 == ndr_3) {
+        m_constraints_violated = true;
+    }
+    else {
+        if (check_pair_stacked(cd_1, cd_2) and check_pair_stacked(cd_3, cd_4)) {
+            if (ndr_1 == -ndr_3) {
+                m_delta_config.stacked_juncts += 1;
+            }
+            else {
+                m_delta_config.e -= m_pot.stacking_energy(cd_1, cd_2) / 2;
+                m_delta_config.e -= m_pot.stacking_energy(cd_3, cd_4) / 2;
+                m_delta_config.stacked_pairs -= 2;
+            }
+        }
+    }
+}
+
+bool BindingPotential::check_regular_pair_constraints(
+        const Domain& cd_1,
+        const Domain& cd_2,
         int i) {
 
     bool stacked {false};
@@ -1162,14 +504,14 @@ bool ConKinkLinearFlexibleBindingPotential::check_regular_pair_constraints(
     }
 
     // Inefficient as I also calculate this in check pair stacked
-    VectorThree ndr {cd_2->m_pos - cd_1->m_pos};
-    if (not cd_1->check_kink_constraint(ndr, *cd_2)) {
+    VectorThree ndr {cd_2.m_pos - cd_1.m_pos};
+    if (not cd_1.check_kink_constraint(ndr, cd_2)) {
         m_constraints_violated = true;
     }
     if (not m_constraints_violated) {
         if (check_pair_stacked(cd_1, cd_2)) {
             stacked = true;
-            m_delta_config.e += m_pot.stacking_energy(*cd_1, *cd_2);
+            m_delta_config.e += m_pot.stacking_energy(cd_1, cd_2);
             m_delta_config.stacked_pairs += 2;
         }
         else {
@@ -1180,80 +522,288 @@ bool ConKinkLinearFlexibleBindingPotential::check_regular_pair_constraints(
     return stacked;
 }
 
-void NonLinearFlexibleBindingPotential::check_constraints(Domain* cd) {
+void BindingPotential::check_edge_pair_junction(
+        const Domain& cd_1,
+        const Domain& cd_2,
+        int i) {
 
-    for (int i: {-1, 0}) {
-        Domain* cd_1 {*cd + i};
-        Domain* cd_2 {*cd + (i + 1)};
-        if (not check_domains_exist_and_bound({cd_1, cd_2})) {
+    const Domain* cd_j1;
+    const Domain* cd_j2;
+    const Domain* cd_j3;
+    const Domain* cd_j4;
+    if (i == -1) {
+        if (not cd_1.prev_domain_exists()) {
+            return;
+        }
+        cd_j2 = &cd_1.get_prev_domain();
+        if (not cd_j2->prev_domain_exists()) {
+            return;
+        }
+        cd_j1 = &cd_j2->get_prev_domain();
+        cd_j3 = &cd_1;
+        cd_j4 = &cd_2;
+    }
+    else {
+        cd_j1 = &cd_1;
+        cd_j2 = &cd_2;
+        if (not cd_2.next_domain_exists()) {
+            return;
+        }
+        cd_j3 = &cd_2.get_next_domain();
+        if (not cd_j3->next_domain_exists()) {
+            return;
+        }
+        cd_j4 = &cd_j3->get_next_domain();
+    }
+    if (check_domains_exist_and_bound(cd_j1, cd_j2, cd_j3, cd_j4)) {
+        const Domain& cd_bound_j2 {*cd_j2->m_bound_domain};
+        const Domain& cd_bound_j3 {*cd_j3->m_bound_domain};
+        bool bound_same_chain {cd_bound_j2.m_c == cd_bound_j3.m_c};
+        if (bound_same_chain) {
+            if ((cd_bound_j2.m_d == cd_bound_j3.m_d + 1)) {
+                check_doubly_contig_junction(*cd_j1, *cd_j2, *cd_j3, *cd_j4);
+            }
+        }
+    }
+}
+
+void BindingPotential::check_central_linear_helix(
+        const Domain& cd_i,
+        const Domain& cd_j) {
+
+    const Domain* cd_h1;
+    const Domain* cd_h2 {&cd_i};
+    const Domain* cd_h3;
+    if (cd_i.prev_domain_exists()) {
+        cd_h1 = &cd_i.get_prev_domain();
+        for (auto j: {-1, 1}) {
+            if (not cd_j.contig_domain_exists(j)) {
+                continue;
+            }
+            cd_h3 = &cd_j.get_contig_domain(j);
+            if (check_domains_exist_and_bound(cd_h1, cd_h3)) {
+                if (check_pair_stacked(*cd_h1, *cd_h2) and
+                    check_pair_stacked(*cd_h2, cd_h3->get_bound_domain())) {
+                    if (not doubly_contiguous_helix(*cd_h1, *cd_h2) and
+                        (not cd_h2->next_domain_exists() or
+                         not doubly_contiguous_helix(
+                                 *cd_h2, cd_h2->get_next_domain()))) {
+                        check_linear_helix(cd_h1, cd_h2, cd_h3);
+                    }
+                }
+            }
+        }
+    }
+    if (not cd_i.next_domain_exists()) {
+        return;
+    }
+    cd_h3 = &cd_i.get_next_domain();
+    for (auto j: {-1, 1}) {
+        if (not cd_j.contig_domain_exists(j)) {
+            continue;
+        }
+        cd_h1 = &cd_j.get_contig_domain(j);
+        if (check_domains_exist_and_bound(cd_h1, cd_h3)) {
+            if (check_pair_stacked(cd_h1->get_bound_domain(), *cd_h2) and
+                check_pair_stacked(*cd_h2, *cd_h3)) {
+                if (not doubly_contiguous_helix(*cd_h2, *cd_h3) and
+                    (not cd_h2->prev_domain_exists() or
+                     not doubly_contiguous_helix(
+                             cd_h2->get_prev_domain(), *cd_h2))) {
+                    check_linear_helix(cd_h1, cd_h2, cd_h3);
+                }
+            }
+        }
+    }
+}
+
+void BindingPotential::check_linear_helix(
+        const Domain* cd_h1,
+        const Domain* cd_h2,
+        const Domain* cd_h3) {
+
+    VectorThree ndr_1 {cd_h2->m_pos - cd_h1->m_pos};
+    VectorThree ndr_2 {cd_h3->m_pos - cd_h2->m_pos};
+    if (ndr_1 == ndr_2) {
+        m_delta_config.linear_helices += 1;
+    }
+    else {
+        m_delta_config.e -= m_pot.stacking_energy(*cd_h1, *cd_h2) / 2;
+        m_delta_config.e -= m_pot.stacking_energy(*cd_h2, *cd_h3) / 2;
+        m_delta_config.stacked_pairs -= 2;
+    }
+}
+
+void BindingPotential::check_linear_helix(
+        const Domain* cd_1,
+        const Domain* cd_2,
+        int i) {
+
+    const Domain* cd_h1;
+    const Domain* cd_h2;
+    const Domain* cd_h3;
+    if (i == -1) {
+        cd_h2 = cd_1;
+        cd_h3 = cd_2;
+
+        // Check same chain
+        if (cd_1->prev_domain_exists()) {
+            cd_h1 = &cd_1->get_prev_domain();
+            if (check_domains_exist_and_bound(cd_h1)) {
+                if (check_pair_stacked(*cd_h1, *cd_h2)) {
+                    check_linear_helix(cd_h1, cd_h2, cd_h3);
+                }
+            }
+        }
+
+        // Check helices that extend to bound chain
+        for (auto j: {-1, 1}) {
+            if (not cd_1->get_bound_domain().contig_domain_exists(j)) {
+                continue;
+            }
+            cd_h1 = &cd_1->get_bound_domain().get_contig_domain(j);
+            if (check_domains_exist_and_bound(cd_h1)) {
+                if (check_pair_stacked(cd_h1->get_bound_domain(), *cd_h2)) {
+                    if (not doubly_contiguous_helix(*cd_h2, *cd_h3) and
+                        (not cd_h2->prev_domain_exists() or
+                         not doubly_contiguous_helix(
+                                 cd_h2->get_prev_domain(), *cd_h2))) {
+                        check_linear_helix(cd_h1, cd_h2, cd_h3);
+                    }
+                }
+            }
+        }
+    }
+
+    else {
+        cd_h2 = cd_2;
+        cd_h1 = cd_1;
+
+        // Check same chain
+        if (cd_2->next_domain_exists()) {
+            cd_h3 = &cd_2->get_next_domain();
+            if (check_domains_exist_and_bound(cd_h3)) {
+                if (check_pair_stacked(*cd_h2, *cd_h3)) {
+                    check_linear_helix(cd_h1, cd_h2, cd_h3);
+                }
+            }
+        }
+
+        // Check helices that extend to bound chain
+        for (auto j: {-1, 1}) {
+            if (not cd_2->get_bound_domain().contig_domain_exists(j)) {
+                continue;
+            }
+            cd_h3 = &cd_2->get_bound_domain().get_contig_domain(j);
+            if (check_domains_exist_and_bound(cd_h3)) {
+                if (check_pair_stacked(*cd_h2, cd_h3->get_bound_domain())) {
+                    if (not doubly_contiguous_helix(*cd_h1, *cd_h2) and
+                        (not cd_h2->next_domain_exists() or
+                         not doubly_contiguous_helix(
+                                 *cd_h2, cd_h2->get_next_domain()))) {
+                        check_linear_helix(cd_h1, cd_h2, cd_h3);
+                    }
+                }
+            }
+        }
+    }
+}
+
+void BindingPotential::check_central_single_junction(
+        const Domain& cd_1,
+        const Domain& cd_2) {
+
+    // Passed domains are the kink pair
+    const Domain* cd_j1;
+    const Domain* cd_j2;
+    const Domain* cd_j3;
+    const Domain* cd_j4;
+    const Domain* cd_k1 {&cd_1};
+    const Domain* cd_k2 {&cd_2};
+
+    // Kinked pair cannot be doubly contiguous
+    if (cd_k1->m_bound_domain->m_c == cd_k2->m_bound_domain->m_c and
+        abs(cd_k1->m_bound_domain->m_d - cd_k2->m_bound_domain->m_d) == 1) {
+        return;
+    }
+
+    // Find possible first junction pairs
+    vector<pair<const Domain*, const Domain*>> first_sel {};
+
+    // Add first junction pair that is on the same chain as the kink pair
+    const Domain* cd_k1_bac {cd_k1->m_prev_domain};
+    first_sel.emplace_back(cd_k1, cd_k1_bac);
+
+    // Add first junction pairs bound to k1
+    Domain* cd_k1_bound {cd_k1->m_bound_domain};
+    Domain* cd_k1_bound_for {cd_k1_bound->m_next_domain};
+    Domain* cd_k1_bound_bac {cd_k1_bound->m_prev_domain};
+    if (check_domains_exist_and_bound(cd_k1_bac)) {
+
+        // If j1 and j2 are doubly contiguous, then this will be double
+        // counted
+        Domain* cd_k1_bac_bound {cd_k1_bac->m_bound_domain};
+        if (cd_k1_bound_for != cd_k1_bac_bound) {
+            first_sel.emplace_back(cd_k1_bound, cd_k1_bound_for);
+        }
+        if (cd_k1_bound_bac != cd_k1_bac_bound) {
+            first_sel.emplace_back(cd_k1_bound, cd_k1_bound_bac);
+        }
+    }
+    else {
+        first_sel.emplace_back(cd_k1_bound, cd_k1_bound_for);
+        first_sel.emplace_back(cd_k1_bound, cd_k1_bound_bac);
+    }
+    for (auto sel1: first_sel) {
+        cd_j2 = sel1.first;
+        cd_j1 = sel1.second;
+        if (not check_domains_exist_and_bound(cd_j1)) {
             continue;
         }
 
-        // This assumes that the staples are at most 2 domains long
-        // Othewise I would have to check the edge pair regardless of
-        // whether the core was doubly contiguous
-        Domain& cd_bound_1 {*cd_1->m_bound_domain};
-        Domain& cd_bound_2 {*cd_2->m_bound_domain};
-        bool bound_same_chain {cd_bound_1.m_c == cd_bound_2.m_c};
-        if (bound_same_chain) {
+        // Find possible second junction pairs
+        vector<pair<const Domain*, const Domain*>> second_sel {};
 
-            // Same helix case
-            if (cd_bound_1.m_d == cd_bound_2.m_d - 1) {
-                check_possible_doubly_contig_helix(cd_1, cd_2);
+        // Add junction pair that is on the same chain as the kink pair
+        const Domain* cd_k2_for {cd_k2->m_next_domain};
+        second_sel.emplace_back(cd_k2, cd_k2_for);
+
+        // Add junction pairs that are on chain bound to k2
+        const Domain* cd_k2_bound {cd_k2->m_bound_domain};
+        const Domain* cd_k2_bound_for {cd_k2_bound->m_next_domain};
+        const Domain* cd_k2_bound_bac {cd_k2_bound->m_prev_domain};
+        if (check_domains_exist_and_bound(cd_k2_for)) {
+
+            // If j3 and j4 are doubly contiguous, then this will be double
+            // counted
+            const Domain* cd_k2_for_bound {cd_k2_for->m_bound_domain};
+            if (cd_k2_bound_for != cd_k2_for_bound) {
+                second_sel.emplace_back(cd_k2_bound, cd_k2_bound_for);
             }
-
-            // Crossover case
-            else if (cd_bound_1.m_d == cd_bound_2.m_d + 1) {
-                check_possible_doubly_contig_junction(cd_1, cd_2);
-            }
-
-            // Not doubly contiguous
-            else {
-                check_regular_pair_constraints(cd_1, cd_2, i);
+            if (cd_k2_bound_bac != cd_k2_for_bound) {
+                second_sel.emplace_back(cd_k2_bound, cd_k2_bound_bac);
             }
         }
         else {
-            check_regular_pair_constraints(cd_1, cd_2, i);
+            second_sel.emplace_back(cd_k2_bound, cd_k2_bound_for);
+            second_sel.emplace_back(cd_k2_bound, cd_k2_bound_bac);
         }
-    }
-}
-
-void NonLinearFlexibleBindingPotential::check_doubly_contig_junction(
-        Domain* cd_1,
-        Domain* cd_2,
-        Domain* cd_3,
-        Domain* cd_4) {
-
-    VectorThree ndr_1 {cd_2->m_pos - cd_1->m_pos};
-    VectorThree ndr_2 {cd_3->m_pos - cd_2->m_pos};
-    VectorThree ndr_3 {cd_4->m_pos - cd_3->m_pos};
-
-    // Check that the domains are not on opposite sides of the junction
-    if (ndr_1 != ndr_2 and ndr_1 == ndr_3) {
-        m_constraints_violated = true;
-    }
-}
-
-void NonLinearFlexibleBindingPotential::check_pair_stacking(
-        Domain* cd_1,
-        Domain* cd_2,
-        bool doubly_contig) {
-
-    if (check_pair_stacked(cd_1, cd_2)) {
-        double delta_e {m_pot.stacking_energy(*cd_1, *cd_2)};
-        if (doubly_contig) {
-            delta_e /= 2;
+        for (auto sel2: second_sel) {
+            cd_j3 = sel2.first;
+            cd_j4 = sel2.second;
+            if (not check_domains_exist_and_bound(cd_j4)) {
+                continue;
+            }
+            check_single_junction(cd_j1, cd_j2, cd_j3, cd_j4, cd_k1, cd_k2);
         }
-        else {
-            m_delta_config.stacked_pairs += 2;
-        }
-        m_delta_config.e += delta_e;
     }
 }
 
 MisbindingPotential::MisbindingPotential(OrigamiPotential& pot): m_pot {pot} {}
 
-double OpposingMisbindingPotential::bind_domains(Domain& cd_i, Domain& cd_j) {
+double MisbindingPotential::bind_domains(
+        const Domain& cd_i,
+        const Domain& cd_j) {
     m_constraints_violated = true;
     if (not check_domain_orientations_opposing(cd_i, cd_j)) {
         return 0;
@@ -1262,48 +812,19 @@ double OpposingMisbindingPotential::bind_domains(Domain& cd_i, Domain& cd_j) {
     return m_pot.hybridization_energy(cd_i, cd_j);
 }
 
-double DisallowedMisbindingPotential::bind_domains(Domain&, Domain&) {
-    m_constraints_violated = true;
-    return 0;
-}
-
 OrigamiPotential::OrigamiPotential(
-        const vector<vector<int>> identities,
-        const vector<vector<string>>& sequences,
+        vector<vector<int>>& identities,
+        vector<vector<string>>& sequences,
         InputParameters& params):
         m_energy_filebase {params.m_energy_filebase},
         m_temp {params.m_temp},
         m_cation_M {params.m_cation_M},
-        m_identities {identities},
-        m_sequences {sequences},
+        m_identities {std::move(identities)},
+        m_sequences {std::move(sequences)},
+        m_binding_pot {*this},
+        m_misbinding_pot {*this},
         m_stacking_pot {params.m_stacking_pot},
         m_hybridization_pot {params.m_hybridization_pot} {
-
-    if (params.m_binding_pot == "Restrictive") {
-        m_binding_pot = new RestrictiveBindingPotential(*this);
-    }
-    else if (params.m_binding_pot == "LinearFlexible") {
-        m_binding_pot = new LinearFlexibleBindingPotential(*this);
-    }
-    else if (params.m_binding_pot == "ConKinkLinearFlexible") {
-        m_binding_pot = new ConKinkLinearFlexibleBindingPotential(*this);
-    }
-    else if (params.m_binding_pot == "NonLinearFlexible") {
-        m_binding_pot = new NonLinearFlexibleBindingPotential(*this);
-    }
-    else {
-        std::cout << "No such binding potential";
-    }
-
-    if (params.m_misbinding_pot == "Opposing") {
-        m_misbinding_pot = new OpposingMisbindingPotential(*this);
-    }
-    else if (params.m_misbinding_pot == "Disallowed") {
-        m_misbinding_pot = new DisallowedMisbindingPotential(*this);
-    }
-    else {
-        std::cout << "No such binding potential";
-    }
 
     if (m_stacking_pot == "Constant") {
         m_stacking_ene = params.m_stacking_ene;
@@ -1317,11 +838,6 @@ OrigamiPotential::OrigamiPotential(
     }
 
     get_energies();
-}
-
-OrigamiPotential::~OrigamiPotential() {
-    delete m_binding_pot;
-    delete m_misbinding_pot;
 }
 
 void OrigamiPotential::update_temp(double temp, double stacking_mult) {
@@ -1366,13 +882,13 @@ void OrigamiPotential::calc_energies() {
     // Calculate S, H, and G for all possible interactions and store
 
     // Loop through all pairs of sequences
-    for (size_t c_i {0}; c_i != m_identities.size(); c_i++) {
-        for (size_t c_j {0}; c_j != m_identities.size(); c_j++) {
+    for (size_t c_i {0}; c_i != m_identities.size(); ++c_i) {
+        for (size_t c_j {0}; c_j != m_identities.size(); ++c_j) {
             size_t c_i_length {m_identities[c_i].size()};
             size_t c_j_length {m_identities[c_j].size()};
-            for (size_t d_i {0}; d_i != c_i_length; d_i++) {
+            for (size_t d_i {0}; d_i != c_i_length; ++d_i) {
                 int d_i_ident {m_identities[c_i][d_i]};
-                for (size_t d_j {0}; d_j != c_j_length; d_j++) {
+                for (size_t d_j {0}; d_j != c_j_length; ++d_j) {
                     int d_j_ident {m_identities[c_j][d_j]};
                     pair<int, int> key {d_i_ident, d_j_ident};
                     if (m_hybridization_pot == "NearestNeighbour") {
@@ -1406,8 +922,8 @@ void OrigamiPotential::calc_energies() {
 }
 
 void OrigamiPotential::calc_hybridization_energy(
-        string seq_i,
-        string seq_j,
+        const string& seq_i,
+        const string& seq_j,
         pair<int, int> key) {
 
     double H_hyb {0};
@@ -1417,20 +933,20 @@ void OrigamiPotential::calc_hybridization_energy(
     int N {0};
 
     // No interaction if no complementary sequence
-    if (comp_seqs.size() == 0) {
+    if (comp_seqs.empty()) {
         H_hyb = 0;
         S_hyb = 0;
     }
     else {
 
         // Take average value of H and S of all equal length comp seqs
-        for (auto comp_seq: comp_seqs) {
+        for (const auto& comp_seq: comp_seqs) {
             ThermoOfHybrid DH_DS {
                     nearestNeighbour::calc_unitless_hybridization_thermo(
                             comp_seq, m_temp, m_cation_M)};
             H_hyb += DH_DS.enthalpy;
             S_hyb += DH_DS.entropy;
-            N++;
+            ++N;
         }
         H_hyb /= N;
         S_hyb /= N;
@@ -1476,12 +992,12 @@ void OrigamiPotential::calc_hybridization_energy(pair<int, int> key) {
 }
 
 void OrigamiPotential::calc_stacking_energy(
-        string seq_i,
-        string seq_j,
+        const string& seq_i,
+        const string& seq_j,
         pair<int, int> key) {
 
-    double s_energy {nearestNeighbour::calc_seq_spec_stacking_energy(
-            seq_i, seq_j, m_temp, m_cation_M)};
+    double s_energy {
+            nearestNeighbour::calc_seq_spec_stacking_energy(seq_i, seq_j)};
     m_stacking_energies[key] = s_energy;
 }
 
@@ -1554,12 +1070,12 @@ DeltaConfig OrigamiPotential::bind_domain(Domain& cd_i) {
     bool comp {check_domains_complementary(cd_i, cd_j)};
     DeltaConfig delta_config {};
     if (comp) {
-        delta_config = m_binding_pot->bind_domains(cd_i, cd_j);
-        m_constraints_violated = m_binding_pot->m_constraints_violated;
+        delta_config = m_binding_pot.bind_domains(cd_i, cd_j);
+        m_constraints_violated = m_binding_pot.m_constraints_violated;
     }
     else {
-        delta_config.e += m_misbinding_pot->bind_domains(cd_i, cd_j);
-        m_constraints_violated = m_misbinding_pot->m_constraints_violated;
+        delta_config.e += m_misbinding_pot.bind_domains(cd_i, cd_j);
+        m_constraints_violated = m_misbinding_pot.m_constraints_violated;
     }
 
     return delta_config;
@@ -1567,7 +1083,7 @@ DeltaConfig OrigamiPotential::bind_domain(Domain& cd_i) {
 
 DeltaConfig OrigamiPotential::check_stacking(Domain& cd_i, Domain& cd_j) {
 
-    return m_binding_pot->check_stacking(cd_i, cd_j);
+    return m_binding_pot.check_stacking(cd_i, cd_j);
 }
 
 double OrigamiPotential::hybridization_energy(
@@ -1597,14 +1113,9 @@ double OrigamiPotential::stacking_energy(const Domain& cd_i, const Domain& cd_j)
     return m_stacking_energies.at(key);
 }
 
-bool OrigamiPotential::check_domains_complementary(Domain& cd_i, Domain& cd_j) {
-    bool comp;
-    if (cd_i.m_d_ident == -cd_j.m_d_ident) {
-        comp = true;
-    }
-    else {
-        comp = false;
-    }
-    return comp;
+bool OrigamiPotential::check_domains_complementary(
+        const Domain& cd_i,
+        const Domain& cd_j) {
+    return cd_i.m_d_ident == -cd_j.m_d_ident;
 }
 } // namespace potential

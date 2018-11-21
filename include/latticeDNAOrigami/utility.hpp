@@ -23,7 +23,7 @@ using std::unordered_map;
 using std::vector;
 
 // Find index for given element
-int index(vector<int> container, int element);
+size_t index(vector<int> container, int element);
 
 // Exception types
 struct NoElement {};
@@ -33,7 +33,7 @@ struct NotImplemented {};
 struct SimulationMisuse {};
 
 // Constrants
-const double NA {6.022140857e23};
+constexpr double NA {6.022140857e23};
 
 enum class Occupancy { unassigned, unbound, bound, misbound };
 
@@ -43,17 +43,17 @@ class VectorThree {
     VectorThree(int x, int y, int z): m_container {{x, y, z}} {};
     VectorThree(): m_container {{0, 0, 0}} {};
 
-    VectorThree operator-();
+    VectorThree operator-() const;
 
     VectorThree operator+(const VectorThree& v_2) const;
     VectorThree operator-(const VectorThree& v_2) const;
     bool operator!=(const VectorThree& v_2) const;
 
-    int& operator[](const size_t& i) { return m_container[i]; };
-    const int& at(const size_t& i) const { return m_container.at(i); };
+    int& operator[](const size_t i) { return m_container[i]; };
+    int at(const size_t i) const { return m_container.at(i); };
 
-    VectorThree rotate_half(VectorThree axis);
-    VectorThree rotate(VectorThree origin, VectorThree axis, int turns);
+    VectorThree rotate_half(VectorThree axis) const;
+    VectorThree rotate(VectorThree origin, VectorThree axis, int turns) const;
     int sum();
     int abssum();
     VectorThree absolute();
@@ -93,8 +93,8 @@ bool operator==(
         const StapleRegrowthTracking& t2);
 
 struct CTCBScaffoldRegrowthTracking {
-    int num_scaffold_domains;
-    int num_staples;
+    size_t num_scaffold_domains;
+    size_t num_staples;
 };
 
 bool operator==(
@@ -102,7 +102,7 @@ bool operator==(
         const CTCBScaffoldRegrowthTracking& t2);
 
 struct ScaffoldRGRegrowthTracking {
-    int num_scaffold_domains;
+    size_t num_scaffold_domains;
 };
 
 bool operator==(
@@ -111,10 +111,10 @@ bool operator==(
 
 struct CTCBLinkerRegrowthTracking {
     bool central_domains_connected;
-    int num_linker_domains;
-    int num_linker_staples;
-    int num_central_domains;
-    int num_central_staples;
+    size_t num_linker_domains;
+    size_t num_linker_staples;
+    size_t num_central_domains;
+    size_t num_central_staples;
     int disp_sum;
     int rot_turns;
 };
@@ -138,7 +138,7 @@ const vector<VectorThree> vectors {{1, 0, 0},
 
 const vector<VectorThree> basis_vectors {xhat, yhat, zhat};
 
-/** Create all possible pairs of a given set (as a vector) */
+// Create all possible pairs of a given set (as a vector)
 template <typename aT>
 vector<pair<aT, aT>> all_pairs(vector<aT> v) {
     vector<pair<aT, aT>> c {};
@@ -151,15 +151,14 @@ vector<pair<aT, aT>> all_pairs(vector<aT> v) {
     return c;
 }
 
-template <typename aT>
-/**
- * Create map from pair to index
+/** Create map from pair to index
  *
  * For use alongsie the all_pairs method
  */
-unordered_map<pair<aT, aT>, int> pair_to_index(vector<pair<aT, aT>> v) {
-    unordered_map<pair<aT, aT>, int> c {};
-    int i {0};
+template <typename aT>
+unordered_map<pair<aT, aT>, size_t> pair_to_index(vector<pair<aT, aT>> v) {
+    unordered_map<pair<aT, aT>, size_t> c {};
+    size_t i {0};
     for (auto a: v) {
         c[a] = i;
         i++;
@@ -169,9 +168,9 @@ unordered_map<pair<aT, aT>, int> pair_to_index(vector<pair<aT, aT>> v) {
 }
 
 // String parsing helper functions
-vector<int> string_to_int_vector(string string_v);
-vector<double> string_to_double_vector(string string_v);
-vector<string> string_to_string_vector(string string_v);
+vector<int> string_to_int_vector(const string& string_v);
+vector<double> string_to_double_vector(const string& string_v);
+vector<string> string_to_string_vector(const string& string_v);
 
 // These are from a stackexchange answer
 template <typename Out>
@@ -181,7 +180,7 @@ vector<string> split(const string& s, char delim);
 
 class Fraction {
   public:
-    Fraction(string unparsed_fraction);
+    Fraction(const string& unparsed_fraction);
 
     /// test
     inline double to_double() const { return m_double_fraction; }

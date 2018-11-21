@@ -12,8 +12,8 @@ class OrientationRotationMCMovetype: public MCMovetype {
             OrigamiSystem& origami_system,
             RandomGens& random_gens,
             IdealRandomWalks& ideal_random_walks,
-            vector<OrigamiOutputFile*> const& config_files,
-            string const& label,
+            vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+            string& label,
             SystemOrderParams& ops,
             SystemBiases& biases,
             InputParameters& params);
@@ -22,7 +22,7 @@ class OrientationRotationMCMovetype: public MCMovetype {
     OrientationRotationMCMovetype& operator=(
             const OrientationRotationMCMovetype&) = delete;
 
-    void write_log_summary(std::unique_ptr<ostream> log_stream) override final;
+    void write_log_summary(ostream& log_stream) override final;
 
   private:
     bool internal_attempt_move() override;

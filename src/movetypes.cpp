@@ -1,5 +1,3 @@
-// movetypes.cpp
-
 #include <algorithm>
 #include <cmath>
 #include <random>
@@ -11,7 +9,6 @@ namespace movetypes {
 
 using std::find;
 using std::fmin;
-using std::get;
 using std::min;
 using std::set;
 using utility::Occupancy;
@@ -21,8 +18,8 @@ MCMovetype::MCMovetype(
         OrigamiSystem& origami_system,
         RandomGens& random_gens,
         IdealRandomWalks& ideal_random_walks,
-        vector<OrigamiOutputFile*> config_files,
-        string label,
+        vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+        string& label,
         SystemOrderParams& ops,
         SystemBiases& biases,
         InputParameters& params):
@@ -31,7 +28,7 @@ MCMovetype::MCMovetype(
         m_random_gens {random_gens},
         m_ideal_random_walks {ideal_random_walks},
         m_config_files {config_files},
-        m_label {label},
+        m_label {std::move(label)},
         m_ops {ops},
         m_biases {biases},
         m_params {params},
@@ -39,13 +36,15 @@ MCMovetype::MCMovetype(
         m_max_total_staples {params.m_max_total_staples},
         m_max_type_staples {params.m_max_type_staples} {}
 
-bool MCMovetype::attempt_move(long long int step) {
+bool MCMovetype::attempt_move(unsigned long long step) {
     reset_internal();
     m_step = step;
     write_config();
     m_general_tracker.attempts++;
     bool accepted {internal_attempt_move()};
-    m_general_tracker.accepts += accepted;
+    if (accepted) {
+        ++m_general_tracker.accepts;
+    }
     add_tracker(accepted);
 
     return accepted;
@@ -60,8 +59,8 @@ void MCMovetype::reset_origami() {
         int c_i {c_i_d_i.first};
         int d_i {c_i_d_i.second};
         pair<int, int> key {c_i, d_i};
-        Domain* domain {m_origami_system.get_domain(c_i, d_i)};
-        m_origami_system.unassign_domain(*domain);
+        Domain& domain {m_origami_system.get_domain(c_i, d_i)};
+        m_origami_system.unassign_domain(domain);
     }
 
     // Delete chains that were added
@@ -79,38 +78,36 @@ void MCMovetype::reset_origami() {
         pair<int, int> key {c_i, d_i};
         VectorThree pos {m_prev_pos[key]};
         VectorThree ore {m_prev_ore[key]};
-        Domain* domain {m_origami_system.get_domain(c_i, d_i)};
-        m_origami_system.set_checked_domain_config(*domain, pos, ore);
+        Domain& domain {m_origami_system.get_domain(c_i, d_i)};
+        m_origami_system.set_checked_domain_config(domain, pos, ore);
     }
 
     m_origami_system.m_constraints_violated = false;
 }
 
-void MCMovetype::write_log_summary_header(ostream* log_stream) {
-    *log_stream << "Movetype: " << get_label() << "\n";
+void MCMovetype::write_log_summary_header(ostream& log_stream) {
+    log_stream << "Movetype: " << get_label() << "\n";
     int attempts {get_attempts()};
     int accepts {get_accepts()};
     double freq {static_cast<double>(accepts) / attempts};
-    *log_stream << "    Attempts: " << attempts << "\n";
-    *log_stream << "    Accepts: " << accepts << "\n";
-    *log_stream << "    Frequency: " << freq << "\n";
+    log_stream << "    Attempts: " << attempts << "\n";
+    log_stream << "    Accepts: " << accepts << "\n";
+    log_stream << "    Frequency: " << freq << "\n";
 }
 
-Domain* MCMovetype::select_random_domain() {
+Domain& MCMovetype::select_random_domain() {
     int d_i_index {
             m_random_gens.uniform_int(0, m_origami_system.num_domains() - 1)};
     int counter {0};
-    for (auto chain: m_origami_system.get_chains()) {
-        for (auto domain: chain) {
+    for (auto& chain: m_origami_system.get_chains()) {
+        for (auto& domain: chain) {
             if (counter == d_i_index) {
                 return domain;
             }
-            else {
-                counter++;
-            }
+            counter++;
         }
     }
-    return nullptr;
+    throw OrigamiMisuse {};
 }
 
 int MCMovetype::select_random_staple_identity() {
@@ -119,7 +116,7 @@ int MCMovetype::select_random_staple_identity() {
 }
 
 int MCMovetype::select_random_staple_of_identity(int c_i_ident) {
-    int staples {m_origami_system.num_staples_of_ident(c_i_ident)};
+    size_t staples {m_origami_system.num_staples_of_ident(c_i_ident)};
     if (staples == 0) {
         m_rejected = true;
         return -1;
@@ -140,34 +137,32 @@ VectorThree MCMovetype::select_random_orientation() {
     return vec;
 }
 
-bool MCMovetype::test_acceptance(long double p_ratio) {
+bool MCMovetype::test_acceptance(double p_ratio) {
     double p_accept = fmin(1, p_ratio) * m_modifier;
     bool accept;
     if (p_accept == 1) {
         accept = true;
     }
     else {
-        if (p_accept > m_random_gens.uniform_real()) {
-            accept = true;
-        }
-        else {
-            accept = false;
-        }
+        accept = p_accept > m_random_gens.uniform_real();
     }
 
     return accept;
 }
 
-bool MCMovetype::staple_is_connector(vector<Domain*> staple) {
-    for (auto domain: staple) {
-        if (domain->m_state != Occupancy::unbound) {
-            Domain* bound_domain {domain->m_bound_domain};
-            if (bound_domain->m_c == m_origami_system.c_scaffold) {
+bool MCMovetype::staple_is_connector(const vector<Domain>& staple) {
+    for (const auto& domain: staple) {
+        if (domain.m_state != Occupancy::unbound) {
+            if (not domain.bound_domain_exists()) {
+                continue;
+            }
+            Domain& bound_domain {domain.get_bound_domain()};
+            if (bound_domain.m_c == m_origami_system.c_scaffold) {
                 continue;
             }
 
             // Do I really need to clear this?
-            set<int> participating_chains {domain->m_c};
+            set<int> participating_chains {domain.m_c};
             if (not scan_for_scaffold_domain(
                         bound_domain, participating_chains)) {
                 return true;
@@ -177,12 +172,12 @@ bool MCMovetype::staple_is_connector(vector<Domain*> staple) {
     return false;
 }
 
-set<int> MCMovetype::find_staples(vector<Domain*> domains) {
+set<int> MCMovetype::find_staples(const vector<Domain*>& domains) {
     set<int> staples {};
-    for (auto domain: domains) {
-        Domain* bound_domain {domain->m_bound_domain};
+    for (const auto* const domain: domains) {
+        const Domain* const bound_domain {domain->m_bound_domain};
         if (bound_domain != nullptr and bound_domain->m_c != 0) {
-            scan_for_scaffold_domain(bound_domain, staples);
+            scan_for_scaffold_domain(*bound_domain, staples);
         }
     }
 
@@ -190,43 +185,42 @@ set<int> MCMovetype::find_staples(vector<Domain*> domains) {
 }
 
 bool MCMovetype::scan_for_scaffold_domain(
-        Domain* domain,
+        const Domain& domain,
         set<int>& participating_chains) {
 
     bool bound_to_scaffold {false};
-    int c_i {domain->m_c};
+    int c_i {domain.m_c};
     participating_chains.insert(c_i);
-    vector<Domain*> staple {m_origami_system.get_chain(c_i)};
-    for (auto cur_domain: staple) {
-        if (cur_domain == domain) {
+    vector<Domain>& staple {m_origami_system.get_chain(c_i)};
+    for (const auto& cur_domain: staple) {
+        if (&cur_domain == &domain) {
             continue;
         }
-        Domain* bound_domain {cur_domain->m_bound_domain};
-        if (bound_domain != nullptr) {
+        if (not cur_domain.bound_domain_exists()) {
+            continue;
+        }
+        Domain& bound_domain {cur_domain.get_bound_domain()};
 
-            // Skip if bound to self
-            if (bound_domain->m_c == domain->m_c) {
-                continue;
-            }
+        // Skip if bound to self
+        if (bound_domain.m_c == domain.m_c) {
+            continue;
+        }
 
-            // Check if bound to scaffold
-            bool domain_on_scaffold {bound_domain->m_c ==
-                                     m_origami_system.c_scaffold};
-            if (domain_on_scaffold) {
-                return true;
-            }
+        // Check if bound to scaffold
+        bool domain_on_scaffold {bound_domain.m_c ==
+                                 m_origami_system.c_scaffold};
+        if (domain_on_scaffold) {
+            return true;
+        }
 
-            // Check if bound domain already in progress
-            if (participating_chains.count(bound_domain->m_c) > 0) {
-                continue;
-            }
-            else {
-                bound_to_scaffold = scan_for_scaffold_domain(
-                        bound_domain, participating_chains);
-            }
-            if (bound_to_scaffold) {
-                return true;
-            }
+        // Check if bound domain already in progress
+        if (participating_chains.count(bound_domain.m_c) > 0) {
+            continue;
+        }
+        bound_to_scaffold = scan_for_scaffold_domain(
+                bound_domain, participating_chains);
+        if (bound_to_scaffold) {
+            return true;
         }
     }
     return false;
@@ -234,7 +228,7 @@ bool MCMovetype::scan_for_scaffold_domain(
 
 void MCMovetype::write_config() {
     if (m_config_output_freq != 0 and m_step % m_config_output_freq == 0) {
-        for (auto file: m_config_files) {
+        for (auto& file: m_config_files) {
             file->write(0, 0);
         }
     }
@@ -256,17 +250,17 @@ int MCMovetype::get_attempts() { return m_general_tracker.attempts; }
 
 int MCMovetype::get_accepts() { return m_general_tracker.accepts; }
 
-vector<domainPairT>
-MCMovetype::find_bound_domains(vector<Domain*> selected_chain) {
+vector<domainPairT> MCMovetype::find_bound_domains(
+        vector<Domain>& selected_chain) {
 
     vector<pair<Domain*, Domain*>> bound_domains {};
-    for (auto domain: selected_chain) {
+    for (auto& domain: selected_chain) {
         // shouldn't this be only non-self binding (only would effect staple
         // size > 2)
-        if (domain->m_bound_domain != nullptr) {
+        if (domain.bound_domain_exists()) {
 
             // New domain, old domain
-            bound_domains.push_back({domain, domain->m_bound_domain});
+            bound_domains.emplace_back(&domain, &domain.get_bound_domain());
         }
     }
 
@@ -282,8 +276,8 @@ IdentityMCMovetype::IdentityMCMovetype(
         OrigamiSystem& origami_system,
         RandomGens& random_gens,
         IdealRandomWalks& ideal_random_walks,
-        vector<OrigamiOutputFile*> config_files,
-        string label,
+        vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+        string& label,
         SystemOrderParams& ops,
         SystemBiases& biases,
         InputParameters& params):
@@ -301,8 +295,8 @@ RegrowthMCMovetype::RegrowthMCMovetype(
         OrigamiSystem& origami_system,
         RandomGens& random_gens,
         IdealRandomWalks& ideal_random_walks,
-        vector<OrigamiOutputFile*> config_files,
-        string label,
+        vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+        string& label,
         SystemOrderParams& ops,
         SystemBiases& biases,
         InputParameters& params):
@@ -344,13 +338,16 @@ double RegrowthMCMovetype::set_growth_point(
 
 void RegrowthMCMovetype::grow_staple(
         int d_i_index,
-        vector<Domain*> selected_chain) {
+        vector<Domain>& selected_chain) {
 
     // Grow in three prime direction
     // (staple domains increase in 3' direction)
-    auto first_iter3 {selected_chain.begin() + d_i_index};
-    auto last_iter3 {selected_chain.end()};
-    vector<Domain*> domains_three_prime {first_iter3, last_iter3};
+    auto iter3 {selected_chain.begin() + d_i_index};
+    vector<Domain*> domains_three_prime {};
+    while (iter3 != selected_chain.end()) {
+        domains_three_prime.push_back(&*iter3);
+        ++iter3;
+    }
     if (domains_three_prime.size() > 1) {
         grow_chain(domains_three_prime);
     }
@@ -359,9 +356,13 @@ void RegrowthMCMovetype::grow_staple(
     }
 
     // Grow in five prime direction
-    auto first_iter5 {selected_chain.begin()};
+    auto iter5 {selected_chain.begin()};
     auto last_iter5 {selected_chain.begin() + d_i_index + 1};
-    vector<Domain*> domains_five_prime {first_iter5, last_iter5};
+    vector<Domain*> domains_five_prime {};
+    while (iter5 != last_iter5) {
+        domains_five_prime.push_back(&*iter5);
+        ++iter5;
+    }
     std::reverse(domains_five_prime.begin(), domains_five_prime.end());
     if (domains_five_prime.size() > 1) {
         grow_chain(domains_five_prime);
@@ -371,21 +372,21 @@ void RegrowthMCMovetype::grow_staple(
     }
 }
 
-pair<Domain*, Domain*>
-RegrowthMCMovetype::select_new_growthpoint(vector<Domain*> selected_chain) {
+pair<Domain*, Domain*> RegrowthMCMovetype::select_new_growthpoint(
+        vector<Domain>& selected_chain) {
 
     int growth_di_new {m_random_gens.uniform_int(0, selected_chain.size() - 1)};
-    Domain* growth_d_new {selected_chain[growth_di_new]};
-    Domain* growth_d_old {select_random_domain()};
+    Domain* growth_d_new {&selected_chain[growth_di_new]};
+    Domain* growth_d_old {&select_random_domain()};
     while (growth_d_old->m_c == growth_d_new->m_c) {
-        growth_d_old = select_random_domain();
+        growth_d_old = &select_random_domain();
     }
 
     return {growth_d_new, growth_d_old};
 }
 
-domainPairT
-RegrowthMCMovetype::select_old_growthpoint(vector<domainPairT> bound_domains) {
+domainPairT RegrowthMCMovetype::select_old_growthpoint(
+        vector<domainPairT> bound_domains) {
 
     int bound_domain_index {
             m_random_gens.uniform_int(0, bound_domains.size() - 1)};
@@ -394,11 +395,10 @@ RegrowthMCMovetype::select_old_growthpoint(vector<domainPairT> bound_domains) {
     return {growth_domain_new, growth_domain_old};
 }
 
-int RegrowthMCMovetype::num_bound_staple_domains(vector<Domain*> staple) {
+size_t RegrowthMCMovetype::num_bound_staple_domains(const vector<Domain>& staple) {
     int num_bd {0};
-    for (auto d: staple) {
-        if (d->m_state == Occupancy::bound or
-            d->m_state == Occupancy::misbound) {
+    for (const auto& d: staple) {
+        if (d.m_state == Occupancy::bound or d.m_state == Occupancy::misbound) {
             num_bd++;
         }
     }
@@ -410,14 +410,14 @@ CTRegrowthMCMovetype::CTRegrowthMCMovetype(
         OrigamiSystem& origami_system,
         RandomGens& random_gens,
         IdealRandomWalks& ideal_random_walks,
-        vector<OrigamiOutputFile*> config_files,
-        string label,
+        vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+        string& label,
         SystemOrderParams& ops,
         SystemBiases& biases,
         InputParameters& params,
-        int num_excluded_staples,
-        int max_regrowth,
-        int max_seg_regrowth):
+        size_t num_excluded_staples,
+        size_t max_regrowth,
+        size_t max_seg_regrowth):
         MCMovetype(
                 origami_system,
                 random_gens,
@@ -437,11 +437,9 @@ CTRegrowthMCMovetype::CTRegrowthMCMovetype(
                 biases,
                 params),
         m_num_excluded_staples {num_excluded_staples},
-        m_max_regrowth {static_cast<unsigned int>(max_regrowth)},
-        m_max_seg_regrowth {static_cast<unsigned int>(max_seg_regrowth)} {
-
-    m_scaffold = m_origami_system.get_chain(m_origami_system.c_scaffold);
-}
+        m_scaffold {m_origami_system.get_chain(m_origami_system.c_scaffold)},
+        m_max_regrowth {static_cast<size_t>(max_regrowth)},
+        m_max_seg_regrowth {static_cast<size_t>(max_seg_regrowth)} {}
 
 void CTRegrowthMCMovetype::reset_internal() {
     m_constraintpoints.reset_internal();
@@ -449,7 +447,7 @@ void CTRegrowthMCMovetype::reset_internal() {
 }
 
 void CTRegrowthMCMovetype::sel_excluded_staples() {
-    for (int i {0}; i != m_num_excluded_staples; i++) {
+    for (size_t i {0}; i != m_num_excluded_staples; i++) {
         if (i == m_origami_system.num_staples()) {
             break;
         }
@@ -458,7 +456,7 @@ void CTRegrowthMCMovetype::sel_excluded_staples() {
         while (not staple_picked) {
             int staple_i {m_random_gens.uniform_int(
                     1, m_origami_system.num_staples())};
-            s_ui = m_origami_system.get_chains()[staple_i][0]->m_c;
+            s_ui = m_origami_system.get_chains()[staple_i][0].m_c;
             staple_picked =
                     (find(m_excluded_staples.begin(),
                           m_excluded_staples.end(),
@@ -470,12 +468,12 @@ void CTRegrowthMCMovetype::sel_excluded_staples() {
 
 vector<Domain*> CTRegrowthMCMovetype::select_indices(
         vector<Domain*> segment,
-        unsigned int min_length,
+        size_t min_length,
         int seg) {
 
-    unsigned int seg_length {static_cast<unsigned int>(segment.size())};
-    unsigned int max_length {min(seg_length, m_max_regrowth)};
-    unsigned int sel_length {static_cast<unsigned int>(
+    size_t seg_length {static_cast<size_t>(segment.size())};
+    size_t max_length {min(seg_length, m_max_regrowth)};
+    size_t sel_length {static_cast<size_t>(
             m_random_gens.uniform_int(min_length, max_length))};
     int start_i {m_random_gens.uniform_int(0, seg_length - 1)};
 
@@ -490,12 +488,55 @@ vector<Domain*> CTRegrowthMCMovetype::select_indices(
     vector<Domain*> domains {};
     while (cur_domain != nullptr and domains.size() != sel_length) {
         domains.push_back(cur_domain);
-        cur_domain = (*cur_domain) + m_dir;
+        cur_domain = &cur_domain->get_contig_domain(m_dir);
     }
-    Domain* back_domain = (*segment[start_i]) + -m_dir;
+    Domain* back_domain = &segment[start_i]->get_contig_domain(-m_dir);
     while (back_domain != nullptr and domains.size() != sel_length) {
         domains.insert(domains.begin(), back_domain);
-        back_domain = (*back_domain) + -m_dir;
+        back_domain = &back_domain->get_contig_domain(-m_dir);
+    }
+    if (domains.size() < min_length) {
+        domains = select_indices(segment, min_length, seg);
+        return domains;
+    }
+
+    // If end domain is end of chain, no endpoint
+    if (cur_domain != nullptr) {
+        m_constraintpoints.add_active_endpoint(
+                cur_domain, cur_domain->m_pos, seg);
+    }
+
+    return domains;
+}
+
+vector<Domain*> CTRegrowthMCMovetype::select_indices(
+        vector<Domain>& segment,
+        size_t min_length,
+        int seg) {
+
+    size_t seg_length {static_cast<size_t>(segment.size())};
+    size_t max_length {min(seg_length, m_max_regrowth)};
+    size_t sel_length {static_cast<size_t>(
+            m_random_gens.uniform_int(min_length, max_length))};
+    int start_i {m_random_gens.uniform_int(0, seg_length - 1)};
+
+    // Select direction of regrowth
+    m_dir = m_random_gens.uniform_int(0, 1);
+    if (m_dir == 0) {
+        m_dir = -1;
+    }
+
+    // Add domains until length reached
+    Domain* cur_domain {&segment[start_i]};
+    vector<Domain*> domains {};
+    while (cur_domain != nullptr and domains.size() != sel_length) {
+        domains.push_back(cur_domain);
+        cur_domain = &cur_domain->get_contig_domain(m_dir);
+    }
+    Domain* back_domain = &segment[start_i].get_contig_domain(-m_dir);
+    while (back_domain != nullptr and domains.size() != sel_length) {
+        domains.insert(domains.begin(), back_domain);
+        back_domain = &back_domain->get_contig_domain(-m_dir);
     }
     if (domains.size() < min_length) {
         domains = select_indices(segment, min_length, seg);
@@ -512,32 +553,32 @@ vector<Domain*> CTRegrowthMCMovetype::select_indices(
 }
 
 void CTRegrowthMCMovetype::select_noncontig_segs(
-        vector<Domain*>& given_seg,
+        vector<Domain>& given_seg,
         vector<vector<Domain*>>& segs,
         vector<vector<vector<Domain*>>>& paired_segs,
         vector<Domain*>& seg_stems,
         vector<int>& dirs) {
 
     set<Domain*> domains {};
-    unsigned int max_length {static_cast<unsigned int>(
+    size_t max_length {static_cast<size_t>(
             m_random_gens.uniform_int(2, m_max_regrowth))};
-    size_t seg_max {static_cast<unsigned int>(
+    size_t seg_max {static_cast<size_t>(
             m_random_gens.uniform_int(2, m_max_seg_regrowth + 1))};
     int start_i {m_random_gens.uniform_int(0, given_seg.size() - 1)};
-    Domain* seg_start_d {given_seg[start_i]};
+    Domain& seg_start_d {given_seg[start_i]};
     int dir {m_random_gens.uniform_int(0, 1)};
     if (dir == 0) {
         dir = -1;
     }
-    if ((*seg_start_d) + dir == nullptr) {
+    if (seg_start_d.contig_domain_exists(dir)) {
         dir *= -1;
     }
-    vector<Domain*> cur_seg {seg_start_d};
-    domains.insert(seg_start_d);
+    vector<Domain*> cur_seg {&seg_start_d};
+    domains.insert(&seg_start_d);
     deque<Domain*> possible_stems {};
     dirs.push_back(dir);
     bool max_length_reached {fill_seg(
-            seg_start_d,
+            &seg_start_d,
             max_length,
             seg_max,
             dir,
@@ -546,7 +587,7 @@ void CTRegrowthMCMovetype::select_noncontig_segs(
             cur_seg)};
     segs.push_back(cur_seg);
     Domain* stemd;
-    while (not max_length_reached and possible_stems.size() != 0) {
+    while (not max_length_reached and not possible_stems.empty()) {
         cur_seg.clear();
 
         // Select a stem domain
@@ -557,7 +598,7 @@ void CTRegrowthMCMovetype::select_noncontig_segs(
         }
         bool adjacent_d_bound {false};
         for (int test_dir: {-1, 1}) {
-            Domain* next_d {*stemd + test_dir};
+            Domain* next_d {&stemd->get_contig_domain(test_dir)};
             if (next_d != nullptr and domains.count(next_d) != 0) {
                 adjacent_d_bound = true;
                 break;
@@ -572,7 +613,7 @@ void CTRegrowthMCMovetype::select_noncontig_segs(
         if (domains.size() == max_length) {
             max_length_reached = true;
             segs.push_back(cur_seg);
-            segs.push_back({});
+            segs.emplace_back();
             paired_segs.push_back({{}, {}});
             dirs.push_back(1);
             dirs.push_back(-1);
@@ -604,7 +645,7 @@ void CTRegrowthMCMovetype::select_noncontig_segs(
                     possible_stems,
                     seg);
             seg_pair[i] = seg;
-            if (cur_seg.size() != 0) {
+            if (not cur_seg.empty()) {
                 seg.insert(seg.begin(), cur_seg[0]);
             }
             segs[segs.size() - 2 + i] = seg;
@@ -619,7 +660,7 @@ void CTRegrowthMCMovetype::select_noncontig_segs(
     Domain* last_d;
     last_d = segs[0].back();
     dir = dirs[0];
-    Domain* next_d {*last_d + dir};
+    Domain* next_d {&last_d->get_contig_domain(dir)};
     if (next_d != nullptr) {
         m_constraintpoints.add_active_endpoint(next_d, next_d->m_pos, 0);
     }
@@ -632,14 +673,14 @@ void CTRegrowthMCMovetype::select_noncontig_segs(
         m_constraintpoints.add_stem_seg_pair(stem_d, {seg_i, seg_i + 1});
         vector<int> stem_seg_pair {};
         for (auto seg: paired_segs[i]) {
-            int dir {dirs[seg_i]};
-            if (seg.size() != 0) {
+            dir = dirs[seg_i];
+            if (not seg.empty()) {
                 last_d = seg.back();
             }
             else {
                 last_d = stem_d;
             }
-            Domain* next_d {*last_d + dir};
+            next_d = &last_d->get_contig_domain(dir);
             if (next_d != nullptr) {
                 m_constraintpoints.add_active_endpoint(
                         next_d, next_d->m_pos, seg_i);
@@ -652,8 +693,8 @@ void CTRegrowthMCMovetype::select_noncontig_segs(
 bool CTRegrowthMCMovetype::excluded_staples_bound() {
     bool bound_to_system {false};
     for (auto exs_i: m_excluded_staples) {
-        vector<Domain*> exs {m_origami_system.get_chain(exs_i)};
-        for (auto exd: exs) {
+        vector<Domain>& exs {m_origami_system.get_chain(exs_i)};
+        for (const auto& exd: exs) {
             set<int> dummy_set {};
             if (scan_for_scaffold_domain(exd, dummy_set)) {
                 bound_to_system = true;
@@ -679,11 +720,11 @@ bool CTRegrowthMCMovetype::fill_seg(
     Domain* next_next_d {start_d};
     bool max_length_reached {false};
     while (seg.size() != seg_max_length and next_d != nullptr) {
-        next_d = *cur_d + dir;
+        next_d = &cur_d->get_contig_domain(dir);
         if (next_d == nullptr) {
             break;
         }
-        next_next_d = *next_d + dir;
+        next_next_d = &next_d->get_contig_domain(dir);
         if (next_next_d != nullptr and domains.count(next_next_d) != 0) {
             break;
         }
@@ -697,7 +738,7 @@ bool CTRegrowthMCMovetype::fill_seg(
         if (cur_d->m_state == Occupancy::bound) {
             Domain* bound_d {cur_d->m_bound_domain};
             for (int staple_dir: {-1, 1}) {
-                Domain* neighbour_d {*bound_d + staple_dir};
+                Domain* neighbour_d {&bound_d->get_contig_domain(staple_dir)};
                 if (neighbour_d != nullptr and
                     neighbour_d->m_state == Occupancy::bound) {
                     Domain* bound_neighbour_d {neighbour_d->m_bound_domain};

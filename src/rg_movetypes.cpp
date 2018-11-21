@@ -1,5 +1,3 @@
-// rg_movetypes.cpp
-
 #include <map>
 
 #include "rg_movetypes.hpp"
@@ -15,15 +13,15 @@ CTRGRegrowthMCMovetype::CTRGRegrowthMCMovetype(
         OrigamiSystem& origami_system,
         RandomGens& random_gens,
         IdealRandomWalks& ideal_random_walks,
-        vector<OrigamiOutputFile*> config_files,
-        string label,
+        vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+        string& label,
         SystemOrderParams& ops,
         SystemBiases& biases,
         InputParameters& params,
-        int num_excluded_staples,
-        int max_recoils,
-        int max_c_attempts,
-        int max_regrowth):
+        size_t num_excluded_staples,
+        size_t max_recoils,
+        size_t max_c_attempts,
+        size_t max_regrowth):
 
         MCMovetype(
                 origami_system,
@@ -94,7 +92,7 @@ double CTRGRegrowthMCMovetype::unassign_and_save_domains() {
     m_prev_ore[key] = domain->m_ore;
     for (size_t i {1}; i != m_regrow_ds.size(); i++) {
         domain = m_regrow_ds[i];
-        pair<int, int> key {domain->m_c, domain->m_d};
+        key = {domain->m_c, domain->m_d};
         m_prev_pos[key] = domain->m_pos;
         m_prev_ore[key] = domain->m_ore;
         m_modified_domains.push_back(key);
@@ -186,7 +184,7 @@ double CTRGRegrowthMCMovetype::recoil_regrow() {
     prepare_for_growth();
 
     // Stop growing when all domains done or max num recoils reached
-    int recoils {0}; // Current number of recoil steps that have been taken
+    size_t recoils {0}; // Current number of recoil steps that have been taken
     while (true) {
         configT c; // Trial config for current domain
         double p_c_open;
@@ -211,19 +209,15 @@ double CTRGRegrowthMCMovetype::recoil_regrow() {
             if (m_di == m_regrow_ds.size() - 1) {
                 break;
             }
-            else {
-                prepare_for_growth();
-            }
+            prepare_for_growth();
         }
         else {
             if (recoils == m_max_recoils or m_di == 1) {
                 m_rejected = true;
                 break;
             }
-            else {
-                recoils++;
-                delta_e += prepare_for_regrowth();
-            }
+            ++recoils;
+            delta_e += prepare_for_regrowth();
         }
     }
 
@@ -257,7 +251,7 @@ void CTRGRegrowthMCMovetype::prepare_for_growth() {
     else {
         m_d_max_c_attempts = m_max_c_attempts;
         m_avail_cis = m_all_cis;
-        m_ref_d = (*m_d + (-m_dir));
+        m_ref_d = &m_d->get_contig_domain(-m_dir);
     }
 }
 
@@ -279,7 +273,7 @@ double CTRGRegrowthMCMovetype::prepare_for_regrowth() {
         m_d_max_c_attempts = m_max_c_attempts;
         m_c_attempts = m_c_attempts_q[m_di];
         m_avail_cis = m_avail_cis_q[m_di];
-        m_ref_d = (*m_d + (-m_dir));
+        m_ref_d = &m_d->get_contig_domain(-m_dir);
     }
 
     return delta_e;
@@ -302,8 +296,8 @@ configT CTRGRegrowthMCMovetype::select_trial_config() {
     }
     else {
         ci = m_random_gens.uniform_int(0, m_avail_cis.size() - 1);
-        std::list<int>::iterator it {std::next(m_avail_cis.begin(), ci)};
-        int i {*it}; // TODO check this does what you think
+        std::list<size_t>::iterator it {std::next(m_avail_cis.begin(), ci)};
+        size_t i {*it}; // TODO check this does what you think
         m_avail_cis.erase(it);
         c = m_all_configs[i];
         c.first = c.first + m_ref_d->m_pos;
@@ -327,7 +321,7 @@ double CTRGRegrowthMCMovetype::calc_p_config_open(configT c) {
     // It's repeated (except growthpoint check) in the CTCB code
     Occupancy pos_occ {m_origami_system.position_occupancy(c.first)};
     if (pos_occ == Occupancy::unbound) {
-        Domain* occ_domain {m_origami_system.unbound_domain_at(c.first)};
+        Domain* occ_domain {&m_origami_system.unbound_domain_at(c.first)};
         bool binding_same_chain {occ_domain->m_c == m_d->m_c};
         bool endpoint {m_constraintpoints.endpoint_reached(m_d, c.first)};
         bool excluded_staple {find(m_excluded_staples.begin(),
@@ -349,12 +343,7 @@ bool CTRGRegrowthMCMovetype::test_config_open(double p_c_open) {
         c_open = true;
     }
     else {
-        if (p_c_open > m_random_gens.uniform_real()) {
-            c_open = true;
-        }
-        else {
-            c_open = false;
-        }
+        c_open = p_c_open > m_random_gens.uniform_real();
     }
 
     return c_open;
@@ -370,10 +359,10 @@ void CTRGRegrowthMCMovetype::calc_weights() {
         m_dir = m_constraintpoints.get_dir(m_d);
 
         // Calculate the number of available configurations.
-        int avail_cs {1}; // Available configurations, already found 1
+        size_t avail_cs {1}; // Available configurations, already found 1
         if (not m_stemd) {
-            m_ref_d = (*m_d + (-m_dir));
-            int c_attempts {m_c_attempts_wq[m_di]};
+            m_ref_d = &m_d->get_contig_domain(-m_dir);
+            size_t c_attempts {m_c_attempts_wq[m_di]};
             m_avail_cis = m_avail_cis_wq[m_di];
             while (c_attempts != m_max_c_attempts) {
                 c_attempts++;
@@ -391,7 +380,9 @@ void CTRGRegrowthMCMovetype::calc_weights() {
                     auto ref_d = m_ref_d;
                     auto stemd = m_stemd;
                     auto avail_cis = m_avail_cis;
-                    avail_cs += test_config_avail();
+                    if (test_config_avail()) {
+                        ++avail_cs;
+                    }
                     m_avail_cis = avail_cis;
                     m_stemd = stemd;
                     m_ref_d = ref_d;
@@ -420,7 +411,7 @@ void CTRGRegrowthMCMovetype::calc_weights() {
  * until it is determined that this cannot be done, using recoils.
  */
 bool CTRGRegrowthMCMovetype::test_config_avail() {
-    int feels {0}; // Current number of feeler domains grown
+    size_t feels {0}; // Current number of feeler domains grown
     if (feels == m_max_recoils or m_di == m_regrow_ds.size() - 1) {
         return true;
     }
@@ -431,7 +422,7 @@ bool CTRGRegrowthMCMovetype::test_config_avail() {
     while (true) {
         configT c; // Trial config for current domain
         bool c_open {false};
-        bool p_c_open;
+        double p_c_open;
         while (not c_open and m_c_attempts != m_d_max_c_attempts) {
             m_c_attempts++;
             c = select_trial_config();
@@ -445,23 +436,19 @@ bool CTRGRegrowthMCMovetype::test_config_avail() {
                 c_avail = true;
                 break;
             }
-            else {
-                set_config(m_d, c);
-                write_config();
-                m_c_attempts_q[m_di] = m_c_attempts;
-                m_avail_cis_q[m_di] = m_avail_cis;
-                prepare_for_growth();
-            }
+            set_config(m_d, c);
+            write_config();
+            m_c_attempts_q[m_di] = m_c_attempts;
+            m_avail_cis_q[m_di] = m_avail_cis;
+            prepare_for_growth();
         }
         else {
             if (feels == 0) {
                 c_avail = false;
                 break;
             }
-            else {
-                feels--;
-                prepare_for_regrowth();
-            }
+            feels--;
+            prepare_for_regrowth();
         }
     }
 
@@ -502,20 +489,18 @@ void CTRGRegrowthMCMovetype::calc_old_c_opens() {
         else {
             m_avail_cis_q[m_di] = m_all_cis;
             m_dir = m_constraintpoints.get_dir(m_d);
-            m_ref_d = (*m_d + (-m_dir));
+            m_ref_d = &m_d->get_contig_domain(-m_dir);
             pair<int, int> refkey {m_ref_d->m_c, m_ref_d->m_d};
             VectorThree pref {m_old_pos[refkey]};
             c.first = p - pref;
-            int ci {m_config_to_i.at(c)};
+            size_t ci {m_config_to_i.at(c)};
             m_avail_cis_q[m_di].remove(ci);
         }
     }
 }
 
 bool CTRGRegrowthMCMovetype::test_rg_acceptance() {
-    long double ratio {m_weight_new / m_weight * std::exp(-m_delta_e)};
-    // cout << ratio << " " << m_weight_new << " " << m_weight << " " <<
-    // std::exp(-m_delta_e) << "\n";
+    double ratio {m_weight_new / m_weight * std::exp(-m_delta_e)};
     bool accepted {false};
     if (test_acceptance(ratio)) {
         m_prev_pos = m_new_pos;
@@ -536,15 +521,15 @@ CTRGScaffoldRegrowthMCMovetype::CTRGScaffoldRegrowthMCMovetype(
         OrigamiSystem& origami_system,
         RandomGens& random_gens,
         IdealRandomWalks& ideal_random_walks,
-        vector<OrigamiOutputFile*> config_files,
-        string label,
+        vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+        string& label,
         SystemOrderParams& ops,
         SystemBiases& biases,
         InputParameters& params,
-        int num_excluded_staples,
-        int max_recoils,
-        int max_c_attempts,
-        int max_regrowth):
+        size_t num_excluded_staples,
+        size_t max_recoils,
+        size_t max_c_attempts,
+        size_t max_regrowth):
 
         MCMovetype(
                 origami_system,
@@ -590,7 +575,7 @@ CTRGScaffoldRegrowthMCMovetype::CTRGScaffoldRegrowthMCMovetype(
                 max_c_attempts,
                 max_regrowth) {}
 
-void CTRGScaffoldRegrowthMCMovetype::write_log_summary(ostream* log_stream) {
+void CTRGScaffoldRegrowthMCMovetype::write_log_summary(ostream& log_stream) {
     write_log_summary_header(log_stream);
 
     // Insertion of each staple type
@@ -603,7 +588,7 @@ void CTRGScaffoldRegrowthMCMovetype::write_log_summary(ostream* log_stream) {
     for (auto tracker: m_tracking) {
         auto info = tracker.first;
         auto counts = tracker.second;
-        int length {info.num_scaffold_domains};
+        size_t length {info.num_scaffold_domains};
         lengths.insert(length);
         if (lengths.find(length) == lengths.end()) {
             length_attempts[length] = counts.attempts;
@@ -615,15 +600,15 @@ void CTRGScaffoldRegrowthMCMovetype::write_log_summary(ostream* log_stream) {
         }
     }
     for (auto l: lengths) {
-        *log_stream << "    Number of scaffold domains: " << l << "\n";
+        log_stream << "    Number of scaffold domains: " << l << "\n";
         int ats {length_attempts[l]};
         int acs {length_accepts[l]};
         double freq {static_cast<double>(acs) / ats};
-        *log_stream << "        Attempts: " << ats << "\n";
-        *log_stream << "        Accepts: " << acs << "\n";
-        *log_stream << "        Frequency: " << freq << "\n";
+        log_stream << "        Attempts: " << ats << "\n";
+        log_stream << "        Accepts: " << acs << "\n";
+        log_stream << "        Frequency: " << freq << "\n";
     }
-    *log_stream << "\n";
+    log_stream << "\n";
 }
 
 bool CTRGScaffoldRegrowthMCMovetype::internal_attempt_move() {
@@ -696,16 +681,16 @@ CTRGJumpScaffoldRegrowthMCMovetype::CTRGJumpScaffoldRegrowthMCMovetype(
         OrigamiSystem& origami_system,
         RandomGens& random_gens,
         IdealRandomWalks& ideal_random_walks,
-        vector<OrigamiOutputFile*> config_files,
-        string label,
+        vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+        string& label,
         SystemOrderParams& ops,
         SystemBiases& biases,
         InputParameters& params,
-        int num_excluded_staples,
-        int max_recoils,
-        int max_c_attempts,
-        int max_regrowth,
-        int max_seg_regrowth):
+        size_t num_excluded_staples,
+        size_t max_recoils,
+        size_t max_c_attempts,
+        size_t max_regrowth,
+        size_t max_seg_regrowth):
 
         MCMovetype(
                 origami_system,
@@ -752,7 +737,7 @@ CTRGJumpScaffoldRegrowthMCMovetype::CTRGJumpScaffoldRegrowthMCMovetype(
                 max_regrowth) {}
 
 void CTRGJumpScaffoldRegrowthMCMovetype::write_log_summary(
-        ostream* log_stream) {
+        ostream& log_stream) {
     write_log_summary_header(log_stream);
 
     // Insertion of each staple type
@@ -765,7 +750,7 @@ void CTRGJumpScaffoldRegrowthMCMovetype::write_log_summary(
     for (auto tracker: m_tracking) {
         auto info = tracker.first;
         auto counts = tracker.second;
-        int length {info.num_scaffold_domains};
+        size_t length {info.num_scaffold_domains};
         lengths.insert(length);
         if (lengths.find(length) == lengths.end()) {
             length_attempts[length] = counts.attempts;
@@ -777,15 +762,15 @@ void CTRGJumpScaffoldRegrowthMCMovetype::write_log_summary(
         }
     }
     for (auto l: lengths) {
-        *log_stream << "    Number of scaffold domains: " << l << "\n";
+        log_stream << "    Number of scaffold domains: " << l << "\n";
         int ats {length_attempts[l]};
         int acs {length_accepts[l]};
         double freq {static_cast<double>(acs) / ats};
-        *log_stream << "        Attempts: " << ats << "\n";
-        *log_stream << "        Accepts: " << acs << "\n";
-        *log_stream << "        Frequency: " << freq << "\n";
+        log_stream << "        Attempts: " << ats << "\n";
+        log_stream << "        Accepts: " << acs << "\n";
+        log_stream << "        Frequency: " << freq << "\n";
     }
-    *log_stream << "\n";
+    log_stream << "\n";
 }
 
 bool CTRGJumpScaffoldRegrowthMCMovetype::internal_attempt_move() {

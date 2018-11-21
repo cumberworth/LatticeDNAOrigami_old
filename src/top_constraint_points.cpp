@@ -1,5 +1,3 @@
-// top_constraint_points.cpp
-
 #include <cmath>
 
 #include "top_constraint_points.hpp"
@@ -9,32 +7,32 @@ namespace topConstraintPoints {
 
 using std::cout;
 using std::find;
-using std::fmin;
 using std::set;
 
-bool domain_included(vector<Domain*> domains, Domain* d) {
+bool domain_included(const vector<Domain*>& domains, const Domain* const d) {
     return find(domains.begin(), domains.end(), d) != domains.end();
 }
 
-bool chain_included(vector<int> staples, int staple) {
+bool chain_included(const vector<int>& staples, const int staple) {
     return find(staples.begin(), staples.end(), staple) != staples.end();
 }
 
-bool chain_included(set<int> staples, int staple) {
+bool chain_included(const set<int>& staples, const int staple) {
     return staples.find(staple) != staples.end();
 }
 
 StapleNetwork::StapleNetwork(OrigamiSystem& origami): m_origami {origami} {}
 
-void StapleNetwork::set_excluded_staples(vector<int> excluded_staples) {
+void StapleNetwork::set_excluded_staples(const vector<int>& excluded_staples) {
     m_ex_staples = excluded_staples;
 }
 
-void StapleNetwork::set_scaffold_domains(vector<Domain*> scaffold_domains) {
+void StapleNetwork::set_scaffold_domains(
+        const vector<Domain*>& scaffold_domains) {
     m_scaffold_ds = scaffold_domains;
 }
 
-void StapleNetwork::scan_network(Domain* d) {
+void StapleNetwork::scan_network(Domain* const d) {
     clear_network();
 
     // Adding the scaffold chain made checks easier
@@ -76,7 +74,7 @@ void StapleNetwork::clear_network() {
     m_segs.clear();
 }
 
-void StapleNetwork::scan_staple_topology(Domain* growth_d) {
+void StapleNetwork::scan_staple_topology(Domain* const growth_d) {
 
     int ci {growth_d->m_c}; // Staple chain index
     m_net_cs.insert(ci);
@@ -126,24 +124,26 @@ void StapleNetwork::scan_staple_topology(Domain* growth_d) {
              * on an excluded staple
              */
             if (not bs_excluded) {
-                m_pot_gps.push_back({d, bd});
+                m_pot_gps.emplace_back(d, bd);
             }
             scan_staple_topology(bd);
         }
     }
 }
 
-vector<Domain*> StapleNetwork::make_staple_stack(Domain* d, int ci) {
+vector<Domain*> StapleNetwork::make_staple_stack(
+        Domain* const d,
+        const int ci) {
     vector<Domain*> ds {};
-    vector<Domain*> staple {m_origami.get_chain(ci)};
+    vector<Domain>& staple {m_origami.get_chain(ci)};
 
     // Iterate through domains in three prime direction
     int seg {0};
     m_segs[d] = seg;
     pair<int, int> key {ci, seg};
     m_domain_to_dir[key] = 1;
-    for (size_t di = d->m_d + 1; di != staple.size(); di++) {
-        Domain* d_loop {staple[di]};
+    for (size_t di = static_cast<size_t>(d->m_d) + 1; di != staple.size(); di++) {
+        Domain* d_loop {&staple[di]};
         ds.push_back(d_loop);
         m_segs[d_loop] = seg;
     }
@@ -153,7 +153,7 @@ vector<Domain*> StapleNetwork::make_staple_stack(Domain* d, int ci) {
     key = {ci, seg};
     m_domain_to_dir[key] = -1;
     for (int di {d->m_d - 1}; di != -1; di--) {
-        Domain* d_loop {staple[di]};
+        Domain* d_loop {&staple[static_cast<size_t>(di)]};
         ds.push_back(d_loop);
         m_segs[d_loop] = seg;
     }
@@ -161,12 +161,14 @@ vector<Domain*> StapleNetwork::make_staple_stack(Domain* d, int ci) {
     return ds;
 }
 
-void StapleNetwork::add_potential_inactive_endpoint(Domain* d, Domain* bd) {
+void StapleNetwork::add_potential_inactive_endpoint(
+        Domain* d,
+        Domain* bd) {
     if (domain_included(m_pot_ds, bd)) {
-        m_pot_iaes.push_back({bd, d});
+        m_pot_iaes.emplace_back(bd, d);
     }
     else {
-        m_pot_iaes.push_back({d, bd});
+        m_pot_iaes.emplace_back(d, bd);
     }
 }
 
@@ -177,7 +179,7 @@ Constraintpoints::Constraintpoints(
         m_ideal_random_walks {ideal_random_walks},
         m_staple_network {origami_system} {}
 
-int Constraintpoints::get_dir(Domain* d) {
+int Constraintpoints::get_dir(Domain* const d) {
     auto seg = m_segs[d];
     pair<int, int> key {d->m_c, seg};
     int dir {m_domain_to_dir[key]};
@@ -206,9 +208,9 @@ void Constraintpoints::reset_internal() {
 }
 
 void Constraintpoints::calculate_constraintpoints(
-        vector<Domain*> scaffold_domains,
-        int dir,
-        vector<int> excluded_staples) {
+        const vector<Domain*>& scaffold_domains,
+        const int dir,
+        const vector<int>& excluded_staples) {
 
     m_scaffold_domains = scaffold_domains;
     m_staple_network.set_scaffold_domains(m_scaffold_domains);
@@ -222,9 +224,9 @@ void Constraintpoints::calculate_constraintpoints(
 }
 
 void Constraintpoints::calculate_constraintpoints(
-        vector<vector<Domain*>> scaffold_segments,
-        vector<int> dirs,
-        vector<int> excluded_staples) {
+        const vector<vector<Domain*>>& scaffold_segments,
+        const vector<int>& dirs,
+        const vector<int>& excluded_staples) {
 
     for (auto segment: scaffold_segments) {
         m_scaffold_domains.insert(
@@ -235,7 +237,7 @@ void Constraintpoints::calculate_constraintpoints(
     int seg {0};
     for (size_t i {0}; i != scaffold_segments.size(); i++) {
         auto scaffold_domains = scaffold_segments[i];
-        if (scaffold_domains.size() != 0) {
+        if (not scaffold_domains.empty()) {
             pair<int, int> key {scaffold_domains[0]->m_c, seg};
             m_domain_to_dir[key] = dirs[i];
             find_growthpoints_endpoints(
@@ -254,15 +256,17 @@ set<int> Constraintpoints::staples_to_be_regrown() {
 
 vector<Domain*> Constraintpoints::domains_to_be_regrown() { return m_d_stack; }
 
-bool Constraintpoints::is_growthpoint(Domain* domain) {
+bool Constraintpoints::is_growthpoint(Domain* const domain) {
     return (m_growthpoints.count(domain) > 0);
 }
 
-bool Constraintpoints::is_stemdomain(Domain* domain) {
+bool Constraintpoints::is_stemdomain(Domain* const domain) {
     return (m_stemdomains.count(domain) > 0);
 }
 
-void Constraintpoints::add_active_endpoint(Domain* d, VectorThree pos) {
+void Constraintpoints::add_active_endpoint(
+        Domain* const d,
+        const VectorThree pos) {
 
     auto seg = m_segs.at(d);
     pair<int, int> key {d->m_c, seg};
@@ -270,25 +274,31 @@ void Constraintpoints::add_active_endpoint(Domain* d, VectorThree pos) {
 }
 
 void Constraintpoints::add_active_endpoint(
-        Domain* domain,
-        VectorThree pos,
-        int seg) {
+        Domain* const domain,
+        const VectorThree pos,
+        const int seg) {
 
     pair<int, int> key {domain->m_c, seg};
     m_active_endpoints[key].push_back({domain->m_d, pos});
 }
 
-void Constraintpoints::add_inactive_endpoint(Domain* d_i, Domain* d_j) {
+void Constraintpoints::add_inactive_endpoint(
+        Domain* const d_i,
+        Domain* const d_j) {
     m_inactive_endpoints[d_i] = d_j;
 }
 
-void Constraintpoints::add_growthpoint(Domain* growthpoint, Domain* stemd) {
+void Constraintpoints::add_growthpoint(
+        Domain* const growthpoint,
+        Domain* const stemd) {
 
     m_growthpoints[growthpoint] = stemd;
     m_stemdomains[stemd] = growthpoint;
 }
 
-void Constraintpoints::add_stem_seg_pair(Domain* stemd, vector<int> seg_pair) {
+void Constraintpoints::add_stem_seg_pair(
+        Domain* const stemd,
+        const vector<int>& seg_pair) {
 
     m_stemd_to_segs[stemd] = seg_pair;
 }
@@ -297,14 +307,14 @@ void Constraintpoints::reset_active_endpoints() {
     m_active_endpoints = m_initial_active_endpoints;
 }
 
-void Constraintpoints::remove_active_endpoint(Domain* domain) {
+void Constraintpoints::remove_active_endpoint(Domain* const domain) {
 
     // Remove endpoint if reached
     m_erased_endpoints.clear();
     int c_i {domain->m_c};
     auto seg = m_segs.at(domain);
     pair<int, int> key {c_i, seg};
-    vector<int> endpoints_to_erase {};
+    vector<unsigned long> endpoints_to_erase {};
     for (size_t j {0}; j != m_active_endpoints[key].size(); j++) {
         pair<int, VectorThree> endpoint {m_active_endpoints[key][j]};
         if (endpoint.first == domain->m_d) {
@@ -316,11 +326,11 @@ void Constraintpoints::remove_active_endpoint(Domain* domain) {
     // Removing in reverse means the indices are not changing as I do it
     std::reverse(endpoints_to_erase.begin(), endpoints_to_erase.end());
     for (auto j: endpoints_to_erase) {
-        m_active_endpoints[key].erase(m_active_endpoints[key].begin() + j);
+        m_active_endpoints[key].erase(m_active_endpoints[key].begin() + static_cast<long>(j));
     }
 }
 
-void Constraintpoints::remove_activated_endpoint(Domain* domain) {
+void Constraintpoints::remove_activated_endpoint(Domain* const domain) {
     bool endpoint_present {m_inactive_endpoints.count(domain) > 0};
     if (endpoint_present) {
         Domain* edomain {m_inactive_endpoints[domain]};
@@ -331,14 +341,14 @@ void Constraintpoints::remove_activated_endpoint(Domain* domain) {
             pair<int, VectorThree> endpoint {m_active_endpoints[key][j]};
             if (endpoint.first == edomain->m_d) {
                 m_active_endpoints[key].erase(
-                        m_active_endpoints[key].begin() + j);
+                        m_active_endpoints[key].begin() + static_cast<long>(j));
                 break;
             }
         }
     }
 }
 
-void Constraintpoints::update_endpoints(Domain* domain) {
+void Constraintpoints::update_endpoints(Domain* const domain) {
     remove_active_endpoint(domain);
 
     // Copy inactive endpoints to active endpoints
@@ -349,15 +359,17 @@ void Constraintpoints::update_endpoints(Domain* domain) {
     }
 }
 
-Domain* Constraintpoints::get_domain_to_grow(Domain* domain) {
+Domain* Constraintpoints::get_domain_to_grow(Domain* const domain) {
     return m_growthpoints[domain];
 }
 
-Domain* Constraintpoints::get_growthpoint(Domain* domain) {
+Domain* Constraintpoints::get_growthpoint(Domain* const domain) {
     return m_stemdomains[domain];
 }
 
-bool Constraintpoints::endpoint_reached(Domain* domain, VectorThree pos) {
+bool Constraintpoints::endpoint_reached(
+        Domain* const domain,
+        const VectorThree pos) {
     bool reached {false};
     auto seg = m_segs.at(domain);
     pair<int, int> key {domain->m_c, seg};
@@ -373,10 +385,10 @@ bool Constraintpoints::endpoint_reached(Domain* domain, VectorThree pos) {
 }
 
 long double Constraintpoints::calc_num_walks_prod(
-        Domain* domain,
-        VectorThree pos,
-        int dir,
-        int offset) {
+        Domain* const domain,
+        const VectorThree pos,
+        const int dir,
+        const unsigned int offset) {
 
     long double prod_nws {1}; // Product of num ideal walks
 
@@ -384,7 +396,7 @@ long double Constraintpoints::calc_num_walks_prod(
     pair<int, int> key {domain->m_c, m_segs.at(domain)};
     for (auto endpoint: m_active_endpoints[key]) {
         int end_d_i {endpoint.first};
-        int steps {calc_remaining_steps(end_d_i, domain, dir, offset)};
+        unsigned int steps {calc_remaining_steps(end_d_i, domain, dir, offset)};
         if (steps < 0) {
             cout << "Bad endpoint detected\n";
             throw utility::SimulationMisuse {};
@@ -398,8 +410,8 @@ long double Constraintpoints::calc_num_walks_prod(
 
 bool Constraintpoints::walks_remain(
         Domain* domain,
-        VectorThree pos,
-        int offset) {
+        const VectorThree pos,
+        const unsigned int offset) {
 
     vector<int> segs {};
     bool w_remain {true};
@@ -422,17 +434,17 @@ bool Constraintpoints::walks_remain(
 }
 
 bool Constraintpoints::walks_remain(
-        pair<int, int> key,
-        Domain* domain,
-        VectorThree pos,
-        int dir,
-        int offset) {
+        const pair<int, int> key,
+        Domain* const domain,
+        const VectorThree pos,
+        const int dir,
+        const unsigned int offset) {
 
     // Loop through all active endpoints on current segment
     bool w_remain {true};
     for (auto endpoint: m_active_endpoints[key]) {
         int end_d_i {endpoint.first};
-        int steps {calc_remaining_steps(end_d_i, domain, dir, offset)};
+        unsigned int steps {calc_remaining_steps(end_d_i, domain, dir, offset)};
         VectorThree end_p {endpoint.second};
         if (m_ideal_random_walks.num_walks(pos, end_p, steps) == 0) {
             w_remain = false;
@@ -444,21 +456,21 @@ bool Constraintpoints::walks_remain(
 }
 
 vector<pair<int, VectorThree>> Constraintpoints::get_active_endpoints(
-        int c_i,
-        int seg) {
+        const int c_i,
+        const int seg) {
     return m_active_endpoints[{c_i, seg}];
 }
 
-Domain* Constraintpoints::get_inactive_endpoints(Domain* domain) {
+Domain* Constraintpoints::get_inactive_endpoints(Domain* const domain) {
     return m_inactive_endpoints[domain];
 }
 
 void Constraintpoints::find_growthpoints_endpoints(
-        vector<Domain*> scaffold_domains,
-        vector<int> excluded_staples,
-        int seg) {
+        const vector<Domain*>& scaffold_domains,
+        const vector<int>& excluded_staples,
+        const int seg) {
 
-    for (auto d: scaffold_domains) {
+    for (const auto d: scaffold_domains) {
         m_d_stack.push_back(d);
         m_segs[d] = seg;
 
@@ -473,7 +485,7 @@ void Constraintpoints::find_growthpoints_endpoints(
         m_staple_network.scan_network(bd);
         auto net_cs = m_staple_network.get_participating_chains();
         auto pot_gps = m_staple_network.get_potential_growthpoints();
-        pot_gps.push_back({d, bd});
+        pot_gps.emplace_back(d, bd);
         auto pot_iaes = m_staple_network.get_potential_inactive_endpoints();
         auto pot_ds = m_staple_network.get_potential_domain_stack();
         auto s_seg_map = m_staple_network.get_staple_to_segs_map();
@@ -495,7 +507,7 @@ void Constraintpoints::find_growthpoints_endpoints(
     }
 }
 
-bool Constraintpoints::bound_to_self(Domain* d) {
+bool Constraintpoints::bound_to_self(const Domain* const d) {
     return d->m_bound_domain->m_c == d->m_c;
 }
 
@@ -509,7 +521,7 @@ void Constraintpoints::add_growthpoints(
 }
 
 void Constraintpoints::add_inactive_endpoints(
-        vector<pair<Domain*, Domain*>> pot_iaes) {
+        const vector<pair<Domain*, Domain*>>& pot_iaes) {
 
     for (auto pot_iae: pot_iaes) {
         m_inactive_endpoints[pot_iae.first] = pot_iae.second;
@@ -517,8 +529,8 @@ void Constraintpoints::add_inactive_endpoints(
 }
 
 void Constraintpoints::add_regrowth_staples(
-        set<int> participating_chains,
-        vector<int> ex_staples) {
+        const set<int> participating_chains,
+        const vector<int>& ex_staples) {
 
     for (auto c_i: participating_chains) {
         if (c_i == 0) {
@@ -531,7 +543,8 @@ void Constraintpoints::add_regrowth_staples(
     }
 }
 
-void Constraintpoints::add_domains_to_stack(vector<Domain*> potential_d_stack) {
+void Constraintpoints::add_domains_to_stack(
+        const vector<Domain*>& potential_d_stack) {
 
     m_d_stack.insert(
             m_d_stack.end(),
@@ -540,9 +553,9 @@ void Constraintpoints::add_domains_to_stack(vector<Domain*> potential_d_stack) {
 }
 
 void Constraintpoints::add_active_endpoints_on_scaffold(
-        vector<pair<Domain*, Domain*>> pot_growthpoints,
-        vector<pair<Domain*, Domain*>> pot_inactive_endpoints,
-        int seg) {
+        const vector<pair<Domain*, Domain*>>& pot_growthpoints,
+        const vector<pair<Domain*, Domain*>>& pot_inactive_endpoints,
+        const int seg) {
 
     // Extract those from potential growthpoints
     for (auto growth_pair: pot_growthpoints) {
@@ -561,41 +574,47 @@ void Constraintpoints::add_active_endpoints_on_scaffold(
 }
 
 void Constraintpoints::add_staple_to_segs_maps(
-        unordered_map<Domain*, int> s_seg_map) {
+        const unordered_map<Domain*, int>& s_seg_map) {
 
     m_segs.insert(s_seg_map.begin(), s_seg_map.end());
 }
 
-void Constraintpoints::add_dirs(unordered_map<pair<int, int>, int> dirs) {
+void Constraintpoints::add_dirs(
+        const unordered_map<pair<int, int>, int>& dirs) {
     m_domain_to_dir.insert(dirs.begin(), dirs.end());
 }
 
-int Constraintpoints::calc_remaining_steps(
-        int endpoint_d_i,
-        Domain* domain,
-        int dir,
-        int step_offset) {
-    int steps;
+unsigned int Constraintpoints::calc_remaining_steps(
+        const int endpoint_d_i,
+        const Domain* const domain,
+        const int dir,
+        const unsigned int step_offset) {
+
+    unsigned int steps;
     if (m_origami_system.m_cyclic and
         domain->m_c == m_origami_system.c_scaffold) {
 
         if (dir > 0 and endpoint_d_i < domain->m_d) {
-            steps = m_origami_system.get_chain(0).size() + endpoint_d_i -
-                    domain->m_d;
+            steps = static_cast<unsigned int>(
+                            m_origami_system.get_chain(0).size()) +
+                    static_cast<unsigned int>(endpoint_d_i) -
+                    static_cast<unsigned int>(domain->m_d);
         }
         else if (dir < 0 and endpoint_d_i > domain->m_d) {
-            steps = domain->m_d + m_origami_system.get_chain(0).size() -
-                    endpoint_d_i;
+            steps = static_cast<unsigned int>(domain->m_d) +
+                    static_cast<unsigned int>(
+                            m_origami_system.get_chain(0).size()) -
+                    static_cast<unsigned int>(endpoint_d_i);
         }
         else if (dir == 0 or endpoint_d_i == domain->m_d) {
             steps = 0;
         }
         else {
-            steps = abs(endpoint_d_i - domain->m_d);
+            steps = static_cast<unsigned int>(abs(endpoint_d_i - domain->m_d));
         }
     }
     else {
-        steps = abs(endpoint_d_i - domain->m_d);
+        steps = static_cast<unsigned int>(abs(endpoint_d_i - domain->m_d));
     }
     steps += step_offset;
 

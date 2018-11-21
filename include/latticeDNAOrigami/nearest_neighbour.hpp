@@ -107,9 +107,9 @@ double calc_unitless_hybridization_energy(
         double cation_M);
 
 ThermoOfHybrid calc_hybridization_H_and_S(string const& seq, double cation_M);
-vector<string> find_longest_contig_complement(string seq_i, string seq_j);
-string calc_comp_seq(string seq);
-bool seq_is_palindromic(string const& seq);
+vector<string> find_longest_contig_complement(const string& seq_i, const string& seq_j);
+string calc_comp_seq(const string& seq);
+bool seq_is_palindromic(const string& seq);
 } // namespace nearestNeighbour
 
 #endif // NEAREST_NEIGHBOUR_H

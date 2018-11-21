@@ -22,7 +22,7 @@ using std::unique_ptr;
 using std::unordered_map;
 using std::vector;
 
-using domainContainer::Domain;
+using domain::Domain;
 using orderParams::OrderParam;
 using orderParams::SystemOrderParams;
 using origami::OrigamiSystem;
@@ -114,7 +114,7 @@ class SquareWellBiasFunction: public BiasFunction {
             int min_param,
             int max_param,
             double well_bias,
-            double oustide_bias);
+            double outside_bias);
     ~SquareWellBiasFunction() {};
     double update_bias();
     double check_bias();
@@ -134,17 +134,17 @@ class SquareWellBiasFunction: public BiasFunction {
 using GridPoint = vector<int>;
 class GridBiasFunction: public BiasFunction {
   public:
-    GridBiasFunction(vector<reference_wrapper<OrderParam>> ops);
+    GridBiasFunction(vector<reference_wrapper<OrderParam>>& ops);
     ~GridBiasFunction() {};
 
     int get_dim();
     vector<int> get_point();
 
-    void replace_biases(unordered_map<GridPoint, double> bias_grid);
+    void replace_biases(unordered_map<GridPoint, double>& bias_grid);
 
     double update_bias();
     double check_bias();
-    double calc_bias(vector<int> params);
+    double calc_bias(const vector<int>& params);
 
   private:
     vector<reference_wrapper<OrderParam>> m_ops;
@@ -192,11 +192,11 @@ class SystemBiases {
     // Check change in bias from changing one domain but don't update total bias
     double check_one_domain(Domain& domain);
 
-    GridBiasFunction& get_grid_bias(string tag);
-    SquareWellBiasFunction& get_square_well_bias(string tag);
+    GridBiasFunction& get_grid_bias(const string& tag);
+    SquareWellBiasFunction& get_square_well_bias(const string& tag);
 
   private:
-    void setup_biases(string biases_filename, vector<pair<int, int>> keys);
+    void setup_biases(const string& biases_filename, vector<pair<int, int>> keys);
     // void add_chain(vector<Domain*> chain);
     // void remove_chain(vector<Domain*> chain);
 
@@ -217,7 +217,7 @@ class SystemBiases {
 
     double m_domain_update_bias {0};
     double m_move_update_bias {0};
-    int m_levels;
+    int m_levels {};
 };
 } // namespace biasFunctions
 

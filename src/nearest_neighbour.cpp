@@ -1,5 +1,3 @@
-// nearest_neighbour.h
-
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -16,7 +14,7 @@ using std::reverse;
 using std::string;
 using std::vector;
 
-double calc_seq_spec_stacking_energy(string const& seq_i, string const& seq_j) {
+double calc_seq_spec_stacking_energy(const string& seq_i, const string& seq_j) {
 
     string nuc_i_back {seq_i.back()};
     string nuc_j_front {seq_j.front()};
@@ -28,7 +26,7 @@ double calc_seq_spec_stacking_energy(string const& seq_i, string const& seq_j) {
 }
 
 ThermoOfHybrid calc_unitless_hybridization_thermo(
-        string const& seq,
+        const string& seq,
         double temp,
         double cation_M) {
     ThermoOfHybrid DH_DS {calc_hybridization_H_and_S(seq, cation_M)};
@@ -41,7 +39,7 @@ ThermoOfHybrid calc_unitless_hybridization_thermo(
 }
 
 double calc_unitless_hybridization_energy(
-        string const& seq,
+        const string& seq,
         double temp,
         double cation_M) {
     ThermoOfHybrid DH_DS {
@@ -50,7 +48,7 @@ double calc_unitless_hybridization_energy(
     return DH_DS.enthalpy - DH_DS.entropy;
 }
 
-ThermoOfHybrid calc_hybridization_H_and_S(string const& seq, double cation_M) {
+ThermoOfHybrid calc_hybridization_H_and_S(const string& seq, double cation_M) {
     string comp_seq {calc_comp_seq(seq)};
 
     // Initiation free energy
@@ -101,8 +99,9 @@ ThermoOfHybrid calc_hybridization_H_and_S(string const& seq, double cation_M) {
     return DH_DS;
 }
 
-vector<string>
-find_longest_contig_complement(string const& seq_i, string const& seq_j) {
+vector<string> find_longest_contig_complement(
+        const string& seq_i,
+        const string& seq_j) {
     // Find smallest sequence
     string seq_three;
     string seq_five;
@@ -121,7 +120,7 @@ find_longest_contig_complement(string const& seq_i, string const& seq_j) {
 
     // Iterate through all lengths and starting points
     vector<string> comp_seqs {};
-    for (int subseq_len {(int)seq_three.size()}; subseq_len != 0;
+    for (unsigned long subseq_len {seq_three.size()}; subseq_len != 0;
          subseq_len--) {
         for (unsigned int start_i {0};
              start_i != (seq_three.size() - subseq_len + 1);
@@ -144,7 +143,7 @@ find_longest_contig_complement(string const& seq_i, string const& seq_j) {
     return comp_seqs;
 }
 
-string calc_comp_seq(string seq) {
+string calc_comp_seq(const string& seq) {
     // Return the complementary DNA sequence.
     string comp_seq {};
     for (auto base: seq) {
@@ -153,7 +152,7 @@ string calc_comp_seq(string seq) {
     return comp_seq;
 }
 
-bool seq_is_palindromic(string const& seq) {
+bool seq_is_palindromic(const string& seq) {
     string comp_seq {calc_comp_seq(seq)};
     string reverse_comp_seq {comp_seq};
     reverse(reverse_comp_seq.begin(), reverse_comp_seq.end());

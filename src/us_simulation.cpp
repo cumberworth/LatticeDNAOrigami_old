@@ -1,5 +1,3 @@
-// us_simulation.cpp
-
 #include <cmath>
 #include <cstdlib>
 #include <memory>
@@ -146,14 +144,14 @@ void USGCMCSimulation::run_production(int n) {
 
 vector<GridPoint> USGCMCSimulation::get_points() { return m_points; }
 
-void USGCMCSimulation::read_weights(string const& filename) {
+void USGCMCSimulation::read_weights(const string& filename) {
     ifstream jsonraw {filename, ifstream::binary};
     Json::Value jsonroot;
     jsonraw >> jsonroot;
 
-    for (auto const& json_entry: jsonroot["biases"]) {
+    for (const auto& json_entry: jsonroot["biases"]) {
         GridPoint point {};
-        for (auto const& comp: json_entry["point"]) {
+        for (const auto& comp: json_entry["point"]) {
             point.push_back(comp.asInt());
         }
         double point_bias {json_entry["bias"].asDouble()};
@@ -199,7 +197,7 @@ void USGCMCSimulation::output_weights() {
     weights_file << "}\n";
 }
 
-void USGCMCSimulation::set_config_from_traj(string const& filename, int step) {
+void USGCMCSimulation::set_config_from_traj(const string& filename, int step) {
     OrigamiTrajInputFile traj_inp {filename};
     Chains config {traj_inp.read_config(step)};
     m_origami_system.set_config(config);
@@ -225,20 +223,20 @@ void USGCMCSimulation::update_internal(long long int step) {
 void USGCMCSimulation::estimate_current_weights() {
     // Average bias weights of iteration
     double ave_bias_weight {0};
-    for (auto const& point: m_s_i) {
+    for (const auto& point: m_s_i) {
         double point_bias {m_grid_bias.calc_bias(point)};
         ave_bias_weight += m_f_i[point] * std::exp(point_bias);
     }
 
     // Calculate for all visited points
-    for (auto const& point: m_s_i) {
+    for (const auto& point: m_s_i) {
         double point_bias {m_grid_bias.calc_bias(point)};
         double p_n_k {m_f_i[point] * std::exp(point_bias) / ave_bias_weight};
         m_p_i[point] = p_n_k;
     }
 
     // Update vector for unvisted points
-    for (auto const& point: m_old_only_points) {
+    for (const auto& point: m_old_only_points) {
         m_p_i[point] = 0;
     }
 }
@@ -257,7 +255,7 @@ void USGCMCSimulation::fill_grid_sets() {
             m_S_n.begin(),
             m_S_n.end(),
             m_old_points.begin());
-    m_old_points.resize(it - m_old_points.begin());
+    m_old_points.resize(static_cast<unsigned int>(it - m_old_points.begin()));
 
     // Now find newly sampled points
     it = std::set_difference(
@@ -266,7 +264,7 @@ void USGCMCSimulation::fill_grid_sets() {
             m_old_points.begin(),
             m_old_points.end(),
             m_new_points.begin());
-    m_new_points.resize(it - m_new_points.begin());
+    m_new_points.resize(static_cast<unsigned int>(it - m_new_points.begin()));
 
     // Now find points sampled before not in current
     it = std::set_difference(
@@ -275,7 +273,7 @@ void USGCMCSimulation::fill_grid_sets() {
             m_old_points.begin(),
             m_old_points.end(),
             m_old_only_points.begin());
-    m_old_only_points.resize(it - m_old_only_points.begin());
+    m_old_only_points.resize(static_cast<unsigned int>(it - m_old_only_points.begin()));
 }
 
 SimpleUSGCMCSimulation::SimpleUSGCMCSimulation(
@@ -287,7 +285,7 @@ SimpleUSGCMCSimulation::SimpleUSGCMCSimulation(
 
 void SimpleUSGCMCSimulation::update_bias() {
     m_old_p_i = m_p_i;
-    for (auto const& point: m_S_n) {
+    for (const auto& point: m_S_n) {
 
         // No T to be consistent with biases here
         double old_bias {m_E_w[point]};
@@ -320,10 +318,10 @@ void SimpleUSGCMCSimulation::update_bias() {
 }
 
 void SimpleUSGCMCSimulation::update_grids() {
-    for (auto const& point: m_s_i) {
+    for (const auto& point: m_s_i) {
         m_w_i[point] = (static_cast<double>(m_f_i[point]) / m_steps);
     }
-    for (auto const& point: m_old_only_points) {
+    for (const auto& point: m_old_only_points) {
         m_w_i[point] = 0;
     }
 }
@@ -332,8 +330,8 @@ void SimpleUSGCMCSimulation::output_summary(int n) {
     *m_us_stream << "Iteration: " << n << "\n";
     *m_us_stream << "\n";
     *m_us_stream << "Gridpoint w, P, E:\n";
-    for (auto const& point: m_S_n) {
-        for (auto const& coor: point) {
+    for (const auto& point: m_S_n) {
+        for (const auto& coor: point) {
             *m_us_stream << coor << " ";
         }
         *m_us_stream << std::setprecision(3);
@@ -380,18 +378,18 @@ void MWUSGCMCSimulation::run() {
 }
 
 void MWUSGCMCSimulation::setup_window_variables() {
-    for (int i {0}; i != m_windows; i++) {
+    for (unsigned int i {0}; i != m_windows; i++) {
         m_points.emplace_back();
         m_starting_files.emplace_back("");
         m_starting_steps.push_back(0);
 
         // Filename bases
         string window_postfix {"_win-"};
-        for (auto const& j: m_window_mins[i]) {
+        for (const auto& j: m_window_mins[i]) {
             window_postfix += std::to_string(j);
             window_postfix += "-";
         }
-        for (auto const& j: m_window_maxs[i]) {
+        for (const auto& j: m_window_maxs[i]) {
             window_postfix += "-";
             window_postfix += std::to_string(j);
         }
@@ -468,8 +466,8 @@ void MWUSGCMCSimulation::update_master_order_params(int n) {
         // Must flatten to send
         vector<int> flattened_points {};
         vector<GridPoint> points {m_us_sim->get_points()};
-        for (auto const& point: points) {
-            for (auto const& comp: point) {
+        for (const auto& point: points) {
+            for (const auto& comp: point) {
                 flattened_points.push_back(comp);
             }
         }
@@ -477,7 +475,7 @@ void MWUSGCMCSimulation::update_master_order_params(int n) {
     }
     else {
         m_points[m_master_node] = m_us_sim->get_points();
-        for (int i {1}; i != m_windows; i++) {
+        for (unsigned int i {1}; i != m_windows; i++) {
             vector<int> f_points;
             m_world.recv(i, n, f_points);
 
@@ -486,7 +484,7 @@ void MWUSGCMCSimulation::update_master_order_params(int n) {
             size_t j {0};
             while (j != f_points.size()) {
                 points.emplace_back();
-                for (int k {0}; k != m_grid_dim; k++) {
+                for (unsigned int k {0}; k != m_grid_dim; k++) {
                     points.back().push_back(f_points[j]);
                     j++;
                 }
@@ -517,7 +515,7 @@ void MWUSGCMCSimulation::update_starting_config(int n) {
         select_starting_configs(n);
         m_starting_file = m_starting_files[m_master_node];
         m_starting_step = m_starting_steps[m_master_node];
-        for (int i {1}; i != m_windows; i++) {
+        for (unsigned int i {1}; i != m_windows; i++) {
             m_world.send(i, n, m_starting_files[i]);
             m_world.send(i, n, m_starting_steps[i]);
         }
@@ -534,7 +532,7 @@ void MWUSGCMCSimulation::select_starting_configs(int n) {
     sort_configs_by_ops();
 
     // For each window select an order parameter and then associated config
-    for (int i {0}; i != m_windows; i++) {
+    for (unsigned int i {0}; i != m_windows; i++) {
 
         // Select a point in the window that has been sampled
         GridPoint point {};
@@ -581,7 +579,7 @@ void MWUSGCMCSimulation::sort_configs_by_ops() {
 
     // For each window order available configs by their order parameters
     m_order_param_to_configs.clear();
-    for (int i {0}; i != m_windows; i++) {
+    for (unsigned int i {0}; i != m_windows; i++) {
         for (size_t step {0}; step != m_points[i].size(); step++) {
 
             // Would need to modify to allow the use of a subset of
@@ -599,7 +597,7 @@ void MWUSGCMCSimulation::sort_configs_by_ops() {
     }
 }
 
-void MWUSGCMCSimulation::parse_windows_file(string const& filename) {
+void MWUSGCMCSimulation::parse_windows_file(const string& filename) {
     ifstream file {filename};
     string window_raw;
 

@@ -34,7 +34,7 @@ using std::unordered_map;
 using std::vector;
 
 using biasFunctions::SystemBiases;
-using domainContainer::Domain;
+using domain::Domain;
 using files::OrigamiOutputFile;
 using idealRandomWalk::IdealRandomWalks;
 using orderParams::SystemOrderParams;
@@ -63,20 +63,20 @@ class MCMovetype {
             OrigamiSystem& origami_system,
             RandomGens& random_gens,
             IdealRandomWalks& ideal_random_walks,
-            vector<OrigamiOutputFile*> const& config_files,
-            string const& label,
+            vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+            string& label,
             SystemOrderParams& ops,
             SystemBiases& biases,
             InputParameters& params);
     MCMovetype(const MCMovetype&) = delete;
     MCMovetype& operator=(const MCMovetype&) = delete;
     virtual ~MCMovetype() {};
-    bool attempt_move(long long int step);
+    bool attempt_move(unsigned long long step);
 
     /** Reset origami system to state before move attempt */
     virtual void reset_origami();
-    void write_log_summary_header(std::unique_ptr<ostream> log_stream);
-    virtual void write_log_summary(std::unique_ptr<ostream> log_stream) = 0;
+    void write_log_summary_header(ostream& log_stream);
+    virtual void write_log_summary(ostream& log_stream) = 0;
 
     string get_label();
     int get_attempts();
@@ -95,12 +95,12 @@ class MCMovetype {
      * Uniform over the set of all domains, rather than uniform over
      * chains and then over the constituent domains
      */
-    Domain* select_random_domain();
+    Domain& select_random_domain();
     int select_random_staple_identity();
     int select_random_staple_of_identity(int c_i_ident);
     VectorThree select_random_position(VectorThree p_prev);
     VectorThree select_random_orientation();
-    bool test_acceptance(long double p_ratio);
+    bool test_acceptance(double p_ratio);
 
     /** Test if staple is anchoring other staples to the system
      *
@@ -108,10 +108,10 @@ class MCMovetype {
      * removed would leave the system in a state with staples
      * unconnected to the scaffold
      */
-    bool staple_is_connector(vector<Domain*> staple);
+    bool staple_is_connector(const vector<Domain>& staple);
 
     /** Find all staples in bound network to given domains */
-    set<int> find_staples(vector<Domain*> domains);
+    set<int> find_staples(const vector<Domain*>& domains);
 
     /** Write the config to move file
      *
@@ -123,17 +123,17 @@ class MCMovetype {
     OrigamiSystem& m_origami_system;
     RandomGens& m_random_gens;
     IdealRandomWalks& m_ideal_random_walks;
-    vector<OrigamiOutputFile*> m_config_files;
+    vector<std::unique_ptr<OrigamiOutputFile>>& m_config_files;
     string m_label;
     SystemOrderParams& m_ops;
     SystemBiases& m_biases;
     InputParameters& m_params;
     bool m_rejected {false};
-    int m_config_output_freq;
+    size_t m_config_output_freq;
 
     // Staple maxes
-    int m_max_total_staples;
-    int m_max_type_staples;
+    size_t m_max_total_staples;
+    size_t m_max_type_staples;
 
     // Lists of modified domains for move reversal
     vector<pair<int, int>> m_modified_domains {};
@@ -148,15 +148,16 @@ class MCMovetype {
     double m_modifier {1};
 
     MovetypeTracking m_general_tracker {0, 0};
-    long long int m_step {0};
+    unsigned long long m_step {0};
 
     // Check if scaffold domain bound to network of given staple
     bool scan_for_scaffold_domain(
-            Domain* domain,
+            const Domain& domain,
             set<int>& participating_chains);
 
     /** Find all domains bound directly to give domains */
-    vector<domainPairT> find_bound_domains(vector<Domain*> selected_chain);
+    vector<domainPairT> find_bound_domains(
+            vector<Domain>& selected_chain);
 };
 
 class IdentityMCMovetype: public MCMovetype {
@@ -165,14 +166,14 @@ class IdentityMCMovetype: public MCMovetype {
             OrigamiSystem& origami_system,
             RandomGens& random_gens,
             IdealRandomWalks& ideal_random_walks,
-            vector<OrigamiOutputFile*> config_files,
-            string label,
+            vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+            string& label,
             SystemOrderParams& ops,
             SystemBiases& biases,
             InputParameters& params);
     IdentityMCMovetype(const IdentityMCMovetype&) = delete;
     IdentityMCMovetype& operator=(const IdentityMCMovetype&) = delete;
-    bool attempt_move(long long int) { return true; };
+    bool attempt_move(unsigned long long) { return true; };
 };
 
 /** Parent class of moves with chain regrowth */
@@ -183,8 +184,8 @@ class RegrowthMCMovetype: virtual public MCMovetype {
             OrigamiSystem& origami_system,
             RandomGens& random_gens,
             IdealRandomWalks& ideal_random_walks,
-            vector<OrigamiOutputFile*> config_files,
-            string label,
+            vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+            string& label,
             SystemOrderParams& ops,
             SystemBiases& biases,
             InputParameters& params);
@@ -207,16 +208,16 @@ class RegrowthMCMovetype: virtual public MCMovetype {
      * The indices passed to grow chain should include the growth
      * point.
      */
-    void grow_staple(int d_i_index, vector<Domain*> selected_chain);
+    void grow_staple(int d_i_index, vector<Domain>& selected_chain);
 
     pair<Domain*, Domain*> select_new_growthpoint(
-            vector<Domain*> selected_chain);
+            vector<Domain>& selected_chain);
 
     /** Select a growthpoint from set of possible */
     domainPairT select_old_growthpoint(vector<domainPairT> bound_domains);
 
     /** Number of staple domains (mis)bound to external chains **/
-    int num_bound_staple_domains(vector<Domain*> staple);
+    size_t num_bound_staple_domains(const vector<Domain>& staple);
 
     // Store old positions and orientations
     unordered_map<pair<int, int>, VectorThree> m_old_pos {};
@@ -231,14 +232,14 @@ class CTRegrowthMCMovetype: virtual public RegrowthMCMovetype {
             OrigamiSystem& origami_system,
             RandomGens& random_gens,
             IdealRandomWalks& ideal_random_walks,
-            vector<OrigamiOutputFile*> config_files,
-            string label,
+            vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+            string& label,
             SystemOrderParams& ops,
             SystemBiases& biases,
             InputParameters& params,
-            int num_excluded_staples,
-            int max_regrowth,
-            int max_seg_regrowth);
+            size_t num_excluded_staples,
+            size_t max_regrowth,
+            size_t max_seg_regrowth);
     CTRegrowthMCMovetype(const CTRegrowthMCMovetype&) = delete;
     CTRegrowthMCMovetype& operator=(const CTRegrowthMCMovetype&) = delete;
 
@@ -249,8 +250,12 @@ class CTRegrowthMCMovetype: virtual public RegrowthMCMovetype {
 
     /** Select scaffold segment to be regrown */
     vector<Domain*> select_indices(
-            vector<Domain*> d,
-            unsigned int min_length,
+            vector<Domain*> segment,
+            size_t min_length,
+            int seg = 0);
+    vector<Domain*> select_indices(
+            vector<Domain>& segment,
+            size_t min_length,
             int seg = 0);
 
     /** Select noncontiguous scaffold segments
@@ -270,7 +275,7 @@ class CTRegrowthMCMovetype: virtual public RegrowthMCMovetype {
      * order of regrowth direction is selected randomly.
      */
     void select_noncontig_segs(
-            vector<Domain*>& given_seg,
+            vector<Domain>& given_seg,
             vector<vector<Domain*>>& segs,
             vector<vector<vector<Domain*>>>& paired_segs,
             vector<Domain*>& seg_stems,
@@ -279,16 +284,16 @@ class CTRegrowthMCMovetype: virtual public RegrowthMCMovetype {
     /** Check if excluded staples are still bound to system */
     bool excluded_staples_bound();
 
-    int m_dir;
-    int m_num_excluded_staples;
+    int m_dir {};
+    size_t m_num_excluded_staples;
     vector<int> m_excluded_staples;
     Constraintpoints m_constraintpoints {
             m_origami_system,
             m_ideal_random_walks}; // For fixed end biases
-    vector<Domain*> m_scaffold {};
+    vector<Domain>& m_scaffold;
 
     // Maximum number of scaffold domains to regrow
-    unsigned int m_max_regrowth;
+    size_t m_max_regrowth;
 
   private:
     bool fill_seg(
@@ -299,7 +304,7 @@ class CTRegrowthMCMovetype: virtual public RegrowthMCMovetype {
             set<Domain*>& domains,
             deque<Domain*>& possible_stems,
             vector<Domain*>& seg);
-    unsigned int m_max_seg_regrowth;
+    size_t m_max_seg_regrowth;
 };
 
 /**

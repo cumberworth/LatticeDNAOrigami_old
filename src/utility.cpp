@@ -1,5 +1,3 @@
-// utility.cpp
-
 #include <algorithm>
 #include <iostream>
 #include <memory>
@@ -10,48 +8,43 @@
 
 namespace utility {
 
-using std::cout;
-using std::unique_ptr;
 using std::vector;
 
-int index(vector<int> container, int element) {
+size_t index(vector<int> container, int element) {
     for (size_t i {0}; i != container.size(); i++) {
         if (container[i] == element) {
             return i;
         }
-        else
-            continue;
     }
     throw NoElement {};
 }
 
-VectorThree VectorThree::operator-() {
+VectorThree VectorThree::operator-() const {
     VectorThree neg {};
-    for (size_t i {0}; i != 3; i++) {
-        neg[i] = -m_container[i];
+    for (size_t i {0}; i != 3; ++i) {
+        neg[i] = -m_container.at(i);
     }
     return neg;
 }
 
 VectorThree VectorThree::operator+(const VectorThree& v_2) const {
     VectorThree sum;
-    for (unsigned int i {0}; i != 3; i++) {
-        sum[i] = m_container[i] + v_2.at(i);
+    for (size_t i {0}; i != 3; i++) {
+        sum[i] = m_container.at(i) + v_2.at(i);
     }
     return sum;
 }
 
 VectorThree VectorThree::operator-(const VectorThree& v_2) const {
     VectorThree diff;
-    for (unsigned int i {0}; i != 3; i++) {
-        diff[i] = m_container[i] - v_2.at(i);
+    for (size_t i {0}; i != 3; i++) {
+        diff[i] = m_container.at(i) - v_2.at(i);
     }
     return diff;
 }
-
 bool VectorThree::operator!=(const VectorThree& v_2) const {
-    for (unsigned int i {0}; i != 3; i++) {
-        if (m_container[i] != v_2.at(i)) {
+    for (size_t i {0}; i != 3; i++) {
+        if (m_container.at(i) != v_2.at(i)) {
             return true;
         }
     }
@@ -59,7 +52,7 @@ bool VectorThree::operator!=(const VectorThree& v_2) const {
 }
 
 bool operator==(const VectorThree& v1, const VectorThree& v2) {
-    for (unsigned int i {0}; i != 3; i++) {
+    for (size_t i {0}; i != 3; i++) {
         if (v1.at(i) != v2.at(i)) {
             return false;
         }
@@ -67,7 +60,7 @@ bool operator==(const VectorThree& v1, const VectorThree& v2) {
     return true;
 }
 
-VectorThree VectorThree::rotate_half(VectorThree axis) {
+VectorThree VectorThree::rotate_half(VectorThree axis) const {
     VectorThree rot = *this;
     axis = axis.absolute();
     if (axis == xhat) {
@@ -91,7 +84,7 @@ VectorThree VectorThree::rotate_half(VectorThree axis) {
 VectorThree VectorThree::rotate(
         VectorThree origin,
         VectorThree axis,
-        int turns) {
+        int turns) const {
 
     VectorThree rot = *this;
     if (turns == 0) {
@@ -213,7 +206,7 @@ bool operator==(
 }
 
 // Couldn't easily template cause function changes (stoi vs stod)
-vector<int> string_to_int_vector(string string_v) {
+vector<int> string_to_int_vector(const string& string_v) {
     string delim {" "};
     size_t start_pos {0};
     size_t delim_pos {string_v.find(delim)};
@@ -223,12 +216,12 @@ vector<int> string_to_int_vector(string string_v) {
         start_pos = delim_pos + 1;
         delim_pos = string_v.find(delim, start_pos);
     }
-    v.push_back(stod(string_v.substr(start_pos, string_v.size())));
+    v.push_back(stoi(string_v.substr(start_pos, string_v.size())));
 
     return v;
 }
 
-vector<double> string_to_double_vector(string string_v) {
+vector<double> string_to_double_vector(const string& string_v) {
     string delim {" "};
     size_t start_pos {0};
     size_t delim_pos {string_v.find(delim)};
@@ -243,7 +236,7 @@ vector<double> string_to_double_vector(string string_v) {
     return v;
 }
 
-vector<string> string_to_string_vector(string string_v) {
+vector<string> string_to_string_vector(const string& string_v) {
     std::stringstream sstream {string_v};
     vector<string> v {};
     while (not sstream.eof()) {
@@ -271,7 +264,7 @@ vector<string> split(const string& s, char delim) {
     return elems;
 }
 
-Fraction::Fraction(string unparsed_fraction) {
+Fraction::Fraction(const string& unparsed_fraction) {
     string delimiter {"/"};
     auto delim_pos {unparsed_fraction.find(delimiter)};
 

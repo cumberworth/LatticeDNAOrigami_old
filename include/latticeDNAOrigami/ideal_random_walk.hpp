@@ -27,7 +27,7 @@ class IdealRandomWalks {
     long double num_walks(
             VectorThree start_pos,
             VectorThree end_pos,
-            int steps);
+            unsigned int steps);
 
     void delete_entry(VectorThree start_pos, VectorThree end_pos, int steps);
 

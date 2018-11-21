@@ -20,7 +20,7 @@ using std::string;
 using std::unordered_map;
 using std::vector;
 
-using domainContainer::Domain;
+using domain::Domain;
 using movetypes::MovetypeTracking;
 using movetypes::RegrowthMCMovetype;
 using utility::StapleExchangeTracking;
@@ -33,8 +33,8 @@ class MetMCMovetype: virtual public RegrowthMCMovetype {
             OrigamiSystem& origami_system,
             RandomGens& random_gens,
             IdealRandomWalks& ideal_random_walks,
-            vector<OrigamiOutputFile*> const& config_files,
-            string const& label,
+            vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+            string& label,
             SystemOrderParams& ops,
             SystemBiases& biases,
             InputParameters& params);
@@ -46,7 +46,7 @@ class MetMCMovetype: virtual public RegrowthMCMovetype {
     void grow_chain(vector<Domain*> domains) override;
     void add_external_bias() override;
 
-    void unassign_domains(vector<Domain*> domains);
+    void unassign_domains(vector<Domain>& domains);
 
     double m_delta_e {0};
 };
@@ -58,8 +58,8 @@ class MetStapleExchangeMCMovetype: public MetMCMovetype {
             OrigamiSystem& origami_system,
             RandomGens& random_gens,
             IdealRandomWalks& ideal_random_walks,
-            vector<OrigamiOutputFile*> const& config_files,
-            string const& label,
+            vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+            string& label,
             SystemOrderParams& ops,
             SystemBiases& biases,
             InputParameters& params,
@@ -70,7 +70,7 @@ class MetStapleExchangeMCMovetype: public MetMCMovetype {
             delete;
 
     void reset_internal() override;
-    void write_log_summary(std::unique_ptr<ostream> log_stream) override;
+    void write_log_summary(ostream& log_stream) override;
 
   private:
     bool internal_attempt_move() override;
@@ -89,10 +89,10 @@ class MetStapleExchangeMCMovetype: public MetMCMovetype {
     unordered_map<StapleExchangeTracking, MovetypeTracking> m_tracking {};
 
     // These need to be changed if misbinding is excluded
-    int preconstrained_df {1};
+    size_t preconstrained_df {1};
 
     // I select by domains not by sites, so this is consistent
-    int m_insertion_sites {m_origami_system.num_domains()};
+    size_t m_insertion_sites {m_origami_system.num_domains()};
 };
 
 class MetStapleRegrowthMCMovetype: public MetMCMovetype {
@@ -102,8 +102,8 @@ class MetStapleRegrowthMCMovetype: public MetMCMovetype {
             OrigamiSystem& origami_system,
             RandomGens& random_gens,
             IdealRandomWalks& ideal_random_walks,
-            vector<OrigamiOutputFile*> const& config_files,
-            string const& label,
+            vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+            string& label,
             SystemOrderParams& ops,
             SystemBiases& biases,
             InputParameters& params);
@@ -111,7 +111,7 @@ class MetStapleRegrowthMCMovetype: public MetMCMovetype {
     MetStapleRegrowthMCMovetype& operator=(const MetStapleRegrowthMCMovetype&) =
             delete;
 
-    void write_log_summary(std::unique_ptr<ostream> log_stream) override;
+    void write_log_summary(ostream& log_stream) override;
 
   private:
     bool internal_attempt_move() override;

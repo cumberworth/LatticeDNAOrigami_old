@@ -21,7 +21,7 @@ using std::unique_ptr;
 using std::unordered_map;
 using std::vector;
 
-using domainContainer::Domain;
+using domain::Domain;
 using origami::OrigamiSystem;
 using parser::InputParameters;
 using utility::Occupancy;
@@ -79,7 +79,7 @@ class AdjacentSiteOrderParam: public OrderParam {
 
 class SumOrderParam: public OrderParam {
   public:
-    SumOrderParam(vector<reference_wrapper<OrderParam>> ops, string label);
+    SumOrderParam(vector<reference_wrapper<OrderParam>>& ops, string label);
 
     int calc_param() override final;
     int check_param(Domain&, VectorThree, VectorThree, Occupancy)
@@ -102,7 +102,7 @@ class NumStaplesOrderParam: public OrderParam {
 
 class NumStaplesTypeOrderParam: public OrderParam {
   public:
-    NumStaplesTypeOrderParam(OrigamiSystem& origami, int stype, string label);
+    NumStaplesTypeOrderParam(OrigamiSystem& origami, int c_ident, string label);
     int calc_param() override final;
     int check_param(Domain& domain, VectorThree new_pos, VectorThree, Occupancy)
             override final;
@@ -116,7 +116,7 @@ class StapleTypeFullyBoundOrderParam: public OrderParam {
   public:
     StapleTypeFullyBoundOrderParam(
             OrigamiSystem& origami,
-            int stype,
+            int c_ident,
             string label);
     int calc_param() override final;
     int check_param(Domain& domain, VectorThree new_pos, VectorThree, Occupancy)
@@ -188,8 +188,8 @@ class SystemOrderParams {
     SystemOrderParams(const SystemOrderParams&) = delete;
     SystemOrderParams& operator=(const SystemOrderParams&) = delete;
 
-    OrderParam& get_order_param(string tag);
-    vector<pair<int, int>> get_dependent_domains(string tag);
+    OrderParam& get_order_param(const string& tag);
+    vector<pair<int, int>> get_dependent_domains(const string& tag);
 
     void update_all_params();
     void update_move_params();
@@ -201,7 +201,7 @@ class SystemOrderParams {
             Occupancy state);
 
   private:
-    void setup_ops(string ops_filename, vector<pair<int, int>> keys);
+    void setup_ops(string& ops_filename, vector<pair<int, int>> keys);
 
     OrigamiSystem& m_origami;
 
@@ -215,7 +215,7 @@ class SystemOrderParams {
     vector<vector<reference_wrapper<OrderParam>>> m_move_update_ops {};
     unordered_map<string, vector<pair<int, int>>> m_tag_to_domains {};
 
-    int m_levels;
+    int m_levels {};
 };
 } // namespace orderParams
 

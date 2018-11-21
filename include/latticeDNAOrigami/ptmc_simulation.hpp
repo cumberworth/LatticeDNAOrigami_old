@@ -44,13 +44,13 @@ class PTGCMCSimulation: public GCMCSimulation {
     mpi::communicator m_world;
 
     // General PTMC parameters
-    int m_rank {m_world.rank()};
-    int m_master_rep {0};
-    int m_num_reps;
-    long long int m_swaps;
+    size_t m_rank {static_cast<size_t>(m_world.rank())};
+    size_t m_master_rep {0};
+    size_t m_num_reps;
+    unsigned long long m_swaps;
     double m_max_pt_dur;
-    long long int m_exchange_interval;
-    long long int m_config_output_freq;
+    size_t m_exchange_interval;
+    size_t m_config_output_freq;
 
     ofstream m_swapfile; // Only used by master
 
@@ -65,50 +65,50 @@ class PTGCMCSimulation: public GCMCSimulation {
     vector<vector<double>> m_control_qs {};
 
     // Index into the control qs to replica with those qs
-    vector<int> m_q_to_repi;
+    vector<size_t> m_q_to_repi;
 
     // Indices into control quantities vector for type
-    int m_temp_i {0};
-    int m_staple_u_i {1};
-    int m_bias_mult_i {2};
-    int m_stacking_mult_i {3};
+    size_t m_temp_i {0};
+    size_t m_staple_u_i {1};
+    size_t m_bias_mult_i {2};
+    size_t m_stacking_mult_i {3};
 
     // Indices into dependent quantities vector for type
-    int m_enthalpy_i {0};
-    int m_staples_i {1};
-    int m_bias_i {2};
-    int m_stacking_i {3};
+    size_t m_enthalpy_i {0};
+    size_t m_staples_i {1};
+    size_t m_bias_i {2};
+    size_t m_stacking_i {3};
 
     // Indices of quantities that will be exchanged
-    vector<int> m_exchange_q_is;
+    vector<size_t> m_exchange_q_is;
 
     // Initialization methods
     virtual void initialize_control_qs(InputParameters& params) = 0;
     void initialize_swap_file(InputParameters& params);
 
     // Communication methods
-    void slave_send(int swap_i);
-    bool slave_receive(int swap_i);
-    void master_receive(int swap_i, vector<vector<double>>& quantities);
-    void master_send(int swap_i);
-    void master_send_kill(int swap_i);
+    void slave_send(size_t swap_i);
+    bool slave_receive(size_t swap_i);
+    void master_receive(size_t swap_i, vector<vector<double>>& dependent_qs);
+    void master_send(size_t swap_i);
+    void master_send_kill(size_t swap_i);
     void master_get_dependent_qs(vector<vector<double>>&);
     virtual void update_control_qs() = 0;
     void update_dependent_qs();
 
     // Exchange methods
-    virtual void attempt_exchange(int swap_i) = 0;
-    bool test_acceptance(double acceptance_p);
+    virtual void attempt_exchange(size_t swap_i) = 0;
+    bool test_acceptance(double p_accept);
     double calc_acceptance_p(
             vector<pair<double, double>> control_q_pairs,
             vector<pair<double, double>>
                     dependent_q_pairs); // rep1 and rep2 values
 
     // Output methods
-    void write_swap_entry(long long int step);
+    void write_swap_entry(unsigned long long step);
     virtual void write_acceptance_freqs() = 0;
 
-    void update_internal(long long int) {};
+    void update_internal(unsigned long long) {};
 };
 
 class OneDPTGCMCSimulation: public PTGCMCSimulation {
@@ -121,11 +121,11 @@ class OneDPTGCMCSimulation: public PTGCMCSimulation {
 
   protected:
     void initialize_control_qs(InputParameters& params) override;
-    void attempt_exchange(int swap_i) override;
+    void attempt_exchange(size_t swap_i) override;
     void write_acceptance_freqs() override;
 
-    vector<int> m_attempt_count;
-    vector<int> m_swap_count;
+    vector<size_t> m_attempt_count;
+    vector<size_t> m_swap_count;
 };
 
 class TwoDPTGCMCSimulation: public PTGCMCSimulation {
@@ -138,25 +138,25 @@ class TwoDPTGCMCSimulation: public PTGCMCSimulation {
 
   protected:
     void initialize_control_qs(InputParameters& params) override;
-    void attempt_exchange(int swap_i) override;
+    void attempt_exchange(size_t swap_i) override;
     void write_acceptance_freqs() override;
 
   private:
     void update_control_qs() override;
 
-    int m_v1_dim;
-    int m_v2_dim;
+    size_t m_v1_dim;
+    size_t m_v2_dim;
     vector<double> m_v1s;
     vector<double> m_v2s;
-    vector<int> m_i_starts {0, 0, 1, 0};
-    vector<int> m_j_starts {0, 0, 0, 1};
-    vector<int> m_i_incrs {2, 1, 2, 1};
-    vector<int> m_j_incrs {1, 2, 1, 2};
-    vector<int> m_i_ends {m_v1_dim - 1, m_v1_dim, m_v1_dim - 1, m_v1_dim};
-    vector<int> m_j_ends {m_v2_dim, m_v2_dim - 1, m_v2_dim, m_v2_dim - 1};
-    vector<int> m_rep_incrs {m_v2_dim, 1, m_v2_dim, 1};
-    vector<vector<vector<int>>> m_attempt_count;
-    vector<vector<vector<int>>> m_swap_count;
+    vector<size_t> m_i_starts {0, 0, 1, 0};
+    vector<size_t> m_j_starts {0, 0, 0, 1};
+    vector<size_t> m_i_incrs {2, 1, 2, 1};
+    vector<size_t> m_j_incrs {1, 2, 1, 2};
+    vector<size_t> m_i_ends {m_v1_dim - 1, m_v1_dim, m_v1_dim - 1, m_v1_dim};
+    vector<size_t> m_j_ends {m_v2_dim, m_v2_dim - 1, m_v2_dim, m_v2_dim - 1};
+    vector<size_t> m_rep_incrs {m_v2_dim, 1, m_v2_dim, 1};
+    vector<vector<vector<size_t>>> m_attempt_count;
+    vector<vector<vector<size_t>>> m_swap_count;
 };
 
 class TPTGCMCSimulation: public OneDPTGCMCSimulation {

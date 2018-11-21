@@ -1,5 +1,3 @@
-// cb_movetypes.cpp
-
 #include <algorithm>
 #include <iostream>
 #include <map>
@@ -9,18 +7,16 @@
 
 namespace movetypes {
 
-using std::cout;
 using std::map;
 
 using utility::Occupancy;
-using utility::OrigamiMisuse;
 
 CBMCMovetype::CBMCMovetype(
         OrigamiSystem& origami_system,
         RandomGens& random_gens,
         IdealRandomWalks& ideal_random_walks,
-        vector<OrigamiOutputFile*> config_files,
-        string label,
+        vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+        string& label,
         SystemOrderParams& ops,
         SystemBiases& biases,
         InputParameters& params):
@@ -75,10 +71,10 @@ void CBMCMovetype::calc_biases(
         case Occupancy::misbound:
             continue;
         case Occupancy::unbound: {
-            Domain* unbound_domain {m_origami_system.unbound_domain_at(p_new)};
+            Domain& unbound_domain {m_origami_system.unbound_domain_at(p_new)};
             VectorThree o_new;
             double bfactor {1};
-            o_new = -unbound_domain->m_ore;
+            o_new = -unbound_domain.m_ore;
             double delta_e {m_origami_system.check_domain_constraints(
                     domain, p_new, o_new)};
             if (not m_origami_system.m_constraints_violated) {
@@ -113,7 +109,7 @@ void CBMCMovetype::select_and_set_config(const int i, vector<Domain*> domains) {
     vector<pair<VectorThree, VectorThree>> configs {};
     vector<double> bfactors {};
     calc_biases(p_prev, *domain, configs, bfactors);
-    vector<double> weights {calc_bias(bfactors, configs, domain)};
+    vector<double> weights {calc_bias(bfactors, configs, *domain)};
     if (m_rejected) {
         return;
     }
@@ -132,8 +128,8 @@ void CBMCMovetype::select_and_set_config(const int i, vector<Domain*> domains) {
 }
 
 void CBMCMovetype::select_and_set_new_config(
-        const vector<double> weights,
-        const configsT configs,
+        const vector<double>& weights,
+        const configsT& configs,
         Domain& domain) {
 
     // Select config based on weights
@@ -182,7 +178,7 @@ double CBMCMovetype::set_old_growth_point(
 }
 
 bool CBMCMovetype::test_cb_acceptance() {
-    long double ratio {m_new_bias / m_bias};
+    double ratio {m_new_bias / m_bias};
     bool accepted;
     if (test_acceptance(ratio)) {
         reset_origami();
@@ -197,6 +193,21 @@ bool CBMCMovetype::test_cb_acceptance() {
     }
 
     return accepted;
+}
+
+double CBMCMovetype::unassign_domains(vector<Domain>& domains) {
+    double delta_e {0};
+    for (auto& domain: domains) {
+        pair<int, int> key {domain.m_c, domain.m_d};
+        m_prev_pos[key] = domain.m_pos;
+        m_prev_ore[key] = domain.m_ore;
+        m_modified_domains.push_back(key);
+
+        delta_e += m_origami_system.unassign_domain(domain);
+    }
+    write_config();
+
+    return delta_e;
 }
 
 double CBMCMovetype::unassign_domains(vector<Domain*> domains) {
@@ -230,8 +241,8 @@ CBStapleRegrowthMCMovetype::CBStapleRegrowthMCMovetype(
         OrigamiSystem& origami_system,
         RandomGens& random_gens,
         IdealRandomWalks& ideal_random_walks,
-        vector<OrigamiOutputFile*> config_files,
-        string label,
+        vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+        string& label,
         SystemOrderParams& ops,
         SystemBiases& biases,
         InputParameters& params):
@@ -263,7 +274,7 @@ CBStapleRegrowthMCMovetype::CBStapleRegrowthMCMovetype(
                 biases,
                 params) {}
 
-void CBStapleRegrowthMCMovetype::write_log_summary(ostream* log_stream) {
+void CBStapleRegrowthMCMovetype::write_log_summary(ostream& log_stream) {
     write_log_summary_header(log_stream);
 
     // Insertion of each staple type
@@ -279,15 +290,15 @@ void CBStapleRegrowthMCMovetype::write_log_summary(ostream* log_stream) {
             accepts[info.staple_type] = counts.accepts;
         }
     }
-    *log_stream << "\n";
+    log_stream << "\n";
     for (auto st: staple_types) {
-        *log_stream << "    Staple type: " << st << "\n";
+        log_stream << "    Staple type: " << st << "\n";
         int ats {attempts[st]};
         int acs {accepts[st]};
         double freq {static_cast<double>(acs) / ats};
-        *log_stream << "        Attempts: " << ats << "\n";
-        *log_stream << "        Accepts: " << acs << "\n";
-        *log_stream << "        Frequency: " << freq << "\n";
+        log_stream << "        Attempts: " << ats << "\n";
+        log_stream << "        Accepts: " << acs << "\n";
+        log_stream << "        Frequency: " << freq << "\n";
     }
 }
 
@@ -300,15 +311,14 @@ bool CBStapleRegrowthMCMovetype::internal_attempt_move() {
         m_tracker.no_staples = true;
         return accepted;
     }
-    else {
-        m_tracker.no_staples = false;
-    }
+
+    m_tracker.no_staples = false;
 
     // Select a staple to regrow
     int c_i_index {
             m_random_gens.uniform_int(1, m_origami_system.num_staples())};
-    vector<Domain*> selected_chain {m_origami_system.get_chains()[c_i_index]};
-    m_tracker.staple_type = selected_chain[0]->m_c_ident;
+    vector<Domain>& selected_chain {m_origami_system.get_chains()[c_i_index]};
+    m_tracker.staple_type = selected_chain[0].m_c_ident;
 
     // Reject if staple is connector
     if (staple_is_connector(selected_chain)) {
@@ -363,9 +373,9 @@ void CBStapleRegrowthMCMovetype::grow_chain(vector<Domain*> domains) {
 }
 
 vector<double> CBStapleRegrowthMCMovetype::calc_bias(
-        const vector<double> bfactors,
+        const vector<double>& bfactors,
         const configsT&,
-        Domain*) {
+        Domain&) {
 
     // Calculate rosenbluth weight
     double rosenbluth_i {0};
@@ -390,7 +400,7 @@ vector<double> CBStapleRegrowthMCMovetype::calc_bias(
 
 void CBStapleRegrowthMCMovetype::set_growthpoint_and_grow_staple(
         domainPairT growthpoint,
-        vector<Domain*> selected_chain) {
+        vector<Domain>& selected_chain) {
 
     if (m_regrow_old) {
         set_old_growth_point(*growthpoint.first, *growthpoint.second);
@@ -409,13 +419,13 @@ CTCBRegrowthMCMovetype::CTCBRegrowthMCMovetype(
         OrigamiSystem& origami_system,
         RandomGens& random_gens,
         IdealRandomWalks& ideal_random_walks,
-        vector<OrigamiOutputFile*> config_files,
-        string label,
+        vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+        string& label,
         SystemOrderParams& ops,
         SystemBiases& biases,
         InputParameters& params,
-        int num_excluded_staples,
-        int max_regrowth):
+        size_t num_excluded_staples,
+        size_t max_regrowth):
         MCMovetype(
                 origami_system,
                 random_gens,
@@ -486,24 +496,24 @@ void CTCBRegrowthMCMovetype::grow_chain(vector<Domain*> domains) {
 }
 
 vector<double> CTCBRegrowthMCMovetype::calc_bias(
-        const vector<double> bfactors,
-        const vector<pair<VectorThree, VectorThree>>& configs,
-        Domain* domain) {
+        const vector<double>& bfactors,
+        const configsT& configs,
+        Domain& domain) {
 
-    vector<long double> weights(bfactors.begin(), bfactors.end());
+    vector<double> weights(bfactors.begin(), bfactors.end());
     for (size_t i {0}; i != configs.size(); i++) {
         VectorThree cur_pos {configs[i].first};
 
         // Set weights of non-self binding to 0 unless endpoint reached
         Occupancy pos_occ {m_origami_system.position_occupancy(cur_pos)};
         if (pos_occ == Occupancy::unbound) {
-            Domain* occ_domain {m_origami_system.unbound_domain_at(cur_pos)};
-            bool binding_same_chain {occ_domain->m_c == domain->m_c};
+            Domain& occ_domain {m_origami_system.unbound_domain_at(cur_pos)};
+            bool binding_same_chain {occ_domain.m_c == domain.m_c};
             bool endpoint {
-                    m_constraintpoints.endpoint_reached(domain, cur_pos)};
+                    m_constraintpoints.endpoint_reached(&domain, cur_pos)};
             bool excluded_staple {find(m_excluded_staples.begin(),
                                        m_excluded_staples.end(),
-                                       occ_domain->m_c) !=
+                                       occ_domain.m_c) !=
                                   m_excluded_staples.end()};
             if (not(binding_same_chain or endpoint or excluded_staple)) {
                 weights[i] = 0;
@@ -511,13 +521,13 @@ vector<double> CTCBRegrowthMCMovetype::calc_bias(
         }
 
         // Zero probability of accepting configs with no walks remaining
-        if (not m_constraintpoints.walks_remain(domain, cur_pos)) {
+        if (not m_constraintpoints.walks_remain(&domain, cur_pos)) {
             weights[i] = 0;
         }
     }
 
     // Modified Rosenbluth
-    long double weights_sum {0};
+    double weights_sum {0};
     for (auto weight: weights) {
         weights_sum += weight;
     }
@@ -532,7 +542,7 @@ vector<double> CTCBRegrowthMCMovetype::calc_bias(
 
         // Normalize
         for (size_t i {0}; i != weights.size(); i++) {
-            double norm_weight = static_cast<double>(weights[i] / weights_sum);
+            auto norm_weight = weights[i] / weights_sum;
             norm_weights.push_back(norm_weight);
         }
     }
@@ -558,7 +568,7 @@ void CTCBRegrowthMCMovetype::grow_staple_and_update_endpoints(
     }
     if (not m_rejected) {
         m_constraintpoints.update_endpoints(growth_d_new);
-        vector<Domain*> staple {m_origami_system.get_chain(c_i)};
+        vector<Domain>& staple {m_origami_system.get_chain(c_i)};
         grow_staple(growth_d_new->m_d, staple);
     }
 }
@@ -567,13 +577,13 @@ CTCBScaffoldRegrowthMCMovetype::CTCBScaffoldRegrowthMCMovetype(
         OrigamiSystem& origami_system,
         RandomGens& random_gens,
         IdealRandomWalks& ideal_random_walks,
-        vector<OrigamiOutputFile*> config_files,
-        string label,
+        vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+        string& label,
         SystemOrderParams& ops,
         SystemBiases& biases,
         InputParameters& params,
-        int num_excluded_staples,
-        int max_regrowth):
+        size_t num_excluded_staples,
+        size_t max_regrowth):
         MCMovetype(
                 origami_system,
                 random_gens,
@@ -625,7 +635,7 @@ CTCBScaffoldRegrowthMCMovetype::CTCBScaffoldRegrowthMCMovetype(
                 num_excluded_staples,
                 max_regrowth) {}
 
-void CTCBScaffoldRegrowthMCMovetype::write_log_summary(ostream* log_stream) {
+void CTCBScaffoldRegrowthMCMovetype::write_log_summary(ostream& log_stream) {
     write_log_summary_header(log_stream);
     // Insertion of each staple type
     map<int, int> length_attempts {};
@@ -637,8 +647,8 @@ void CTCBScaffoldRegrowthMCMovetype::write_log_summary(ostream* log_stream) {
     for (auto tracker: m_tracking) {
         auto info = tracker.first;
         auto counts = tracker.second;
-        int length {info.num_scaffold_domains};
-        int num_staples {info.num_staples};
+        size_t length {info.num_scaffold_domains};
+        size_t num_staples {info.num_staples};
         lengths.insert(length);
         staples.insert(num_staples);
         if (lengths.find(length) == lengths.end()) {
@@ -659,23 +669,23 @@ void CTCBScaffoldRegrowthMCMovetype::write_log_summary(ostream* log_stream) {
         }
     }
     for (auto l: lengths) {
-        *log_stream << "    Number of scaffold domains: " << l << "\n";
+        log_stream << "    Number of scaffold domains: " << l << "\n";
         int ats {length_attempts[l]};
         int acs {length_accepts[l]};
         double freq {static_cast<double>(acs) / ats};
-        *log_stream << "        Attempts: " << ats << "\n";
-        *log_stream << "        Accepts: " << acs << "\n";
-        *log_stream << "        Frequency: " << freq << "\n";
+        log_stream << "        Attempts: " << ats << "\n";
+        log_stream << "        Accepts: " << acs << "\n";
+        log_stream << "        Frequency: " << freq << "\n";
     }
-    *log_stream << "\n";
+    log_stream << "\n";
     for (auto st: staples) {
-        *log_stream << "    Number of staples: " << st << "\n";
+        log_stream << "    Number of staples: " << st << "\n";
         int ats {staple_attempts[st]};
         int acs {staple_accepts[st]};
         double freq {static_cast<double>(acs) / ats};
-        *log_stream << "        Attempts: " << ats << "\n";
-        *log_stream << "        Accepts: " << acs << "\n";
-        *log_stream << "        Frequency: " << freq << "\n";
+        log_stream << "        Attempts: " << ats << "\n";
+        log_stream << "        Accepts: " << acs << "\n";
+        log_stream << "        Frequency: " << freq << "\n";
     }
 }
 
@@ -756,14 +766,14 @@ CTCBJumpScaffoldRegrowthMCMovetype::CTCBJumpScaffoldRegrowthMCMovetype(
         OrigamiSystem& origami_system,
         RandomGens& random_gens,
         IdealRandomWalks& ideal_random_walks,
-        vector<OrigamiOutputFile*> config_files,
-        string label,
+        vector<std::unique_ptr<OrigamiOutputFile>>& config_files,
+        string& label,
         SystemOrderParams& ops,
         SystemBiases& biases,
         InputParameters& params,
-        int num_excluded_staples,
-        int max_regrowth,
-        int max_seg_regrowth):
+        size_t num_excluded_staples,
+        size_t max_regrowth,
+        size_t max_seg_regrowth):
         MCMovetype(
                 origami_system,
                 random_gens,
@@ -816,7 +826,7 @@ CTCBJumpScaffoldRegrowthMCMovetype::CTCBJumpScaffoldRegrowthMCMovetype(
                 max_regrowth) {}
 
 void CTCBJumpScaffoldRegrowthMCMovetype::write_log_summary(
-        ostream* log_stream) {
+        ostream& log_stream) {
 
     write_log_summary_header(log_stream);
     // Insertion of each staple type
@@ -829,8 +839,8 @@ void CTCBJumpScaffoldRegrowthMCMovetype::write_log_summary(
     for (auto tracker: m_tracking) {
         auto info = tracker.first;
         auto counts = tracker.second;
-        int length {info.num_scaffold_domains};
-        int num_staples {info.num_staples};
+        size_t length {info.num_scaffold_domains};
+        size_t num_staples {info.num_staples};
         lengths.insert(length);
         staples.insert(num_staples);
         if (lengths.find(length) == lengths.end()) {
@@ -851,23 +861,23 @@ void CTCBJumpScaffoldRegrowthMCMovetype::write_log_summary(
         }
     }
     for (auto l: lengths) {
-        *log_stream << "    Number of scaffold domains: " << l << "\n";
+        log_stream << "    Number of scaffold domains: " << l << "\n";
         int ats {length_attempts[l]};
         int acs {length_accepts[l]};
         double freq {static_cast<double>(acs) / ats};
-        *log_stream << "        Attempts: " << ats << "\n";
-        *log_stream << "        Accepts: " << acs << "\n";
-        *log_stream << "        Frequency: " << freq << "\n";
+        log_stream << "        Attempts: " << ats << "\n";
+        log_stream << "        Accepts: " << acs << "\n";
+        log_stream << "        Frequency: " << freq << "\n";
     }
-    *log_stream << "\n";
+    log_stream << "\n";
     for (auto st: staples) {
-        *log_stream << "    Number of staples: " << st << "\n";
+        log_stream << "    Number of staples: " << st << "\n";
         int ats {staple_attempts[st]};
         int acs {staple_accepts[st]};
         double freq {static_cast<double>(acs) / ats};
-        *log_stream << "        Attempts: " << ats << "\n";
-        *log_stream << "        Accepts: " << acs << "\n";
-        *log_stream << "        Frequency: " << freq << "\n";
+        log_stream << "        Attempts: " << ats << "\n";
+        log_stream << "        Accepts: " << acs << "\n";
+        log_stream << "        Frequency: " << freq << "\n";
     }
 }
 

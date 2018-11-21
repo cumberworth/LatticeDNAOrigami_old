@@ -1,5 +1,3 @@
-// bias_functions.cpp
-
 #include "bias_functions.hpp"
 #include "files.hpp"
 
@@ -9,7 +7,6 @@ using std::cout;
 using std::set;
 
 using files::OrigamiBiasFunctionsFile;
-using orderParams::DistOrderParam;
 
 double BiasFunction::get_bias() { return m_bias; }
 
@@ -221,9 +218,9 @@ void SquareWellBiasFunction::set_min_op(int min_op) { m_min_param = min_op; }
 
 void SquareWellBiasFunction::set_max_op(int max_op) { m_max_param = max_op; }
 
-GridBiasFunction::GridBiasFunction(vector<reference_wrapper<OrderParam>> ops):
+GridBiasFunction::GridBiasFunction(vector<reference_wrapper<OrderParam>>& ops):
 
-        m_ops {ops} {}
+        m_ops {std::move(ops)} {}
 
 int GridBiasFunction::get_dim() { return m_ops.size(); }
 
@@ -237,11 +234,11 @@ vector<int> GridBiasFunction::get_point() {
 }
 
 void GridBiasFunction::replace_biases(
-        unordered_map<vector<int>, double> bias_grid) {
-    m_bias_grid = bias_grid;
+        unordered_map<vector<int>, double>& bias_grid) {
+    m_bias_grid = std::move(bias_grid);
 }
 
-double GridBiasFunction::calc_bias(vector<int> params) {
+double GridBiasFunction::calc_bias(const vector<int>& params) {
     auto key_value = m_bias_grid.find(params);
     double g_bias;
     if (key_value == m_bias_grid.end()) {
@@ -295,21 +292,21 @@ SystemBiases::SystemBiases(
 
     // Setup dependency table
     vector<pair<int, int>> keys {};
-    for (auto chain: origami.get_chains()) {
-        for (auto domain: chain) {
-            pair<int, int> key {domain->m_c, domain->m_d};
+    for (const auto& chain: origami.get_chains()) {
+        for (const auto& domain: chain) {
+            pair<int, int> key {domain.m_c, domain.m_d};
             m_domain_update_biases[key] = {};
             keys.push_back(key);
         }
     }
 
-    if (params.m_bias_funcs_filename != "") {
+    if (not params.m_bias_funcs_filename.empty()) {
         setup_biases(params.m_bias_funcs_filename, keys);
     }
 }
 
 void SystemBiases::setup_biases(
-        string biases_filename,
+        const string& biases_filename,
         vector<pair<int, int>> keys) {
 
     OrigamiBiasFunctionsFile biases_file {biases_filename};
@@ -322,36 +319,34 @@ void SystemBiases::setup_biases(
             biases_file.get_d_biases_by_level()};
     unordered_map<string, vector<pair<int, int>>> tag_to_domains {};
     for (size_t i {0}; i != level_to_types.size(); i++) {
-        m_level_to_biases.push_back({});
-        m_move_update_biases.push_back({});
+        m_level_to_biases.emplace_back();
+        m_move_update_biases.emplace_back();
         m_levels++;
         for (auto key: keys) {
             m_domain_update_biases[key].push_back({});
         }
         for (size_t j {0}; j != level_to_types[i].size(); j++) {
-            BiasFunction* bias_f;
             string type {level_to_types[i][j]};
             string tag {level_to_tags[i][j]};
             vector<string> op_tags {level_to_ops[i][j]};
             vector<string> d_bias_tags {level_to_d_biases[i][j]};
             set<pair<int, int>> d_domains {};
             bool update_per_domain {true};
-            for (auto op_tag: op_tags) {
+            std::unique_ptr<BiasFunction> bias_f;
+            for (const auto& op_tag: op_tags) {
                 vector<pair<int, int>> domains {
                         m_system_order_params.get_dependent_domains(op_tag)};
-                if (domains.size() == 0) {
+                if (domains.empty()) {
                     update_per_domain = false;
                     break;
                 }
-                else {
-                    for (auto d: domains) {
-                        d_domains.insert(d);
-                    }
+                for (auto d: domains) {
+                    d_domains.insert(d);
                 }
             }
-            for (auto d_bias_tag: d_bias_tags) {
+            for (const auto& d_bias_tag: d_bias_tags) {
                 vector<pair<int, int>> domains {tag_to_domains[d_bias_tag]};
-                if (domains.size() == 0 or not update_per_domain) {
+                if (domains.empty() or not update_per_domain) {
                     update_per_domain = false;
                     break;
                 }
@@ -372,8 +367,8 @@ void SystemBiases::setup_biases(
                 int max_op {biases_file.get_int_option(i, j, "max_op")};
                 double max_bias {
                         biases_file.get_double_option(i, j, "max_bias")};
-                bias_f = new LinearStepBiasFunction {
-                        op, min_op, max_op, max_bias};
+                bias_f = std::make_unique<LinearStepBiasFunction>(
+                        op, min_op, max_op, max_bias);
             }
             if (type == "LinearStepWell") {
                 OrderParam& op {
@@ -385,8 +380,8 @@ void SystemBiases::setup_biases(
                 double min_bias {
                         biases_file.get_double_option(i, j, "min_bias")};
                 double slope {biases_file.get_double_option(i, j, "slope")};
-                bias_f = new LinearStepWellBiasFunction {
-                        op, min_op, max_op, well_bias, min_bias, slope};
+                bias_f = std::make_unique<LinearStepWellBiasFunction>(
+                        op, min_op, max_op, well_bias, min_bias, slope);
             }
             else if (type == "SquareWell") {
                 OrderParam& op {
@@ -397,24 +392,24 @@ void SystemBiases::setup_biases(
                         biases_file.get_double_option(i, j, "well_bias")};
                 double outside_bias {
                         biases_file.get_double_option(i, j, "outside_bias")};
-                bias_f = new SquareWellBiasFunction {
-                        op, min_op, max_op, well_bias, outside_bias};
+                bias_f = std::make_unique<SquareWellBiasFunction>(
+                        op, min_op, max_op, well_bias, outside_bias);
             }
             else if (type == "Grid") {
                 vector<reference_wrapper<OrderParam>> ops {};
-                for (auto op_tag: op_tags) {
+                for (const auto& op_tag: op_tags) {
                     reference_wrapper<OrderParam> op {
                             m_system_order_params.get_order_param(op_tag)};
                     ops.push_back(op);
                 }
-                bias_f = new GridBiasFunction {ops};
+                bias_f = std::make_unique<GridBiasFunction>(ops);
             }
             else {
                 cout << "No such bias function type";
                 throw utility::SimulationMisuse {};
             }
 
-            m_level_to_biases[i].emplace_back(bias_f);
+            m_level_to_biases[i].emplace_back(std::move(bias_f));
             BiasFunction& bias_f_r {*m_level_to_biases[i].back()};
             m_tag_to_biases.emplace(tag, bias_f_r);
             if (update_per_domain) {
@@ -476,7 +471,7 @@ void SystemBiases::update_bias_mult(double bias_mult) {
 
 double SystemBiases::calc_move() {
     double bias_diff {0};
-    for (auto level: m_move_update_biases) {
+    for (const auto& level: m_move_update_biases) {
         for (auto bias_f: level) {
             double prev_bias {bias_f.get().get_bias()};
             double new_bias {bias_f.get().update_bias()};
@@ -493,7 +488,7 @@ double SystemBiases::calc_one_domain(Domain& domain) {
 
     // Get dependent bias functions and update
     pair<int, int> key {domain.m_c, domain.m_d};
-    for (auto level: m_domain_update_biases[key]) {
+    for (const auto& level: m_domain_update_biases[key]) {
         for (auto bias_f: level) {
             double prev_bias {bias_f.get().get_bias()};
             double new_bias {bias_f.get().update_bias()};
@@ -510,7 +505,7 @@ double SystemBiases::check_one_domain(Domain& domain) {
 
     // Get dependent bias functions
     pair<int, int> key {domain.m_c, domain.m_d};
-    for (auto level: m_domain_update_biases[key]) {
+    for (const auto& level: m_domain_update_biases[key]) {
         for (auto bias_f: level) {
 
             // Check bias bias values without internal update
@@ -523,11 +518,11 @@ double SystemBiases::check_one_domain(Domain& domain) {
     return bias_diff * m_bias_mult;
 }
 
-GridBiasFunction& SystemBiases::get_grid_bias(string tag) {
-    return static_cast<GridBiasFunction&>(m_tag_to_biases.at(tag).get());
+GridBiasFunction& SystemBiases::get_grid_bias(const string& tag) {
+    return dynamic_cast<GridBiasFunction&>(m_tag_to_biases.at(tag).get());
 }
 
-SquareWellBiasFunction& SystemBiases::get_square_well_bias(string tag) {
-    return static_cast<SquareWellBiasFunction&>(m_tag_to_biases.at(tag).get());
+SquareWellBiasFunction& SystemBiases::get_square_well_bias(const string& tag) {
+    return dynamic_cast<SquareWellBiasFunction&>(m_tag_to_biases.at(tag).get());
 }
 } // namespace biasFunctions

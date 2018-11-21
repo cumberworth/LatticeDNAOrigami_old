@@ -1,5 +1,3 @@
-// files.cpp
-
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -19,36 +17,36 @@ using utility::FileMisuse;
 using utility::Occupancy;
 using utility::VectorThree;
 
-OrigamiInputFile::OrigamiInputFile(string filename) {
+OrigamiInputFile::OrigamiInputFile(const string& filename) {
     try {
         read_file(filename);
-    } catch (Json::RuntimeError) {
+    } catch (Json::RuntimeError&) {
         cout << "Problem reading origami system file\n";
         throw;
     }
 }
 
-void OrigamiInputFile::read_file(string filename) {
+void OrigamiInputFile::read_file(const string& filename) {
     ifstream jsonraw {filename, ifstream::binary};
     Json::Value jsonroot;
     jsonraw >> jsonroot;
 
     // Extract sequences
     Json::Value jsonseqs {jsonroot["origami"]["sequences"]};
-    for (unsigned int i {0}; i != jsonseqs.size(); i++) {
-        m_sequences.push_back({});
-        for (unsigned int j {0}; j != jsonseqs[i].size(); j++) {
-            m_sequences[i].push_back(jsonseqs[i][j].asString());
+    for (size_t i {0}; i != jsonseqs.size(); i++) {
+        m_sequences.emplace_back();
+        for (size_t j {0}; j != jsonseqs[static_cast<int>(i)].size(); j++) {
+            m_sequences[i].push_back(jsonseqs[static_cast<int>(i)][static_cast<int>(j)].asString());
         }
     }
 
     // Extract identities
     Json::Value jsonidents {jsonroot["origami"]["identities"]};
-    for (unsigned int i {0}; i != jsonidents.size(); i++) {
-        m_identities.push_back({});
-        auto num_domains {jsonidents[i].size()};
-        for (unsigned int j {0}; j != num_domains; j++) {
-            int ident {jsonidents[i][j].asInt()};
+    for (size_t i {0}; i != jsonidents.size(); i++) {
+        m_identities.emplace_back();
+        auto num_domains {jsonidents[static_cast<int>(i)].size()};
+        for (size_t j {0}; j != num_domains; j++) {
+            int ident {jsonidents[static_cast<int>(i)][static_cast<int>(j)].asInt()};
             m_identities[i].push_back(ident);
         }
     }
@@ -57,21 +55,21 @@ void OrigamiInputFile::read_file(string filename) {
     // Note for now always using first configuration, may change file format
     // later
     Json::Value jsonconfig {jsonroot["origami"]["configurations"][0]["chains"]};
-    for (unsigned int i {0}; i != jsonconfig.size(); i++) {
-        Json::Value jsonchain {jsonconfig[i]};
+    for (size_t i {0}; i != jsonconfig.size(); i++) {
+        Json::Value jsonchain {jsonconfig[static_cast<int>(i)]};
         int index {jsonchain["index"].asInt()};
         int identity {jsonchain["identity"].asInt()};
         vector<VectorThree> positions {};
         vector<VectorThree> orientations {};
-        for (unsigned int j {0}; j != jsonchain["positions"].size(); j++) {
-            int posx {jsonchain["positions"][j][0].asInt()};
-            int posy {jsonchain["positions"][j][1].asInt()};
-            int posz {jsonchain["positions"][j][2].asInt()};
-            positions.push_back(VectorThree {posx, posy, posz});
-            int orex {jsonchain["orientations"][j][0].asInt()};
-            int orey {jsonchain["orientations"][j][1].asInt()};
-            int orez {jsonchain["orientations"][j][2].asInt()};
-            orientations.push_back(VectorThree {orex, orey, orez});
+        for (size_t j {0}; j != jsonchain["positions"].size(); j++) {
+            int posx {jsonchain["positions"][static_cast<int>(j)][0].asInt()};
+            int posy {jsonchain["positions"][static_cast<int>(j)][1].asInt()};
+            int posz {jsonchain["positions"][static_cast<int>(j)][2].asInt()};
+            positions.emplace_back(VectorThree {posx, posy, posz});
+            int orex {jsonchain["orientations"][static_cast<int>(j)][0].asInt()};
+            int orey {jsonchain["orientations"][static_cast<int>(j)][1].asInt()};
+            int orez {jsonchain["orientations"][static_cast<int>(j)][2].asInt()};
+            orientations.emplace_back(VectorThree {orex, orey, orez});
         }
         Chain chain {index, identity, positions, orientations};
         m_chains.push_back(chain);
@@ -90,21 +88,22 @@ vector<Chain> OrigamiInputFile::get_config() { return m_chains; }
 
 bool OrigamiInputFile::is_cyclic() { return m_cyclic; }
 
-OrigamiTrajInputFile::OrigamiTrajInputFile(string filename):
-        m_filename {filename} {
+OrigamiTrajInputFile::OrigamiTrajInputFile(string& filename):
+        m_filename {std::move(filename)} {
     m_file.open(m_filename);
 }
 
-vector<Chain> OrigamiTrajInputFile::read_config(int step) {
+vector<Chain> OrigamiTrajInputFile::read_config(unsigned long long step) {
     try {
         return internal_read_config(step);
-    } catch (Json::RuntimeError) {
+    } 
+    catch (Json::RuntimeError&) {
         cout << "Problem reading trajectory file config\n";
         throw;
     }
 }
 
-vector<Chain> OrigamiTrajInputFile::internal_read_config(int step) {
+vector<Chain> OrigamiTrajInputFile::internal_read_config(unsigned long long step) {
     vector<Chain> step_chains {};
     go_to_step(step);
     while (true) {
@@ -131,7 +130,7 @@ vector<Chain> OrigamiTrajInputFile::internal_read_config(int step) {
             pos_line_stream >> y;
             int z;
             pos_line_stream >> z;
-            positions.push_back({x, y, z});
+            positions.emplace_back(x, y, z);
         }
 
         string ore_line;
@@ -145,7 +144,7 @@ vector<Chain> OrigamiTrajInputFile::internal_read_config(int step) {
             ore_line_stream >> y;
             int z;
             ore_line_stream >> z;
-            orientations.push_back({x, y, z});
+            orientations.emplace_back(x, y, z);
         }
 
         Chain chain {chain_index, chain_identity, positions, orientations};
@@ -155,11 +154,11 @@ vector<Chain> OrigamiTrajInputFile::internal_read_config(int step) {
     return step_chains;
 }
 
-void OrigamiTrajInputFile::go_to_step(unsigned int step) {
+void OrigamiTrajInputFile::go_to_step(unsigned long long step) {
     // Returns line after step number
     // Really ugly fragile method for doing this
     m_file.seekg(std::ios::beg);
-    for (unsigned int i = 0; i != step; ++i) {
+    for (size_t i = 0; i != step; ++i) {
         bool end_of_step_reached {false};
         while (not end_of_step_reached) {
             string line;
@@ -176,30 +175,30 @@ void OrigamiTrajInputFile::go_to_step(unsigned int step) {
     // Check that read step is requested step
     string step_s;
     std::getline(m_file, step_s);
-    // int read_step {std::stoi(step_s)};
+    // size_t read_step {std::stoi(step_s)};
     // if (read_step != step) {
     //    throw FileMisuse {};
     //}
 }
 
-OrigamiMovetypeFile::OrigamiMovetypeFile(string filename):
-        m_filename {filename} {
+OrigamiMovetypeFile::OrigamiMovetypeFile(string& filename):
+        m_filename {std::move(filename)} {
 
     try {
-        read_file(filename);
-    } catch (Json::RuntimeError) {
+        read_file();
+    } catch (Json::RuntimeError&) {
         cout << "Problem reading movetype file\n";
         throw;
     }
 }
 
-void OrigamiMovetypeFile::read_file(string filename) {
-    ifstream jsonraw {filename, ifstream::binary};
+void OrigamiMovetypeFile::read_file() {
+    ifstream jsonraw {m_filename, ifstream::binary};
     Json::Value jsonroot;
     jsonraw >> jsonroot;
     m_jsonmovetypes = jsonroot["origami"]["movetypes"];
-    for (unsigned int i {0}; i != m_jsonmovetypes.size(); i++) {
-        Json::Value jsonmovetype {m_jsonmovetypes[i]};
+    for (size_t i {0}; i != m_jsonmovetypes.size(); i++) {
+        Json::Value jsonmovetype {m_jsonmovetypes[static_cast<int>(i)]};
         string type {jsonmovetype["type"].asString()};
         string label {jsonmovetype["label"].asString()};
         string freq_raw {jsonmovetype["freq"].asString()};
@@ -217,32 +216,36 @@ vector<string> OrigamiMovetypeFile::get_labels() { return m_labels; }
 
 vector<double> OrigamiMovetypeFile::get_freqs() { return m_freqs; }
 
-bool OrigamiMovetypeFile::get_bool_option(int movetype_i, string key) {
-    return m_jsonmovetypes[movetype_i][key].asBool();
+bool OrigamiMovetypeFile::get_bool_option(size_t movetype_i, const string& key) {
+    return m_jsonmovetypes[static_cast<unsigned int>(movetype_i)][key].asBool();
 }
 
-double OrigamiMovetypeFile::get_double_option(int movetype_i, string key) {
-    return m_jsonmovetypes[movetype_i][key].asDouble();
+double OrigamiMovetypeFile::get_double_option(
+        size_t movetype_i,
+        const string& key) {
+    return m_jsonmovetypes[static_cast<int>(movetype_i)][key].asDouble();
 }
 
 vector<double> OrigamiMovetypeFile::get_double_vector_option(
-        int movetype_i,
-        string key) {
+        size_t movetype_i,
+        const string& key) {
     vector<double> dv {};
-    for (unsigned int i {0}; i != m_jsonmovetypes[movetype_i][key].size();
+    for (size_t i {0}; i != m_jsonmovetypes[static_cast<int>(movetype_i)][key].size();
          i++) {
-        dv.push_back(m_jsonmovetypes[movetype_i][key][i].asDouble());
+        dv.push_back(m_jsonmovetypes[static_cast<int>(movetype_i)][key][static_cast<int>(i)].asDouble());
     }
 
     return dv;
 }
 
-string OrigamiMovetypeFile::get_string_option(int movetype_i, string key) {
-    return m_jsonmovetypes[movetype_i][key].asString();
+string OrigamiMovetypeFile::get_string_option(
+        size_t movetype_i,
+        const string& key) {
+    return m_jsonmovetypes[static_cast<int>(movetype_i)][key].asString();
 }
 
-int OrigamiMovetypeFile::get_int_option(int movetype_i, string key) {
-    return m_jsonmovetypes[movetype_i][key].asInt();
+int OrigamiMovetypeFile::get_int_option(size_t movetype_i, const string& key) {
+    return m_jsonmovetypes[static_cast<int>(movetype_i)][key].asInt();
 }
 
 vector<vector<string>> OrigamiLeveledInput::get_types_by_level() {
@@ -257,64 +260,64 @@ vector<vector<string>> OrigamiLeveledInput::get_tags_by_level() {
     return m_level_to_tags;
 }
 
-double OrigamiLeveledInput::get_double_option(int i, int j, string key) {
+double OrigamiLeveledInput::get_double_option(size_t i, size_t j, const string& key) {
     int json_i {m_level_to_indices[i][j]};
     return m_json_ops[json_i][key].asDouble();
 }
 
-string OrigamiLeveledInput::get_string_option(int i, int j, string key) {
+string OrigamiLeveledInput::get_string_option(size_t i, size_t j, const string& key) {
     int json_i {m_level_to_indices[i][j]};
     return m_json_ops[json_i][key].asString();
 }
 
-int OrigamiLeveledInput::get_int_option(int i, int j, string key) {
+int OrigamiLeveledInput::get_int_option(size_t i, size_t j, const string& key) {
     int json_i {m_level_to_indices[i][j]};
     return m_json_ops[json_i][key].asInt();
 }
 
-bool OrigamiLeveledInput::get_bool_option(int i, int j, string key) {
+bool OrigamiLeveledInput::get_bool_option(size_t i, size_t j, const string& key) {
     int json_i {m_level_to_indices[i][j]};
     return m_json_ops[json_i][key].asBool();
 }
 
 vector<string> OrigamiLeveledInput::get_vector_string_option(
-        int i,
-        int j,
-        string key) {
+        size_t i,
+        size_t j,
+        const string& key) {
     int json_i {m_level_to_indices[i][j]};
     vector<string> sv {};
-    for (unsigned int i {0}; i != m_json_ops[json_i][key].size(); i++) {
-        sv.push_back(m_json_ops[json_i][key][i].asString());
+    for (size_t k {0}; i != m_json_ops[json_i][key].size(); i++) {
+        sv.push_back(m_json_ops[json_i][key][static_cast<int>(k)].asString());
     }
     return sv;
 }
 
-OrigamiOrderParamsFile::OrigamiOrderParamsFile(string filename) {
+OrigamiOrderParamsFile::OrigamiOrderParamsFile(string& filename) {
     m_filename = filename;
     try {
-        read_file(filename);
-    } catch (Json::RuntimeError) {
+        read_file();
+    } catch (Json::RuntimeError&) {
         cout << "Problem reading order parameter file\n";
         throw;
     }
 }
 
-void OrigamiOrderParamsFile::read_file(string filename) {
-    ifstream jsonraw {filename, ifstream::binary};
+void OrigamiOrderParamsFile::read_file() {
+    ifstream jsonraw {m_filename, ifstream::binary};
     Json::Value jsonroot;
     jsonraw >> jsonroot;
     m_json_ops = jsonroot["origami"]["order_params"];
-    int max_level {0};
+    size_t max_level {0};
     vector<string> types {};
     vector<string> labels {};
     vector<string> tags {};
-    vector<int> levels {};
-    for (unsigned int i {0}; i != m_json_ops.size(); i++) {
-        Json::Value json_op {m_json_ops[i]};
+    vector<size_t> levels {};
+    for (size_t i {0}; i != m_json_ops.size(); i++) {
+        Json::Value json_op {m_json_ops[static_cast<int>(i)]};
         string type {json_op["type"].asString()};
         string label {json_op["label"].asString()};
         string tag {json_op["tag"].asString()};
-        int level {json_op["level"].asInt()};
+        size_t level {static_cast<size_t>(json_op["level"].asInt())};
         if (level > max_level) {
             max_level = level;
         }
@@ -324,13 +327,13 @@ void OrigamiOrderParamsFile::read_file(string filename) {
         levels.push_back(level);
     }
 
-    for (int i {0}; i != max_level + 1; i++) {
-        m_level_to_types.push_back({});
-        m_level_to_labels.push_back({});
-        m_level_to_tags.push_back({});
-        m_level_to_indices.push_back({});
+    for (size_t i {0}; i != max_level + 1; ++i) {
+        m_level_to_types.emplace_back();
+        m_level_to_labels.emplace_back();
+        m_level_to_tags.emplace_back();
+        m_level_to_indices.emplace_back();
     }
-    for (unsigned int i {0}; i != m_json_ops.size(); i++) {
+    for (size_t i {0}; i != m_json_ops.size(); i++) {
         m_level_to_types[levels[i]].push_back(types[i]);
         m_level_to_labels[levels[i]].push_back(labels[i]);
         m_level_to_tags[levels[i]].push_back(tags[i]);
@@ -338,39 +341,40 @@ void OrigamiOrderParamsFile::read_file(string filename) {
     }
 }
 
-OrigamiBiasFunctionsFile::OrigamiBiasFunctionsFile(string filename) {
+OrigamiBiasFunctionsFile::OrigamiBiasFunctionsFile(const string& filename) {
     m_filename = filename;
     try {
         read_file(filename);
-    } catch (Json::RuntimeError) {
+    }
+    catch (Json::RuntimeError&) {
         cout << "Problem reading bias function file\n";
         throw;
     }
 }
 
-void OrigamiBiasFunctionsFile::read_file(string filename) {
+void OrigamiBiasFunctionsFile::read_file(const string& filename) {
     ifstream jsonraw {filename, ifstream::binary};
     Json::Value jsonroot;
     jsonraw >> jsonroot;
     m_json_ops = jsonroot["origami"]["bias_functions"];
-    int max_level {0};
+    size_t max_level {0};
     vector<string> types {};
     vector<string> labels {};
     vector<string> tags {};
-    vector<int> levels {};
+    vector<size_t> levels {};
     vector<vector<string>> op_tags {};
     vector<vector<string>> d_biases_tags {};
-    for (unsigned int i {0}; i != m_json_ops.size(); i++) {
-        Json::Value json_op {m_json_ops[i]};
+    for (size_t i {0}; i != m_json_ops.size(); i++) {
+        Json::Value json_op {m_json_ops[static_cast<int>(i)]};
         string type {json_op["type"].asString()};
         string label {json_op["label"].asString()};
         string tag {json_op["tag"].asString()};
-        int level {json_op["level"].asInt()};
+        size_t level {static_cast<size_t>(json_op["level"].asInt())};
         vector<string> ops {};
-        for (unsigned int j {0}; j != m_json_ops[i]["ops"].size(); j++) {
-            ops.push_back(m_json_ops[i]["ops"][j].asString());
+        for (size_t j {0}; j != m_json_ops[static_cast<int>(i)]["ops"].size(); ++j) {
+            ops.push_back(m_json_ops[static_cast<int>(i)]["ops"][static_cast<int>(j)].asString());
         }
-        string d_biases_raw {m_json_ops[i]["bias_funcs"].asString()};
+        string d_biases_raw {m_json_ops[static_cast<int>(i)]["bias_funcs"].asString()};
         if (level > max_level) {
             max_level = level;
         }
@@ -382,19 +386,19 @@ void OrigamiBiasFunctionsFile::read_file(string filename) {
         d_biases_tags.push_back(utility::string_to_string_vector(d_biases_raw));
     }
 
-    for (int i {0}; i != max_level + 1; i++) {
-        m_level_to_types.push_back({});
-        m_level_to_labels.push_back({});
-        m_level_to_tags.push_back({});
-        m_level_to_indices.push_back({});
-        m_level_to_ops.push_back({});
-        m_level_to_d_biases.push_back({});
+    for (size_t i {0}; i != max_level + 1; i++) {
+        m_level_to_types.emplace_back();
+        m_level_to_labels.emplace_back();
+        m_level_to_tags.emplace_back();
+        m_level_to_indices.emplace_back();
+        m_level_to_ops.emplace_back();
+        m_level_to_d_biases.emplace_back();
     }
-    for (unsigned int i {0}; i != m_json_ops.size(); i++) {
+    for (size_t i {0}; i != m_json_ops.size(); i++) {
         m_level_to_types[levels[i]].push_back(types[i]);
         m_level_to_labels[levels[i]].push_back(labels[i]);
         m_level_to_tags[levels[i]].push_back(tags[i]);
-        m_level_to_indices[levels[i]].push_back(i);
+        m_level_to_indices[levels[i]].push_back(static_cast<int>(i));
         m_level_to_ops[levels[i]].push_back(op_tags[i]);
         m_level_to_d_biases[levels[i]].push_back(d_biases_tags[i]);
     }
@@ -410,9 +414,9 @@ vector<vector<vector<string>>> OrigamiBiasFunctionsFile::
 }
 
 OrigamiOutputFile::OrigamiOutputFile(
-        string filename,
-        int write_freq,
-        int max_num_staples,
+        const string& filename,
+        size_t write_freq,
+        size_t max_num_staples,
         OrigamiSystem& origami_system):
         m_filename {filename},
         m_write_freq {write_freq},
@@ -420,7 +424,7 @@ OrigamiOutputFile::OrigamiOutputFile(
 
     // This assumes 2 domain staples
     m_max_num_domains =
-            2 * max_num_staples + m_origami_system.get_chain(0).size();
+            2 * max_num_staples + static_cast<unsigned int>(m_origami_system.get_chain(0).size());
     m_file.open(m_filename);
 }
 
@@ -430,7 +434,7 @@ void OrigamiOutputFile::open_write_close() {
     m_file.close();
 }
 
-void OrigamiVSFOutputFile::write(long int, double) {
+void OrigamiVSFOutputFile::write(unsigned long long, double) {
     m_file << "atom 0:";
     size_t scaffold_length {m_origami_system.get_chain(0).size()};
     m_file << scaffold_length << " radius 0.25 type scaffold\n";
@@ -439,19 +443,19 @@ void OrigamiVSFOutputFile::write(long int, double) {
     m_file << " radius 0.25 type staple";
 }
 
-void OrigamiTrajOutputFile::write(long int step, double) {
+void OrigamiTrajOutputFile::write(unsigned long long step, double) {
     m_file << step << "\n";
-    for (auto chain: m_origami_system.get_chains()) {
-        m_file << chain[0]->m_c << " " << chain[0]->m_c_ident << "\n";
-        for (auto domain: chain) {
-            for (int i {0}; i != 3; i++) {
-                m_file << domain->m_pos[i] << " ";
+    for (const auto& chain: m_origami_system.get_chains()) {
+        m_file << chain[0].m_c << " " << chain[0].m_c_ident << "\n";
+        for (const auto& domain: chain) {
+            for (size_t i {0}; i != 3; ++i) {
+                m_file << domain.m_pos.at(i) << " ";
             }
         }
         m_file << "\n";
-        for (auto domain: chain) {
-            for (int i {0}; i != 3; i++) {
-                m_file << domain->m_ore[i] << " ";
+        for (const auto& domain: chain) {
+            for (size_t i {0}; i != 3; ++i) {
+                m_file << domain.m_ore.at(i) << " ";
             }
         }
         m_file << "\n";
@@ -459,20 +463,20 @@ void OrigamiTrajOutputFile::write(long int step, double) {
     m_file << "\n";
 }
 
-void OrigamiVCFOutputFile::write(long int, double) {
+void OrigamiVCFOutputFile::write(unsigned long long, double) {
     m_file << "timestep\n";
-    for (auto chain: m_origami_system.get_chains()) {
-        for (auto domain: chain) {
-            for (int i {0}; i != 3; i++) {
-                m_file << domain->m_pos[i] << " ";
+    for (const auto& chain: m_origami_system.get_chains()) {
+        for (const auto& domain: chain) {
+            for (size_t i {0}; i != 3; i++) {
+                m_file << domain.m_pos.at(i) << " ";
             }
             m_file << "\n";
         }
     }
 
-    int num_doms {m_origami_system.num_domains()};
-    for (int dom_i {num_doms}; dom_i != m_max_num_domains; dom_i++) {
-        for (int i {0}; i != 3; i++) {
+    size_t num_doms {m_origami_system.num_domains()};
+    for (size_t dom_i {num_doms}; dom_i != m_max_num_domains; dom_i++) {
+        for (size_t i {0}; i != 3; i++) {
             m_file << 0 << " ";
         }
         m_file << "\n";
@@ -480,12 +484,12 @@ void OrigamiVCFOutputFile::write(long int, double) {
     m_file << "\n";
 }
 
-void OrigamiOrientationOutputFile::write(long int, double) {
-    for (auto chain: m_origami_system.get_chains()) {
-        for (auto domain: chain) {
-            for (int i {0}; i != 3; i++) {
-                if (domain->m_state != Occupancy::unassigned) {
-                    m_file << domain->m_ore[i] << " ";
+void OrigamiOrientationOutputFile::write(unsigned long long, double) {
+    for (const auto& chain: m_origami_system.get_chains()) {
+        for (const auto& domain: chain) {
+            for (size_t i {0}; i != 3; ++i) {
+                if (domain.m_state != Occupancy::unassigned) {
+                    m_file << domain.m_ore.at(i) << " ";
                 }
                 else {
                     m_file << 0 << " ";
@@ -493,25 +497,25 @@ void OrigamiOrientationOutputFile::write(long int, double) {
             }
         }
     }
-    int num_doms {m_origami_system.num_domains()};
-    for (int dom_i {num_doms}; dom_i != m_max_num_domains; dom_i++) {
-        for (int i {0}; i != 3; i++) {
+    size_t num_doms {m_origami_system.num_domains()};
+    for (size_t dom_i {num_doms}; dom_i != m_max_num_domains; dom_i++) {
+        for (size_t i {0}; i != 3; i++) {
             m_file << 0 << " ";
         }
     }
     m_file << "\n";
 }
 
-void OrigamiStateOutputFile::write(long int, double) {
-    for (auto chain: m_origami_system.get_chains()) {
-        for (auto domain: chain) {
-            if (domain->m_state == Occupancy::unbound) {
+void OrigamiStateOutputFile::write(unsigned long long, double) {
+    for (const auto& chain: m_origami_system.get_chains()) {
+        for (const auto& domain: chain) {
+            if (domain.m_state == Occupancy::unbound) {
                 m_file << "1 ";
             }
-            else if (domain->m_state == Occupancy::bound) {
+            else if (domain.m_state == Occupancy::bound) {
                 m_file << "2 ";
             }
-            else if (domain->m_state == Occupancy::misbound) {
+            else if (domain.m_state == Occupancy::misbound) {
                 m_file << "3 ";
             }
             else {
@@ -519,15 +523,15 @@ void OrigamiStateOutputFile::write(long int, double) {
             }
         }
     }
-    int num_doms {m_origami_system.num_domains()};
-    for (int dom_i {num_doms}; dom_i != m_max_num_domains; dom_i++) {
+    size_t num_doms {m_origami_system.num_domains()};
+    for (size_t dom_i {num_doms}; dom_i != m_max_num_domains; dom_i++) {
         m_file << "-1 ";
     }
 
     m_file << "\n";
 }
 
-void OrigamiCountsOutputFile::write(long int step, double) {
+void OrigamiCountsOutputFile::write(unsigned long long step, double) {
     m_file << step << " ";
     m_file << m_origami_system.num_staples() << " ";
     m_file << m_origami_system.num_unique_staples() << " ";
@@ -537,7 +541,7 @@ void OrigamiCountsOutputFile::write(long int step, double) {
     m_file << "\n";
 }
 
-void OrigamiStaplesBoundOutputFile::write(long int step, double) {
+void OrigamiStaplesBoundOutputFile::write(unsigned long long step, double) {
     m_file << step << " ";
     for (auto staple_count: m_origami_system.get_staple_counts()) {
         m_file << staple_count << " ";
@@ -545,16 +549,16 @@ void OrigamiStaplesBoundOutputFile::write(long int step, double) {
     m_file << "\n";
 }
 
-void OrigamiStaplesFullyBoundOutputFile::write(long int step, double) {
+void OrigamiStaplesFullyBoundOutputFile::write(unsigned long long step, double) {
     m_file << step << " ";
     for (size_t staple_ident {1};
          staple_ident != m_origami_system.m_identities.size();
          staple_ident++) {
-        int staple_state {0};
-        for (auto staple_i: m_origami_system.staples_of_ident(staple_ident)) {
+        size_t staple_state {0};
+        for (auto staple_i: m_origami_system.staples_of_ident(static_cast<int>(staple_ident))) {
             bool fully_bound {true};
-            for (auto domain: m_origami_system.get_chain(staple_i)) {
-                if (domain->m_state != Occupancy::bound) {
+            for (const auto& domain: m_origami_system.get_chain(staple_i)) {
+                if (domain.m_state != Occupancy::bound) {
                     fully_bound = false;
                     break;
                 }
@@ -570,9 +574,9 @@ void OrigamiStaplesFullyBoundOutputFile::write(long int step, double) {
 }
 
 OrigamiEnergiesOutputFile::OrigamiEnergiesOutputFile(
-        string filename,
-        int write_freq,
-        int max_num_staples,
+        const string& filename,
+        size_t write_freq,
+        size_t max_num_staples,
         OrigamiSystem& origami_system,
         SystemBiases& biases):
         OrigamiOutputFile {filename,
@@ -585,7 +589,7 @@ OrigamiEnergiesOutputFile::OrigamiEnergiesOutputFile(
     m_file.precision(10);
 }
 
-void OrigamiEnergiesOutputFile::write(long int step, double) {
+void OrigamiEnergiesOutputFile::write(unsigned long long step, double) {
     m_file << step << " ";
     m_file << m_origami_system.energy() << " ";
     m_origami_system.update_enthalpy_and_entropy();
@@ -597,9 +601,9 @@ void OrigamiEnergiesOutputFile::write(long int step, double) {
 }
 
 OrigamiTimesOutputFile::OrigamiTimesOutputFile(
-        string filename,
-        int write_freq,
-        int max_num_staples,
+        const string& filename,
+        size_t write_freq,
+        size_t max_num_staples,
         OrigamiSystem& origami_system):
         OrigamiOutputFile {filename,
                            write_freq,
@@ -609,16 +613,16 @@ OrigamiTimesOutputFile::OrigamiTimesOutputFile(
     m_file << "step time\n";
 }
 
-void OrigamiTimesOutputFile::write(long int step, double time) {
+void OrigamiTimesOutputFile::write(unsigned long long step, double time) {
     m_file << step << " ";
     m_file << time;
     m_file << "\n";
 }
 
 OrigamiOrderParamsOutputFile::OrigamiOrderParamsOutputFile(
-        string filename,
-        int write_freq,
-        int max_num_staples,
+        const string& filename,
+        size_t write_freq,
+        size_t max_num_staples,
         OrigamiSystem& origami_system,
         SystemOrderParams& ops,
         vector<string> op_tags):
@@ -628,7 +632,7 @@ OrigamiOrderParamsOutputFile::OrigamiOrderParamsOutputFile(
                            origami_system},
         m_ops {ops} {
 
-    for (auto op_tag: op_tags) {
+    for (const auto& op_tag: op_tags) {
         OrderParam& op {m_ops.get_order_param(op_tag)};
         m_file << op_tag << ", ";
         m_file.precision(10);
@@ -637,7 +641,7 @@ OrigamiOrderParamsOutputFile::OrigamiOrderParamsOutputFile(
     m_file << "\n";
 }
 
-void OrigamiOrderParamsOutputFile::write(long int step, double) {
+void OrigamiOrderParamsOutputFile::write(unsigned long long step, double) {
     m_file << step;
     for (auto op: m_ops_to_output) {
         m_file << " " << op.get().calc_param();

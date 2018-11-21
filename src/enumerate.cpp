@@ -1,5 +1,3 @@
-// enumerate.cpp
-
 #include <algorithm>
 #include <fstream>
 #include <iostream>
