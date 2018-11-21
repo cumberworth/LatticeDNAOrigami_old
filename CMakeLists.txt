@@ -41,10 +41,10 @@ add_executable(latticeDNAOrigami
 )
 target_include_directories(latticeDNAOrigami PUBLIC include/latticeDNAOrigami)
 target_compile_features(latticeDNAOrigami PUBLIC cxx_std_17)
-set_target_properties(latticeDNAOrigami PROPERTIES
-    CXX_EXTENSIONS OFF
-    CXX_CLANG_TIDY "clang-tidy;-checks=boost-*,cppcoreguidelines-*,clang-analyzer-*,misc-*,modernize-*,mpi-*,performance-*,readability-*,clang-diagnostic-*,-clang-diagnostic-unused-parameter,-clang-analyzer-core.NonNullParamChecker,-clang-analyzer-deadcode.DeadStores,-clang-diagnostic-c++11-narrowing,-readability-named-parameter,-clang-diagnostic-shorten-64-to-32,-clang-diagnostic-sign-conversion,-clang-analyzer-optin.cplusplus.VirtualCall;-warnings-as-errors=*"
-)
+#set_target_properties(latticeDNAOrigami PROPERTIES
+#    CXX_EXTENSIONS OFF
+#    CXX_CLANG_TIDY "clang-tidy;-checks=boost-*,cppcoreguidelines-*,clang-analyzer-*,misc-*,modernize-*,mpi-*,performance-*,readability-*,clang-diagnostic-*,-clang-diagnostic-unused-parameter,-clang-analyzer-core.NonNullParamChecker,-clang-analyzer-deadcode.DeadStores,-clang-diagnostic-c++11-narrowing,-readability-named-parameter,-clang-diagnostic-shorten-64-to-32,-clang-diagnostic-sign-conversion,-clang-analyzer-optin.cplusplus.VirtualCall;-warnings-as-errors=*"
+#)
 
 # MPI
 find_package(MPI REQUIRED)
@@ -79,7 +79,7 @@ target_link_libraries(latticeDNAOrigami PUBLIC
 
 # Brute force method is required to add interprocedural optimization because CMake does not support it for clang
 # There is a bug in the llvm code that prevents this from being used in combination with clang-tidy
-#target_compile_options(-flto=thin)
+target_compile_options(latticeDNAOrigami PUBLIC -flto=thin)
 
 # CCache (increased compiliation speed)
 find_program(CCACHE_PROGRAM ccache)
@@ -107,4 +107,4 @@ target_link_libraries(latticeDNAOrigami PUBLIC jsoncpp)
 #target_compile_options(latticeDNAOrigami PUBLIC -Wall -Wextra -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Wunused -Woverloaded-virtual -Wpedantic -Wconversion -Wsign-conversion -Wnull-dereference -Wdouble-promotion -Werror)
 target_compile_options(latticeDNAOrigami PUBLIC -Wall -Wextra -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Woverloaded-virtual -Wpedantic -Wconversion -Wsign-conversion -Wnull-dereference -Wdouble-promotion)
 
-set_target_properties(latticeDNAOrigami PROPERTIES LINK_FLAGS "-fuse-ld=lld")
+set_target_properties(latticeDNAOrigami PROPERTIES LINK_FLAGS "-fuse-ld=lld -flto=thin")
