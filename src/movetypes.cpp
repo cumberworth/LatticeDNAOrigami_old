@@ -153,9 +153,6 @@ bool MCMovetype::test_acceptance(double p_ratio) {
 bool MCMovetype::staple_is_connector(const vector<Domain>& staple) {
     for (const auto& domain: staple) {
         if (domain.m_state != Occupancy::unbound) {
-            if (not domain.bound_domain_exists()) {
-                continue;
-            }
             Domain& bound_domain {domain.get_bound_domain()};
             if (bound_domain.m_c == m_origami_system.c_scaffold) {
                 continue;
@@ -196,7 +193,7 @@ bool MCMovetype::scan_for_scaffold_domain(
         if (&cur_domain == &domain) {
             continue;
         }
-        if (not cur_domain.bound_domain_exists()) {
+        if (cur_domain.m_bound_domain == nullptr) {
             continue;
         }
         Domain& bound_domain {cur_domain.get_bound_domain()};
@@ -257,7 +254,7 @@ vector<domainPairT> MCMovetype::find_bound_domains(
     for (auto& domain: selected_chain) {
         // shouldn't this be only non-self binding (only would effect staple
         // size > 2)
-        if (domain.bound_domain_exists()) {
+        if (domain.m_bound_domain != nullptr) {
 
             // New domain, old domain
             bound_domains.emplace_back(&domain, &domain.get_bound_domain());
@@ -486,14 +483,22 @@ vector<Domain*> CTRegrowthMCMovetype::select_indices(
     // Add domains until length reached
     Domain* cur_domain {segment[start_i]};
     vector<Domain*> domains {};
-    while (cur_domain != nullptr and domains.size() != sel_length) {
+    while (domains.size() != sel_length) {
         domains.push_back(cur_domain);
+        if (not cur_domain->contig_domain_exists(m_dir)) {
+            break;
+        }
         cur_domain = &cur_domain->get_contig_domain(m_dir);
     }
-    Domain* back_domain = &segment[start_i]->get_contig_domain(-m_dir);
-    while (back_domain != nullptr and domains.size() != sel_length) {
-        domains.insert(domains.begin(), back_domain);
-        back_domain = &back_domain->get_contig_domain(-m_dir);
+    if (segment[start_i]->contig_domain_exists(-m_dir)) {
+        Domain* back_domain = &segment[start_i]->get_contig_domain(-m_dir);
+        while (domains.size() != sel_length) {
+            domains.insert(domains.begin(), back_domain);
+            if (not back_domain->contig_domain_exists(-m_dir)) {
+                break;
+            }
+            back_domain = &back_domain->get_contig_domain(-m_dir);
+        }
     }
     if (domains.size() < min_length) {
         domains = select_indices(segment, min_length, seg);
@@ -529,14 +534,22 @@ vector<Domain*> CTRegrowthMCMovetype::select_indices(
     // Add domains until length reached
     Domain* cur_domain {&segment[start_i]};
     vector<Domain*> domains {};
-    while (cur_domain != nullptr and domains.size() != sel_length) {
+    while (domains.size() != sel_length) {
         domains.push_back(cur_domain);
+        if (not cur_domain->contig_domain_exists(m_dir)) {
+            break;
+        }
         cur_domain = &cur_domain->get_contig_domain(m_dir);
     }
-    Domain* back_domain = &segment[start_i].get_contig_domain(-m_dir);
-    while (back_domain != nullptr and domains.size() != sel_length) {
-        domains.insert(domains.begin(), back_domain);
-        back_domain = &back_domain->get_contig_domain(-m_dir);
+    if (segment[start_i].contig_domain_exists(-m_dir)) {
+        Domain* back_domain = &segment[start_i].get_contig_domain(-m_dir);
+        while (back_domain != nullptr and domains.size() != sel_length) {
+            domains.insert(domains.begin(), back_domain);
+            if (not back_domain->contig_domain_exists(-m_dir)) {
+                break;
+            }
+            back_domain = &back_domain->get_contig_domain(-m_dir);
+        }
     }
     if (domains.size() < min_length) {
         domains = select_indices(segment, min_length, seg);
@@ -598,8 +611,11 @@ void CTRegrowthMCMovetype::select_noncontig_segs(
         }
         bool adjacent_d_bound {false};
         for (int test_dir: {-1, 1}) {
+            if (not stemd->contig_domain_exists(test_dir)) {
+                continue;
+            }
             Domain* next_d {&stemd->get_contig_domain(test_dir)};
-            if (next_d != nullptr and domains.count(next_d) != 0) {
+            if (domains.count(next_d) != 0) {
                 adjacent_d_bound = true;
                 break;
             }
@@ -660,8 +676,8 @@ void CTRegrowthMCMovetype::select_noncontig_segs(
     Domain* last_d;
     last_d = segs[0].back();
     dir = dirs[0];
-    Domain* next_d {&last_d->get_contig_domain(dir)};
-    if (next_d != nullptr) {
+    if (last_d->contig_domain_exists(dir)) {
+        Domain* next_d {&last_d->get_contig_domain(dir)};
         m_constraintpoints.add_active_endpoint(next_d, next_d->m_pos, 0);
     }
 
@@ -680,8 +696,8 @@ void CTRegrowthMCMovetype::select_noncontig_segs(
             else {
                 last_d = stem_d;
             }
-            next_d = &last_d->get_contig_domain(dir);
-            if (next_d != nullptr) {
+            if (last_d->contig_domain_exists(dir)) {
+                Domain* next_d {&last_d->get_contig_domain(dir)};
                 m_constraintpoints.add_active_endpoint(
                         next_d, next_d->m_pos, seg_i);
             }
@@ -720,12 +736,15 @@ bool CTRegrowthMCMovetype::fill_seg(
     Domain* next_next_d {start_d};
     bool max_length_reached {false};
     while (seg.size() != seg_max_length and next_d != nullptr) {
+        if (not cur_d->contig_domain_exists(dir)) {
+            break;
+        }
         next_d = &cur_d->get_contig_domain(dir);
-        if (next_d == nullptr) {
+        if (not next_d->contig_domain_exists(dir)) {
             break;
         }
         next_next_d = &next_d->get_contig_domain(dir);
-        if (next_next_d != nullptr and domains.count(next_next_d) != 0) {
+        if (domains.count(next_next_d) != 0) {
             break;
         }
         seg.push_back(next_d);
@@ -738,9 +757,11 @@ bool CTRegrowthMCMovetype::fill_seg(
         if (cur_d->m_state == Occupancy::bound) {
             Domain* bound_d {cur_d->m_bound_domain};
             for (int staple_dir: {-1, 1}) {
+                if (not bound_d->contig_domain_exists(staple_dir)) {
+                    continue;
+                }
                 Domain* neighbour_d {&bound_d->get_contig_domain(staple_dir)};
-                if (neighbour_d != nullptr and
-                    neighbour_d->m_state == Occupancy::bound) {
+                if (neighbour_d->m_state == Occupancy::bound) {
                     Domain* bound_neighbour_d {neighbour_d->m_bound_domain};
                     if (bound_neighbour_d->m_c == m_origami_system.c_scaffold) {
                         possible_stems.push_back(bound_neighbour_d);

@@ -39,7 +39,7 @@ bool check_domains_exist_and_bound(const T& domain, Args... args) {
            check_domains_exist_and_bound(args...);
 }
 
-bool doubly_contiguous_helix(const Domain& cd_1, const Domain& cd_2);
+bool doubly_contiguous_helix(const Domain* cd_1, const Domain* cd_2);
 
 struct DeltaConfig {
     double e {0};

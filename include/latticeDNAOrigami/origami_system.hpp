@@ -153,7 +153,7 @@ class OrigamiSystem {
     // The index that should be assigned to the next added chain
     int m_current_c_i {};
 
-  protected:
+  private:
     // Bookeeping stuff, could probably organize better
     vector<vector<Domain>> m_domains {}; // Domains grouped by chain
     int m_num_domains {0}; // Total domains in system
@@ -184,6 +184,8 @@ class OrigamiSystem {
     double m_hyb_entropy {};
     double m_stacking_energy {};
     OrigamiPotential m_pot;
+
+    size_t m_max_total_chains {};
 
     // Intializers
     void initialize_complementary_associations();

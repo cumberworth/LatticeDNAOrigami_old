@@ -8,7 +8,7 @@ bool Domain::next_domain_exists() const { return m_next_domain != nullptr; }
 
 bool Domain::prev_domain_exists() const { return m_prev_domain != nullptr; }
 
-bool Domain::bound_domain_exists() const { return m_bound_domain != nullptr; }
+bool Domain::bound_domain_exists() const { return m_state == Occupancy::bound; }
 
 bool Domain::contig_domain_exists(int i) const {
     if (i == 1) {
@@ -58,7 +58,8 @@ Domain& Domain::get_contig_domain(int i) {
     throw utility::NoElement {};
 }
 
-bool Domain::check_twist_constraint(const VectorThree ndr, const Domain& cd_2) const {
+bool Domain::check_twist_constraint(const VectorThree ndr, const Domain& cd_2)
+        const {
     bool twist_constraint_obeyed {true};
     VectorThree ore_1_rotated {m_ore.rotate_half(ndr)};
     if (not(ore_1_rotated == cd_2.m_ore)) {
@@ -67,7 +68,8 @@ bool Domain::check_twist_constraint(const VectorThree ndr, const Domain& cd_2) c
     return twist_constraint_obeyed;
 }
 
-bool Domain::check_kink_constraint(const VectorThree ndr, const Domain& cd_2) const {
+bool Domain::check_kink_constraint(const VectorThree ndr, const Domain& cd_2)
+        const {
     bool kink_constraint_obeyed {true};
     if (ndr == -m_ore) {
         kink_constraint_obeyed = false;

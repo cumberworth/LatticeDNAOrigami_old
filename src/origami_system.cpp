@@ -45,7 +45,8 @@ OrigamiSystem::OrigamiSystem(
         m_cation_M {params.m_cation_M},
         m_staple_u {staple_u},
         m_cyclic {cyclic},
-        m_pot {identities, sequences, params} {
+        m_pot {identities, sequences, params},
+        m_max_total_chains {params.m_max_total_staples + 1} {
 
     initialize_complementary_associations();
     initialize_scaffold(chains[0]);
@@ -555,6 +556,7 @@ void OrigamiSystem::initialize_complementary_associations() {
 }
 
 void OrigamiSystem::initialize_staples(Chains chains) {
+    m_domains.reserve(m_max_total_chains);
 
     // Create domain objects
     for (size_t i {1}; i != chains.size(); ++i) {

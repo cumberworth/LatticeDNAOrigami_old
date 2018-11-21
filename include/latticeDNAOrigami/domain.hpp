@@ -44,6 +44,31 @@ class Domain {
     Domain* m_next_domain {nullptr}; // Domain in ?' direction
     Domain* m_prev_domain {nullptr}; // Domain in ?' direction
     Domain* m_bound_domain {nullptr}; // Pointer to bound domain
+
+    const Domain* operator+(int incr) const {
+
+        // There is probably a better way to do this
+        if (incr > 0) {
+            incr -= 1;
+            if (m_next_domain == nullptr) {
+                return nullptr;
+            }
+            const Domain* domain {(*m_next_domain) + incr};
+            return domain;
+        }
+        else if (incr < 0) {
+            incr += 1;
+            if (m_prev_domain == nullptr) {
+                return nullptr;
+            }
+            const Domain* domain {(*m_prev_domain) + incr};
+            return domain;
+        }
+        else {
+            return this;
+        }
+    }
+
 };
 } // namespace domain
 

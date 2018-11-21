@@ -1,4 +1,3 @@
-#include <cstdarg>
 #include <fstream>
 #include <iostream>
 #include <utility>
@@ -28,22 +27,22 @@ bool check_domain_orientations_opposing(
     return domain_orientations_opposing;
 }
 
-bool doubly_contiguous_helix(const Domain& cd_1, const Domain& cd_2) {
+bool doubly_contiguous_helix(const Domain* cd_1, const Domain* cd_2) {
 
-    if (not (cd_1.bound_domain_exists() and cd_2.bound_domain_exists())) {
+    if (not check_domains_exist_and_bound(cd_1, cd_2)) {
         return false;
     }
 
-    if (cd_1.m_c != cd_2.m_c or cd_2.m_d != cd_1.m_d + 1) {
+    if (cd_1->m_c != cd_2->m_c or cd_2->m_d != cd_1->m_d + 1) {
         return false;
     }
-    const Domain& cd_bound_1 {cd_1.get_bound_domain()};
-    const Domain& cd_bound_2 {cd_2.get_bound_domain()};
-    if (cd_bound_1.m_c != cd_bound_2.m_c) {
+    const Domain* cd_bound_1 {cd_1->m_bound_domain};
+    const Domain* cd_bound_2 {cd_2->m_bound_domain};
+    if (cd_bound_1->m_c != cd_bound_2->m_c) {
         return false;
     }
 
-    return cd_bound_2.m_d == cd_bound_1.m_d + 1;
+    return cd_bound_2->m_d == cd_bound_1->m_d + 1;
 }
 
 BindingPotential::BindingPotential(OrigamiPotential& pot): m_pot {pot} {}
@@ -88,8 +87,7 @@ DeltaConfig BindingPotential::check_stacking(
 }
 
 void BindingPotential::check_constraints(const Domain& cd) {
-
-    vector<bool> pairs_stacked {false, false};
+        vector<bool> pairs_stacked {false, false};
     for (int i: {-1, 0}) {
         if (not cd.contig_domain_exists(i)) {
             continue;
@@ -584,10 +582,10 @@ void BindingPotential::check_central_linear_helix(
             if (check_domains_exist_and_bound(cd_h1, cd_h3)) {
                 if (check_pair_stacked(*cd_h1, *cd_h2) and
                     check_pair_stacked(*cd_h2, cd_h3->get_bound_domain())) {
-                    if (not doubly_contiguous_helix(*cd_h1, *cd_h2) and
+                    if (not doubly_contiguous_helix(cd_h1, cd_h2) and
                         (not cd_h2->next_domain_exists() or
                          not doubly_contiguous_helix(
-                                 *cd_h2, cd_h2->get_next_domain()))) {
+                                 cd_h2, &cd_h2->get_next_domain()))) {
                         check_linear_helix(cd_h1, cd_h2, cd_h3);
                     }
                 }
@@ -606,31 +604,14 @@ void BindingPotential::check_central_linear_helix(
         if (check_domains_exist_and_bound(cd_h1, cd_h3)) {
             if (check_pair_stacked(cd_h1->get_bound_domain(), *cd_h2) and
                 check_pair_stacked(*cd_h2, *cd_h3)) {
-                if (not doubly_contiguous_helix(*cd_h2, *cd_h3) and
+                if (not doubly_contiguous_helix(cd_h2, cd_h3) and
                     (not cd_h2->prev_domain_exists() or
                      not doubly_contiguous_helix(
-                             cd_h2->get_prev_domain(), *cd_h2))) {
+                             &cd_h2->get_prev_domain(), cd_h2))) {
                     check_linear_helix(cd_h1, cd_h2, cd_h3);
                 }
             }
         }
-    }
-}
-
-void BindingPotential::check_linear_helix(
-        const Domain* cd_h1,
-        const Domain* cd_h2,
-        const Domain* cd_h3) {
-
-    VectorThree ndr_1 {cd_h2->m_pos - cd_h1->m_pos};
-    VectorThree ndr_2 {cd_h3->m_pos - cd_h2->m_pos};
-    if (ndr_1 == ndr_2) {
-        m_delta_config.linear_helices += 1;
-    }
-    else {
-        m_delta_config.e -= m_pot.stacking_energy(*cd_h1, *cd_h2) / 2;
-        m_delta_config.e -= m_pot.stacking_energy(*cd_h2, *cd_h3) / 2;
-        m_delta_config.stacked_pairs -= 2;
     }
 }
 
@@ -664,10 +645,10 @@ void BindingPotential::check_linear_helix(
             cd_h1 = &cd_1->get_bound_domain().get_contig_domain(j);
             if (check_domains_exist_and_bound(cd_h1)) {
                 if (check_pair_stacked(cd_h1->get_bound_domain(), *cd_h2)) {
-                    if (not doubly_contiguous_helix(*cd_h2, *cd_h3) and
+                    if (not doubly_contiguous_helix(cd_h2, cd_h3) and
                         (not cd_h2->prev_domain_exists() or
                          not doubly_contiguous_helix(
-                                 cd_h2->get_prev_domain(), *cd_h2))) {
+                                 &cd_h2->get_prev_domain(), cd_h2))) {
                         check_linear_helix(cd_h1, cd_h2, cd_h3);
                     }
                 }
@@ -697,15 +678,32 @@ void BindingPotential::check_linear_helix(
             cd_h3 = &cd_2->get_bound_domain().get_contig_domain(j);
             if (check_domains_exist_and_bound(cd_h3)) {
                 if (check_pair_stacked(*cd_h2, cd_h3->get_bound_domain())) {
-                    if (not doubly_contiguous_helix(*cd_h1, *cd_h2) and
+                    if (not doubly_contiguous_helix(cd_h1, cd_h2) and
                         (not cd_h2->next_domain_exists() or
                          not doubly_contiguous_helix(
-                                 *cd_h2, cd_h2->get_next_domain()))) {
+                                 cd_h2, &cd_h2->get_next_domain()))) {
                         check_linear_helix(cd_h1, cd_h2, cd_h3);
                     }
                 }
             }
         }
+    }
+}
+
+void BindingPotential::check_linear_helix(
+        const Domain* cd_h1,
+        const Domain* cd_h2,
+        const Domain* cd_h3) {
+
+    VectorThree ndr_1 {cd_h2->m_pos - cd_h1->m_pos};
+    VectorThree ndr_2 {cd_h3->m_pos - cd_h2->m_pos};
+    if (ndr_1 == ndr_2) {
+        m_delta_config.linear_helices += 1;
+    }
+    else {
+        m_delta_config.e -= m_pot.stacking_energy(*cd_h1, *cd_h2) / 2;
+        m_delta_config.e -= m_pot.stacking_energy(*cd_h2, *cd_h3) / 2;
+        m_delta_config.stacked_pairs -= 2;
     }
 }
 
