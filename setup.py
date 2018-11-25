@@ -6,5 +6,5 @@ from setuptools import setup
 setup(
     name='origamipy',
     packages=['origamipy'],
-    scripts=glob.glob('scripts/analysis/*.py')
+    scripts=glob.glob('scripts/*/*.py')
 )
