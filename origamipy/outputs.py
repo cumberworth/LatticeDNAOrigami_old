@@ -66,9 +66,9 @@ class EnumCollection:
 
 class SimCollection:
     """Output data for all runs of each replica of a simulation."""
-    _datatypes = ['enes', 'ops']#, 'staples', 'staplestates']
+    _datatypes = ['enes', 'ops', 'staples', 'staplestates']
 
-    def __init__(self, filebase, conditions):
+    def __init__(self, filebase, conditions, reps):
         self._filebase = filebase
         self._conditions = conditions
         self._datatype_to_reps = {tag: [] for tag in self._datatypes}
@@ -78,18 +78,26 @@ class SimCollection:
         self._num_reps = 0
         self._reps_num_steps = []
         self._num_decorrelated_steps = 0
+        self._reps = reps
 
         self._load_reps_data()
 
     def _load_reps_data(self):
         reps_remain = True
         rep = -1
-        while reps_remain:
-            rep += 1
-            reps_remain = self._load_runs_data(rep)
-            self._get_num_steps()
+        if self._reps == []:
+            while reps_remain:
+                rep += 1
+                reps_remain = self._load_runs_data(rep)
+                self._get_num_steps()
 
-        self._num_reps = rep
+            self._num_reps = rep
+        else:
+            for rep in self._reps:
+                reps_remain = self._load_runs_data(rep)
+                self._get_num_steps()
+
+            self._num_reps = len(self._reps)
 
     def _load_runs_data(self, rep):
         datatype_to_runs = {key: [] for key in self._datatype_to_reps.keys()}
@@ -128,10 +136,10 @@ class SimCollection:
         datatype_to_runs['enes'].append(enes)
         ops = datatypes.OrderParams.from_file(filebase)
         datatype_to_runs['ops'].append(ops)
-        #staples = datatypes.NumStaplesOfType.from_file(filebase)
-        #datatype_to_runs['staples'].append(staples)
-        #staplestates = datatypes.StapleTypeStates.from_file(filebase)
-        #datatype_to_runs['staplestates'].append(staplestates)
+        staples = datatypes.NumStaplesOfType.from_file(filebase)
+        datatype_to_runs['staples'].append(staples)
+        staplestates = datatypes.StapleTypeStates.from_file(filebase)
+        datatype_to_runs['staplestates'].append(staplestates)
 
         return datatype_to_runs
 
@@ -208,7 +216,7 @@ class SimCollection:
 
 class MultiStateSimCollection:
     """Output data from a parallel simulation with multiple states."""
-    def __init__(self, filepathbase, all_conditions):
+    def __init__(self, filepathbase, all_conditions, reps):
         self._filepathbase = filepathbase
         self._all_conditions = all_conditions
         self._sim_collections = {}
@@ -218,11 +226,11 @@ class MultiStateSimCollection:
         self._decor_staplestates = []
         self._conditions_to_decor_rpots = {}
 
-        self._create_sim_collections()
+        self._create_sim_collections(reps)
 
-    def _create_sim_collections(self):
+    def _create_sim_collections(self, reps):
         for conditions in self._all_conditions:
-            sim_collection = SimCollection(self._filepathbase, conditions)
+            sim_collection = SimCollection(self._filepathbase, conditions, reps)
             self._sim_collections[conditions] = sim_collection
 
     def perform_decorrelation(self):
@@ -240,14 +248,14 @@ class MultiStateSimCollection:
         for sim in self._sim_collections.values():
             enes.append(sim.decorrelated_energies)
             ops.append(sim.decorrelated_order_params)
-            #staples.append(sim.decorrelated_staples)
-            #staplestates.append(sim.decorrelated_staplestates)
+            staples.append(sim.decorrelated_staples)
+            staplestates.append(sim.decorrelated_staplestates)
 
         self._decor_enes = datatypes.OutputData.concatenate(enes)
         self._decor_ops = datatypes.OutputData.concatenate(ops)
-        #self._decor_staples = datatypes.OutputData.concatenate(staples)
-        #s = datatypes.OutputData.concatenate(staplestates)
-        #self._decor_staplestates = s
+        self._decor_staples = datatypes.OutputData.concatenate(staples)
+        s = datatypes.OutputData.concatenate(staplestates)
+        self._decor_staplestates = s
 
     def perform_mbar(self):
         rpots_matrix = self._calc_decorrelated_rpots_for_all_conditions()
@@ -272,7 +280,7 @@ class MultiStateSimCollection:
         return num_configs
 
     def calculate_all_expectations(self, filebase):
-        dts = [self._decor_ops]#, self._decor_staples, self._decor_staplestates]
+        dts = [self._decor_ops, self._decor_staples, self._decor_staplestates]
         all_tags = self._all_conditions.condition_tags
         all_aves = []
         all_stds = []
