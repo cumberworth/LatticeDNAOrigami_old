@@ -51,19 +51,19 @@ def molarity_to_lattice_volume(molarity, lattice_site_volume):
     return V
 
 
-def rotate_vector_half(vector, rotation_axis):
+def rotate_vectors_half(vector, rotation_axis):
     vector = np.copy(vector)
     if all(np.abs(rotation_axis) == XHAT):
-        vector[1] = -vector[1]
-        vector[2] = -vector[2]
+        vector[:, 1] = -vector[:, 1]
+        vector[:, 2] = -vector[:, 2]
 
     if all(np.abs(rotation_axis) == YHAT):
-        vector[0] = -vector[0]
-        vector[2] = -vector[2]
+        vector[:, 0] = -vector[:, 0]
+        vector[:, 2] = -vector[:, 2]
 
     if all(np.abs(rotation_axis) == ZHAT):
-        vector[0] = -vector[0]
-        vector[1] = -vector[1]
+        vector[:, 0] = -vector[:, 0]
+        vector[:, 1] = -vector[:, 1]
 
     return vector
 

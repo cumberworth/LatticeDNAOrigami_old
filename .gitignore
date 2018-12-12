@@ -12,8 +12,10 @@ scripts/ideal_random_walks/num_walks.arch
 *__pycache__/
 .cache/
 .d/
+archive/
 bin/
 build/
+buildc/
 dist/
 localtests/
 tests/data/

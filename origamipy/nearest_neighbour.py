@@ -53,7 +53,7 @@ def remove_energy_units(ene):
 
 
 def calc_hybridization_energy(sequence, T, cation_M):
-    """Outputs energies in K to avoid multiplying by KB when calculating acceptances.
+    """Energies in K to avoid multiplying by Kb when calculating acceptance.
 
     Sequences are assumed to be 5' to 3'.
 
@@ -64,13 +64,13 @@ def calc_hybridization_energy(sequence, T, cation_M):
 
     # Convert from kcal/mol to K (so avoid KB later)
     DG = DG * J_PER_CAL * 1000 / R
-    
+
     return DG
 
 
 def find_longest_contig_complement(seq_1, seq_2):
     """Find longest contiguous complementary sequences between two strands.
-    
+
     The sequences are assumed to be 3'-5'.
     """
 
@@ -102,33 +102,37 @@ def find_longest_contig_complement(seq_1, seq_2):
 
     return comp_seqs
 
+
 def calc_melting_point(sequence, strand_M, cation_M):
     """Calculate melting point assuming two state behaviour."""
     DH, DS = calc_hybridization_enthalpy_and_entropy(sequence, cation_M)
-
-    # Convert to J/mol
     DH = DH * J_PER_CAL * 1000
-
-    # Convert to J/mol/K
     DS = DS * J_PER_CAL * 1000
 
-    melting_T = DH / (DS + R * math.log(strand_M))
+    return DH / (DS + R * math.log(strand_M))
 
-    return melting_T
 
 def calc_internal_melting_point(sequence, cation_M):
     """Calculate temperature at which enthalpy and entropy are equal."""
     DH, DS = calc_hybridization_enthalpy_and_entropy(sequence, cation_M)
-
-    # Convert to J/mol
     DH = DH * J_PER_CAL * 1000
-
-    # Convert to J/mol/K
     DS = DS * J_PER_CAL * 1000
 
-    melting_T = DH / DS
+    return DH / DS
 
-    return melting_T
+
+def calc_staple_melting_point(seqs, strand_M, cation_M):
+    staple_DH = 0
+    staple_DS = 0
+    for seq in seqs:
+        DH, DS = calc_hybridization_enthalpy_and_entropy(seq, cation_M)
+        staple_DH += DH
+        staple_DS += DS
+
+    staple_DH = staple_DH * J_PER_CAL * 1000
+    staple_DS = staple_DS * J_PER_CAL * 1000
+
+    return staple_DH / (staple_DS + R * math.log(strand_M))
 
 
 def calc_excess_bound_fraction(seq, cation_M, staple_M, temp):
@@ -152,6 +156,7 @@ def calc_equimolar_bound_fraction(seq, cation_M, staple_M, temp):
 
     return x / staple_M
 
+
 def calc_hybridization_enthalpy_and_entropy(sequence, cation_M):
     """Calculate hybridization enthalpy and entropy of domains with NN model.
 
@@ -174,8 +179,8 @@ def calc_hybridization_enthalpy_and_entropy(sequence, cation_M):
     DH_stack = 0
     DS_stack = 0
     for base_index in range(0, len(sequence) - 1):
-        first_pair = sequence[base_index : base_index + 2]
-        second_pair = complementary_sequence[base_index : base_index + 2]
+        first_pair = sequence[base_index: base_index + 2]
+        second_pair = complementary_sequence[base_index: base_index + 2]
         key = first_pair + '/' + second_pair
 
         # Not all permutations are included in dict as some reversals have
@@ -205,7 +210,8 @@ def calc_hybridization_enthalpy_and_entropy(sequence, cation_M):
     DS_hybrid = DS_init + DS_sym + DS_stack + DS_at
 
     # Apply salt correction
-    DS_hybrid = DS_hybrid + (0.368 * (len(sequence) / 2) * math.log(cation_M))/1000
+    DS_hybrid = DS_hybrid + (0.368 * (len(sequence) / 2)
+                             * math.log(cation_M))/1000
 
     return DH_hybrid, DS_hybrid
 
@@ -226,3 +232,30 @@ def sequence_is_palindromic(sequence):
     reverse_complementary_sequence = complementary_sequence[::-1]
     palindromic = reverse_complementary_sequence == sequence
     return palindromic
+
+
+def calc_staplestates_sum_curve(staple_seqs, temps, staple_M, cation_M):
+    DH_staples = []
+    DS_staples = []
+    for seqs in staple_seqs:
+        DH_total = 0
+        DS_total = 0
+        for seq in seqs:
+            DH, DS = calc_hybridization_enthalpy_and_entropy(seq, cation_M)
+            DH_total += DH*J_PER_CAL*1000 / R
+            DS_total += DS*J_PER_CAL*1000 / R
+
+        DH_staples.append(DH_total)
+        DS_staples.append(DS_total)
+
+    staplestates_sums = []
+    for temp in temps:
+        staplestates_sum = 0
+        for DH, DS in zip(DH_staples, DS_staples):
+            DG = DH/temp - DS
+            bound_to_unbound = staple_M * np.exp(-DG)
+            staplestates_sum += bound_to_unbound / (1 + bound_to_unbound)
+
+        staplestates_sums.append(staplestates_sum)
+
+    return staplestates_sums

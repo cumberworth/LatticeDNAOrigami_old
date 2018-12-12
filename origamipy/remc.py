@@ -2,11 +2,11 @@
 
 import collections
 
-from origamipy import io
+from origamipy import files
 
 
 def deconvolute_remc_outputs(all_exchange_params, fileinfo, filetypes):
-    swapfile = io.SwapInpFile(fileinfo.inputdir, fileinfo.filebase)
+    swapfile = files.SwapInpFile(fileinfo.inputdir, fileinfo.filebase)
     for filetype in filetypes:
         f_collection = FileCollection(all_exchange_params, fileinfo, filetype)
         for threads_to_replicas in swapfile:
@@ -23,7 +23,7 @@ class FileCollection:
         self._num_threads = len(all_exchange_params)
         self._thread_files = []
         self._replica_files = []
-        self._filetype = io.UnparsedStepInpFile
+        self._filetype = files.UnparsedStepInpFile
         self._num_header_lines = 0
 
         self._set_filetype()
@@ -39,14 +39,14 @@ class FileCollection:
     def _set_filetype(self):
         if self._ext in ['trj', 'vcf']:
             self._num_header_lines = 0
-            self._filetype = io.UnparsedMultiLineStepInpFile
+            self._filetype = files.UnparsedMultiLineStepInpFile
         elif self._ext in ['ores', 'states', 'staples',
                            'staplestates']:
             self._num_header_lines = 0
-            self._filetype = io.UnparsedSingleLineStepInpFile
+            self._filetype = files.UnparsedSingleLineStepInpFile
         elif self._ext in ['times', 'ene', 'ops']:
             self._num_header_lines = 1
-            self._filetype = io.UnparsedSingleLineStepInpFile
+            self._filetype = files.UnparsedSingleLineStepInpFile
         else:
             raise NotImplementedError
 

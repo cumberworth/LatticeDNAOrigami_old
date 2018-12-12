@@ -132,6 +132,7 @@ class TxtTrajInpFile(StepsInpFile):
         super().__init__(filename)
         self._struct_file = struct_file
         self._chains = []
+        self._next_line()
 
     def get_chains(self, step):
         for i, chains in enumerate(self):
@@ -142,7 +143,6 @@ class TxtTrajInpFile(StepsInpFile):
             raise IndexError
 
     def _parse_step(self):
-        self._next_line()
         self._step = self._get_step()
         self._chains = []
         chains_remain = True
@@ -151,6 +151,8 @@ class TxtTrajInpFile(StepsInpFile):
             self._parse_chain()
             if self._line == '':
                 chains_remain = False
+
+        self._next_line()
 
     def _return_step(self):
         return self._chains

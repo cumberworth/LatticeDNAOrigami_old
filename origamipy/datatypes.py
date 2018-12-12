@@ -50,8 +50,9 @@ class OutputData:
     def from_file(cls, filebase):
         filename = cls._create_filename(filebase)
         data = cls._load_file(filename)
-        tags = cls._get_tags(filename, data=data)
-        return cls(tags, data)
+        header = cls._get_header(filename)
+        tags = cls._get_tags(header, data=data)
+        return cls(header, tags, data)
 
     @classmethod
     def _create_filename(cls, filebase):
@@ -59,15 +60,22 @@ class OutputData:
 
     @classmethod
     def _load_file(cls, filename):
-        data = np.loadtxt(filename, skiprows=cls._header_lines)
+        data = np.loadtxt(filename, skiprows=cls._header_lines,
+                          dtype=cls._dtype)
         return data.transpose()
 
     @classmethod
-    def _get_tags(cls, filename, **kwargs):
-        tags = []
+    def _get_header(cls, filename):
+        if cls._header_lines == 0:
+            return ''
+
         with open(filename) as f:
-            tags = f.readline().rstrip().split()
-            tags = [tag.rstrip(',') for tag in tags]
+            return f.readline()
+
+    @classmethod
+    def _get_tags(cls, header, **kwargs):
+        tags = header.rstrip().split()
+        tags = [tag.rstrip(',') for tag in tags]
 
         return tags
 
@@ -76,7 +84,7 @@ class OutputData:
         data_list = [d._data for d in output_data_list]
         concatenated_data = np.concatenate(data_list, axis=1)
         data = output_data_list[0]
-        return type(data)(data._tags, concatenated_data)
+        return type(data)(data._header, data._tags, concatenated_data)
 
     @classmethod
     def concatenate_with_masks(cls, output_data_list, masks):
@@ -87,20 +95,21 @@ class OutputData:
 
         concatenated_data = np.concatenate(masked_data_list, axis=1)
         data = output_data_list[0]
-        return type(data)(data._tags, concatenated_data)
+        return type(data)(data._header, data._tags, concatenated_data)
 
     @property
     def tags(self):
         return self._tags
 
-    def __init__(self, tags, data):
+    def __init__(self, header, tags, data):
+        self._header = header
         self._tags = tags
         self._data = data
         self._tag_to_index = {tag: i for i, tag in enumerate(tags)}
 
     def __add__(self, other):
         data = np.concatenate([self._data, other._data], axis=1)
-        return type(self)(self._tags, data)
+        return type(self)(self._header, self._tags, data)
 
     def __getitem__(self, tag):
         index = self._tag_to_index[tag]
@@ -110,10 +119,14 @@ class OutputData:
         index = self._tag_to_index[tag]
         self._data[index] = value
 
+    def to_file(self, filebase):
+        filename = '{}.{}'.format(filebase, self._ext)
+        np.savetxt(filename, self._data.T, header=self._header, comments='')
 
 class Energies(OutputData):
     _ext = 'ene'
     _header_lines = 1
+    _dtype = np.float
 
     @classmethod
     def from_file(cls, filebase, temp):
@@ -121,15 +134,28 @@ class Energies(OutputData):
         self._multiply_energy_by_temp(temp)
         return self
 
-    def __init__(self, tags, data):
-        super().__init__(tags, data)
+    def __init__(self, header, tags, data):
+        super().__init__(header, tags, data)
 
-        # Energy are written in units of be k_b / K
 
     def _multiply_energy_by_temp(self, temp):
+
+        # Energy are written in units of be k_b / K
         self['tenergy'] = self['tenergy']*temp
         self['henthalpy'] = self['henthalpy']*temp
         self['stacking'] = self['stacking']*temp
+
+
+    def to_file(self, filebase, temp):
+        self._divide_energy_by_temp(temp)
+        super().to_file(filebase)
+
+    def _divide_energy_by_temp(self, temp):
+
+        # Energy are written in units of be k_b / K
+        self['tenergy'] = self['tenergy']/temp
+        self['henthalpy'] = self['henthalpy']/temp
+        self['stacking'] = self['stacking']/temp
 
     @property
     def total_energies(self):
@@ -155,10 +181,11 @@ class Energies(OutputData):
 class OrderParams(OutputData):
     _ext = 'ops'
     _header_lines = 1
+    _dtype = np.int
 
     @classmethod
-    def _get_tags(cls, filename, **kwargs):
-        tags = super()._get_tags(filename)
+    def _get_tags(cls, header, **kwargs):
+        tags = super()._get_tags(header)
         tags.insert(0, 'step')
         return tags
 
@@ -166,17 +193,19 @@ class OrderParams(OutputData):
 class Times(OutputData):
     _ext = 'times'
     _header_lines = 1
+    _dtype = np.float
 
 
 class NumStaplesOfType(OutputData):
     _ext = 'staples'
     _header_lines = 0
+    _dtype = np.int
 
     @classmethod
     def _get_tags(cls, *args, data=None):
         tags = ['step']
         for i in range(1, data.shape[0]):
-            tags.append('staplestate{}'.format(i))
+            tags.append('staples{}'.format(i))
 
         return tags
 
@@ -184,11 +213,12 @@ class NumStaplesOfType(OutputData):
 class StapleTypeStates(OutputData):
     _ext = 'staplestates'
     _header_lines = 0
+    _dtype = np.int
 
     @classmethod
     def _get_tags(cls, *args, data=None):
         tags = ['step']
         for i in range(1, data.shape[0]):
-            tags.append('staples{}'.format(i))
+            tags.append('staplestates{}'.format(i))
 
         return tags
