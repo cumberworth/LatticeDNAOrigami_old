@@ -14,8 +14,6 @@ def deconvolute_remc_outputs(all_exchange_params, fileinfo, filetypes):
 
 
 class FileCollection:
-    """Read from thread files and write to replica files"""
-
     def __init__(self, all_exchange_params, fileinfo, ext):
         self._fileinfo = fileinfo
         self._ext = ext
@@ -32,6 +30,7 @@ class FileCollection:
         self._write_headers()
 
     def deconvolute_and_write_step(self, threads_to_replicas):
+        """Read from thread files and write to replica files"""
         for replica, thread in enumerate(threads_to_replicas):
             step = next(self._thread_files[thread])
             self._replica_files[replica].write(step)

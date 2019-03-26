@@ -19,10 +19,10 @@ def main():
     elif ref_ext == 'trj':
         ref_file = files.TxtTrajInpFile(args.ref_filename, system_file)
 
-    ref_positions = np.array(ref_file.chains(args.step)[0]['positions'])
-    ref_positions = config_process.center_on_origin(ref_positions)
+    ref_config = np.array(ref_file.chains(args.step))
+    ref_positions = config_process.center_on_origin(ref_config)
     aligned_positions, rmsds = config_process.align_positions(traj_file,
-            ref_positions)
+            ref_config)
 
     np.savetxt(args.outfile, rmsds)
 

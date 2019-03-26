@@ -2,7 +2,7 @@
 
 source $libdir/liborigami.tcl
 
-set origami [mol new $filebase.vsf]
+set origami [mol new $system.vsf]
 set ores_raw [load_matrix_as_lists $filebase.ores]
 set ores [unpack_ores $ores_raw]
 set num_scaffold_domains [calc_num_scaffold_domains]

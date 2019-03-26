@@ -108,3 +108,24 @@ def rotate_vectors_quarter(vectors, rotation_axis, direction):
         rotated_vectors[:, 1] = direction * -x
 
     return rotated_vectors
+
+
+NUM_STAPLES_TAG = 'numstaples'
+
+
+def calc_reduced_potentials(enes, ops, conditions):
+    """Reduced potentials as defined in shirts2008."""
+    rstaple_u = calc_reduced_staple_u(conditions)
+    bias_collection = conditions.total_bias(ops)
+    num_staples = ops[NUM_STAPLES_TAG]
+    e = (enes.enthalpies + enes.stacking_energies + bias_collection)
+    renes = e/conditions.temp
+
+    return renes - enes.entropies + rstaple_u*num_staples
+
+
+def calc_reduced_staple_u(conditions):
+    """Calculate reduced staple chemical potential"""
+    rstaple_u = math.log(conditions.staple_m)
+
+    return rstaple_u

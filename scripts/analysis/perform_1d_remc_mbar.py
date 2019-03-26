@@ -11,33 +11,44 @@ import argparse
 from origamipy import conditions
 from origamipy import biases
 from origamipy import outputs
+from origamipy import decorrelate
+from origamipy import mbar_wrapper
 
 
 def main():
     args = parse_args()
-    conditions_map = construct_conditions_map(args)
     fileformatter = construct_fileformatter()
-    all_conditions = conditions.AllSimConditions(conditions_map, fileformatter)
+    all_conditions = construct_conditions(args, fileformatter)
     inp_filebase = create_input_filepathbase(args)
-    sims_collection = outputs.MultiStateSimCollection(inp_filebase, all_conditions)
+    sim_collections = outputs.create_sim_collections(inp_filebase,
+            all_conditions, args.reps)
+    decor_outs = decorrelate.DecorrelatedOutputs(sim_collections, all_conditions)
+    decor_outs.read_decors_from_files()
 
-    sims_collection.perform_decorrelation()
-    sims_collection.perform_mbar()
+    mbarw = mbar_wrapper.MBARWrapper(decor_outs)
+    mbarw.perform_mbar()
 
     out_filebase = create_output_filepathbase(args)
-    sims_collection.calculate_all_expectations(out_filebase)
+    mbarw.calc_all_expectations(out_filebase)
+    mbarw.calc_1d_lfes(all_conditions, out_filebase)
+    mbarw.calc_specified_2d_lfes(parse_tag_pairs(args.tag_pairs),
+            all_conditions, out_filebase)
 
 
-def construct_conditions_map(args):
+def parse_tag_pairs(tag_pairs):
+    return [tuple(tag_pair.split(',')) for tag_pair in tag_pairs]
+
+
+def construct_conditions(args, fileformatter):
     conditions_map = {'temp': args.temps,
                       'staple_m': [args.staple_m],
                       'bias': [biases.NoBias()]}
 
-    return conditions_map
+    return conditions.AllSimConditions(conditions_map, fileformatter)
 
 
 def construct_fileformatter():
-    specs = [conditions.ConditionsFileformatSpec('temp', '{:.1f}')]
+    specs = [conditions.ConditionsFileformatSpec('temp', '{:d}')]
     return conditions.ConditionsFileformatter(specs)
 
 
@@ -72,9 +83,14 @@ def parse_args():
             type=float,
             help='Stacking energy (kb K)')
     parser.add_argument(
+        '--reps',
+        nargs='+',
+        type=int,
+        help='Reps (leave empty for all available)')
+    parser.add_argument(
             '--temps',
             nargs='+',
-            type=float,
+            type=int,
             help='Temperatures')
     parser.add_argument('--tags',
             nargs='+',

@@ -58,22 +58,14 @@ class JSONStructOutFile:
         self.json_origami['origami']['sequences'] = origami_system.sequences
         self.json_origami['origami']['cyclic'] = origami_system.cyclic
 
-    def write(self, origami_system):
+    def write(self, chains):
         self.json_origami['origami']['configurations'].append({})
         current_config = self.json_origami['origami']['configurations'][-1]
 
         # Step should probably be changed as this is no longer being used by a
         # a simulation class
         current_config['step'] = 0
-        current_config['chains'] = []
-        for chain in origami_system.chains:
-            current_config['chains'].append({})
-            json_chain = current_config['chains'][-1]
-            json_chain['identity'] = chain['identity']
-            json_chain['index'] = chain['index']
-            json_chain['positions'] = chain['positions']
-            json_chain['orientations'] = chain['orientations']
-
+        current_config['chains'] = chains
         json.dump(self.json_origami, open(self._filename, 'w'), indent=4,
                   separators=(',', ': '))
 
@@ -137,6 +129,8 @@ class TxtTrajInpFile(StepsInpFile):
     def get_chains(self, step):
         for i, chains in enumerate(self):
             if i == step:
+                self._file.seek(0)
+                self._next_line()
                 return chains
 
         else:
@@ -175,14 +169,14 @@ class TxtTrajInpFile(StepsInpFile):
 
     def _get_index_and_identity(self):
         split_line = self._line.split()
-        return split_line[0], split_line[1]
+        return int(split_line[0]), int(split_line[1])
 
     def _get_domainsx3_matrix_from_line(self):
         row_major_vector = np.array(self._line.split(), dtype=int)
         return row_major_vector.reshape(len(row_major_vector) // 3, 3).tolist()
 
     def _parse_header(self):
-        pass
+        self._next_line()
 
 
 class TxtTrajOutFile:
@@ -204,6 +198,44 @@ class TxtTrajOutFile:
                 for comp in ore:
                     self.file.write('{} '.format(comp))
             self.file.write('\n')
+        self.file.write('\n')
+
+
+class VCFOutFile:
+    """VCF output file."""
+
+    def __init__(self, filename, max_staples):
+        self.file = open(filename, 'w')
+        self.max_staples = max_staples
+
+    def write_config_from_chains(self, chains):
+        self.file.write('timestep\n')
+        for chain_i, chain in enumerate(chains):
+            for pos in chain['positions']:
+                for comp in pos:
+                    self.file.write('{} '.format(comp))
+                self.file.write('\n')
+
+        while chain_i != self.max_staples:
+            chain_i += 1
+            for i in range(2):
+                self.file.write('0 0 0\n')
+
+        self.file.write('\n')
+
+    def write_config_from_positions(self, all_positions):
+        self.file.write('timestep\n')
+        for chain_i, pos in enumerate(all_positions):
+            for pos in positions:
+                for comp in pos:
+                    self.file.write('{} '.format(comp))
+                self.file.write('\n')
+
+        while chain_i != self.max_staples:
+            chain_i += 1
+            for i in range(3):
+                self.file.write('0 0 0\n')
+
         self.file.write('\n')
 
 

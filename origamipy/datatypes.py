@@ -81,10 +81,13 @@ class OutputData:
 
     @classmethod
     def concatenate(cls, output_data_list):
-        data_list = [d._data for d in output_data_list]
+        data = output_data_list[-1]
+
+        # UGLY HACK TO CUT EXTRA COLUMSN IN OPS
+        cols = len(data._tags)
+        data_list = [d._data[:cols] for d in output_data_list]
         concatenated_data = np.concatenate(data_list, axis=1)
-        data = output_data_list[0]
-        return type(data)(data._header, data._tags, concatenated_data)
+        return type(data)(data._header, data._tags[:cols], concatenated_data)
 
     @classmethod
     def concatenate_with_masks(cls, output_data_list, masks):
@@ -100,6 +103,10 @@ class OutputData:
     @property
     def tags(self):
         return self._tags
+
+    @property
+    def steps(self):
+        return len(self._data[0])
 
     def __init__(self, header, tags, data):
         self._header = header
@@ -121,12 +128,17 @@ class OutputData:
 
     def to_file(self, filebase):
         filename = '{}.{}'.format(filebase, self._ext)
-        np.savetxt(filename, self._data.T, header=self._header, comments='')
+        np.savetxt(filename, self._data.T, header=self._header.rstrip('\n'),
+                comments='', fmt=self._fmt)
+
+    def apply_mask(self, mask):
+        self._data = self._data.T[mask].T
 
 class Energies(OutputData):
     _ext = 'ene'
     _header_lines = 1
     _dtype = np.float
+    _fmt = '%f'
 
     @classmethod
     def from_file(cls, filebase, temp):
@@ -177,11 +189,11 @@ class Energies(OutputData):
     def bias_energies(self):
         return self['bias']
 
-
 class OrderParams(OutputData):
     _ext = 'ops'
     _header_lines = 1
     _dtype = np.int
+    _fmt = '%d'
 
     @classmethod
     def _get_tags(cls, header, **kwargs):
@@ -194,12 +206,14 @@ class Times(OutputData):
     _ext = 'times'
     _header_lines = 1
     _dtype = np.float
+    _fmt = '%f'
 
 
 class NumStaplesOfType(OutputData):
     _ext = 'staples'
     _header_lines = 0
     _dtype = np.int
+    _fmt = '%d'
 
     @classmethod
     def _get_tags(cls, *args, data=None):
@@ -214,6 +228,7 @@ class StapleTypeStates(OutputData):
     _ext = 'staplestates'
     _header_lines = 0
     _dtype = np.int
+    _fmt = '%d'
 
     @classmethod
     def _get_tags(cls, *args, data=None):
