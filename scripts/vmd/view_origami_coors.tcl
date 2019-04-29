@@ -1,4 +1,4 @@
-# Requires the variables filebase and libdir have been set
+# Requires the variables filebase, libdir, system, and staplelength have been set
 
 source $libdir/liborigami.tcl
 
