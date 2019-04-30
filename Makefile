@@ -4,7 +4,7 @@
 
 OPTLEVEL = -O3
 BUILDDIR = build
-PREFIX = ../../bin/latticeDNAOrigami
+PREFIX = /usr/local
 TARGET = latticeDNAOrigami
 TARGETDIR = bin
 SRCDIR = src
@@ -35,7 +35,7 @@ POSTCOMPILE = @mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d && touch $@
 all: $(TARGETDIR)/$(TARGET)
 
 $(TARGETDIR)/$(TARGET): $(OBJECTS)
-	$(CPP) $(LDFLAGS) -o $@ $^
+	$(CPP) -o $@ $^ $(LDFLAGS)
 
 $(BUILDDIR)/%.o: %.cpp
 $(BUILDDIR)/%.o: %.cpp $(DEPDIR)/%.d
@@ -51,6 +51,6 @@ clean:
 	rm .d/*.d
 
 install:
-	cp $(TARGETDIR)/$(TARGET) $(PREFIX)
+	cp $(TARGETDIR)/$(TARGET) $(PREFIX)/bin/$(TARGET)
 
 include $(wildcard $(patsubst %,$(DEPDIR)/%.d,$(basename $(SOURCES))))
