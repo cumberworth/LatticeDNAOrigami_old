@@ -112,24 +112,14 @@ proc calc_num_scaffold_domains {} {
     return $num_scaffolds
 }
 
-proc calc_num_staple_domains {frame} {
+proc calc_num_staple_domains {} {
     # Calculate number of staples for given frame
-    global num_scaffold_domains
-    global states
     global origami
+    global num_scaffold_domains
     global staplelength
     set numatoms [molinfo $origami get numatoms]
-    set num_staple_domains 0
-    for {set i $num_scaffold_domains} {$i != $numatoms} {incr i} {
-        set state [lindex [lindex $states $frame] $i]
-        if {$state != -1} {
-            incr num_staple_domains
-        } else {
-            break
-        }
-    }
 
-    return [expr $num_staple_domains]
+    return [expr $numatoms - $num_scaffold_domains]
 }
 
 proc create_domain_reps {} {
@@ -216,8 +206,8 @@ proc draw_next_domain_vectors {} {
     global radius
     global cylinderradius
     global staplelength
+    global num_staple_domains
     set frame [molinfo $origami get frame]
-    set num_staple_domains [calc_num_staple_domains $frame]
 
     # Draw scaffold vectors
     set d1 [atomselect $origami "index 0" frame $frame]
@@ -250,7 +240,7 @@ proc draw_next_domain_vectors {} {
             set vector [vecscale $diff [expr 1 - $radius]]
             set state1 [lindex [lindex $states $frame] $d1_i]
             set state2 [lindex [lindex $states $frame] $d2_i]
-            if {$state1 != 0 && $state2 != 0 && [veclength $vector] <= 1} {
+            if {$state1 != 0 && $state1 != -1 && $state2 != 0 && $state2 != -1 && [veclength $vector] <= 1} {
                 draw_3d_vector $d1_coors $vector $colors(staple_next_domain) \
                     [vecscale 0.99 $cylinderradius]
             }
@@ -267,8 +257,8 @@ proc draw_ore_vectors {} {
     global origami
     global states
     global cylinderradius
+    global num_staple_domains
     set frame [molinfo $origami get frame]
-    set num_staple_domains [calc_num_staple_domains $frame]
 
     # Draw scaffold vectors
     for {set i 0} {$i != $num_scaffold_domains} {incr i} {
@@ -288,7 +278,7 @@ proc draw_ore_vectors {} {
     set num_domains [expr $num_scaffold_domains + $num_staple_domains]
     for {set i $num_scaffold_domains} {$i != $num_domains} {incr i} {
         set state [lindex [lindex $states $frame] $i]
-        if {$state == 0} {
+        if {$state == 0 || $state == -1} {
             continue
         }
         set d [atomselect $origami "index $i" frame $frame]
@@ -329,10 +319,10 @@ proc update_frame {} {
     lappend ores [lindex $ores 0]
 
     graphics $origami delete all
-    update_colors
-    update_radii
-    draw_next_domain_vectors
-    draw_ore_vectors
+    #update_colors
+    #update_radii
+    #draw_next_domain_vectors
+    #draw_ore_vectors
 }
 
 proc update_frame_trace {args} {
