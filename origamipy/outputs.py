@@ -198,7 +198,7 @@ class SimCollection:
         rep = -1
         while reps_remain:
             rep += 1
-            t = '{}_rep-{}-{}.ops'
+            t = '{}_run-0_rep-{}-{}.ops'
             fname = t.format(self.filebase, rep, self.conditions.fileformat)
             reps_remain = os.path.isfile(fname)
 
