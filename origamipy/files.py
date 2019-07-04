@@ -55,7 +55,7 @@ class JSONStructOutFile:
         self.json_origami = {'origami': {'identities': {},
                              'configurations': []}}
         self.json_origami['origami']['identities'] = origami_system.identities
-        self.json_origami['origami']['sequences'] = origami_system.sequences
+#        self.json_origami['origami']['sequences'] = origami_system.sequences
         self.json_origami['origami']['cyclic'] = origami_system.cyclic
 
     def write(self, chains):
@@ -348,3 +348,28 @@ class TagOutFile:
     def write(self, tags, data):
         np.savetxt(self._filename, data, header=' '.join(tags), comments='',
                    fmt='%.6f')
+
+
+class StatesInpFile(StepsInpFile):
+    """Plain text states input file.
+
+    Requires system information be provided through an input file.
+    """
+
+    def __init__(self, filename):
+        super().__init__(filename)
+        self._states = []
+        self._next_line()
+
+    def _parse_step(self):
+        self._states = [int(i) for i in self._line.split()]
+        self._next_line()
+
+    def _return_step(self):
+        return self._states
+
+    def _next_line(self):
+        self._line = next(self._file).rstrip()
+
+    def _parse_header(self):
+        pass

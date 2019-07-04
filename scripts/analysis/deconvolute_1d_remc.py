@@ -5,13 +5,13 @@
 import argparse
 
 from origamipy import remc
-from origamipy import io
+from origamipy import files
 
 
 def main():
     args = parse_args()
     all_params = create_exchange_params(args.temps)
-    fileinfo = io.FileInfo(args.inputdir, args.outputdir, args.filebase)
+    fileinfo = files.FileInfo(args.inputdir, args.outputdir, args.filebase)
     remc.deconvolute_remc_outputs(all_params, fileinfo, FILETYPES)
 
 

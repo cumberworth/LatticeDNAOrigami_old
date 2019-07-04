@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 
-"""Perform decorrelation on 1D REMC simulation output.
+"""Check if REMC simulations converged
 
-The exchange variables are assumed to be temperature and stacking multiplier,
-in that order.
+Convergence criteria is based on number of steps following all replicas having
+sampled a fully stacked state.
 """
 
 import argparse
@@ -21,10 +21,26 @@ def main():
     inp_filebase = create_input_filepathbase(args)
     sim_collections = outputs.create_sim_collections(inp_filebase,
             all_conditions, args.reps)
-    decor_outs = decorrelate.DecorrelatedOutputs(sim_collections, all_conditions)
-    decor_outs.perform_decorrelation(args.skip)
-    decor_outs.apply_masks()
-    decor_outs.write_decors_to_files()
+    reps = sim_collections[0]._reps
+    reps_converged = [False for i in range(reps)]:
+    for rep in range(reps):
+        for sim_collection in sim_collections:
+            ops = sim_collection.get_reps_data('ops')
+            stacked_pairs = ops['stacked_pairs']
+            fully_stacked = np.where(stacked_pairs == args.fully_stacked_pairs)
+            if len(fully_stacked[0]) == 0:
+                continue
+
+            steps = ops['steps']
+            first_fully_stacked_step = steps[fully_stacked[0][0]]
+            steps_since_fully_stacked = steps[-1] - first_fully_stacked_step
+            if steps_since_fully_stacked > args.prod_steps:
+                reps_converged[rep] = True
+
+    if np.all(reps_converged):
+        print(1)
+    else:
+        print(0)
 
 
 def construct_fileformatter():
@@ -59,10 +75,6 @@ def parse_args():
         type=str,
         help='Directory of inputs')
     parser.add_argument(
-        'output_dir',
-        type=str,
-        help='Directory to output to')
-    parser.add_argument(
         'staple_m',
         type=float,
         help='Staple molarity (mol/V)')
@@ -71,9 +83,13 @@ def parse_args():
         type=float,
         help='Stacking energy (kb K)')
     parser.add_argument(
-        'skip',
+        'fully_stacked_pairs',
         type=int,
-        help='Number of steps to skip')
+        help='Number of stacked pairs in fully stacked state')
+    parser.add_argument(
+        'prod_steps',
+        type=int,
+        help='Minimum number of steps to run after fully stacked states sampled')
     parser.add_argument(
         '--reps',
         nargs='+',

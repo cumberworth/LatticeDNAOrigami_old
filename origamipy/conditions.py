@@ -65,7 +65,8 @@ class SimConditions:
         for key, value in self._conditions.items():
             if 'bias' in key:
                 value = value.fileformat_value
-            condition_to_char_value[key] = value
+
+            condition_to_char_value[key] = float(value)
 
         return condition_to_char_value
 

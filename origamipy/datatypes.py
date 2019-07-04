@@ -52,6 +52,7 @@ class OutputData:
         data = cls._load_file(filename)
         header = cls._get_header(filename)
         tags = cls._get_tags(header, data=data)
+
         return cls(header, tags, data)
 
     @classmethod
@@ -128,11 +129,19 @@ class OutputData:
 
     def to_file(self, filebase):
         filename = '{}.{}'.format(filebase, self._ext)
+        if self._header_lines != 0:
+            self._header = ', '.join(self._tags)
+
         np.savetxt(filename, self._data.T, header=self._header.rstrip('\n'),
                 comments='', fmt=self._fmt)
 
     def apply_mask(self, mask):
         self._data = self._data.T[mask].T
+
+    def add_column(self, tag, data):
+        self._tags.append(tag)
+        self._tag_to_index = {tag: i for i, tag in enumerate(self._tags)}
+        self._data = np.concatenate([self._data, [data]])
 
 class Energies(OutputData):
     _ext = 'ene'
@@ -198,7 +207,9 @@ class OrderParams(OutputData):
     @classmethod
     def _get_tags(cls, header, **kwargs):
         tags = super()._get_tags(header)
-        tags.insert(0, 'step')
+        if 'step' not in tags:
+            tags.insert(0, 'step')
+
         return tags
 
 

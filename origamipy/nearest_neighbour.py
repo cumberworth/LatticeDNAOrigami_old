@@ -135,19 +135,15 @@ def calc_staple_melting_point(seqs, strand_M, cation_M):
     return staple_DH / (staple_DS + R * math.log(strand_M))
 
 
-def calc_excess_bound_fraction(seq, cation_M, staple_M, temp):
+def calc_excess_bound_fraction(DG, staple_M, temp):
     """Calculate fraction scaffold domains bound with excess staple strand"""
-
-    DG = calc_hybridization_energy(seq, temp, cation_M)
     bound_to_unbound = staple_M * np.exp(-DG / temp)
 
     return bound_to_unbound / (1 + bound_to_unbound)
 
 
-def calc_equimolar_bound_fraction(seq, cation_M, staple_M, temp):
+def calc_equimolar_bound_fraction(DG, staple_M, temp):
     """Calculate fraction scaffold domains bound with equimolar staples"""
-
-    DG = calc_hybridization_energy(seq, temp, cation_M)
     K = np.exp(-DG / temp)
     a = 1
     b = -(2*staple_M + 1/K)

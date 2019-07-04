@@ -10,15 +10,15 @@ import pandas as pd
 
 def set_default_appearance():
 
-    plt.rcParams['lines.linewidth'] = 1.5
+    plt.rcParams['lines.linewidth'] = 1.0
     plt.rcParams['lines.markeredgewidth'] = 1.0
-    plt.rcParams['lines.markersize'] = 2.5
+    plt.rcParams['lines.markersize'] = 1.0
 
     # Fonts and symbols
     plt.rcParams['font.family'] = 'serif'
     plt.rcParams['font.serif'] = 'Times New Roman'
     plt.rcParams['font.weight'] = 'normal'
-    plt.rcParams['font.size'] = '10'
+    plt.rcParams['font.size'] = '8'
     plt.rcParams['text.usetex'] = False
     plt.rcParams['mathtext.rm'] = 'serif'
     plt.rcParams['mathtext.it'] = 'serif:italic'

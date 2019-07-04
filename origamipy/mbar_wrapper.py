@@ -67,11 +67,22 @@ class MBARWrapper:
 
         return aves, stds
 
+    def calc_expectation(self, values, conds):
+        decor_enes = self._decor_outs.get_concatenated_datatype('enes')
+        decor_ops = self._decor_outs.get_concatenated_datatype('ops')
+        rpots = utility.calc_reduced_potentials(decor_enes, decor_ops,
+                conds)
+        ave, vari = self._mbar.computeExpectations(values, rpots)
+        ave = ave[0].astype(float)
+        std = np.sqrt(vari)[0].astype(float)
+
+        return ave, std
+
     def calc_1d_lfes(self, reduced_conditions, filebase):
         print('Calculating all 1D LFEs')
 
         # This is bad
-        temps = [str(c.temp) for c in reduced_conditions]
+        temps = [c.temp for c in reduced_conditions]
         all_tags = self._decor_outs.all_conditions.condition_tags
         series_tags = self._decor_outs.all_series_tags
 
@@ -120,7 +131,8 @@ class MBARWrapper:
             self.calc_2d_lfes(tag1, tag2, reduced_conditions, filebase)
 
     def calc_2d_lfes(self, tag1, tag2, reduced_conditions, filebase):
-        temps = [str(c.temp) for c in reduced_conditions]
+        print('Calculating 2D LFEs of {}-{}'.format(tag1, tag2))
+        temps = [c.temp for c in reduced_conditions]
         decor_value_pairs = list(zip(self._decor_outs.get_concatenated_series(tag1),
                                  self._decor_outs.get_concatenated_series(tag2)))
         bins = list(set(decor_value_pairs))
@@ -145,9 +157,3 @@ class MBARWrapper:
     def _hack_prepare_2d_lfe_series_for_write(self, series, bins):
         bins = np.array(bins).reshape(len(bins), 2)
         return np.concatenate([bins, np.array(series).T], axis=1)
-
-    def calc_staplestates_tag_lfes(self, tag, reduced_conditions, filebase):
-        print('Calcuating 2D LFEs for all pairs of staplestates and {}'.format(tag))
-        temps = [str(c.temp) for c in reduced_conditions]
-        for staple_tag in self._decor_staplestates.tags[1:]:
-            self.calc_2d_lfes(staple_tag, tag, reduced_conditions, filebase)

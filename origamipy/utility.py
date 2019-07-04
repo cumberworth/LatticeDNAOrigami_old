@@ -119,7 +119,7 @@ def calc_reduced_potentials(enes, ops, conditions):
     bias_collection = conditions.total_bias(ops)
     num_staples = ops[NUM_STAPLES_TAG]
     e = (enes.enthalpies + enes.stacking_energies + bias_collection)
-    renes = e/conditions.temp
+    renes = e/float(conditions.temp)
 
     return renes - enes.entropies + rstaple_u*num_staples
 

@@ -84,7 +84,7 @@ class SimCollection:
     def decorrelated_staplestates(self):
         return self.get_decor_reps_data('staplestates')
 
-    def get_reps_data(self, tag):
+    def get_reps_data(self, tag, concatenate=True):
         if tag not in self._datatype_to_reps.keys():
             self._datatype_to_reps[tag] = []
             for rep in range(max(self._reps) + 1):
@@ -93,7 +93,7 @@ class SimCollection:
                     self._datatype_to_reps[tag].append(0)
                     continue
 
-                self._load_runs_data(rep, tag)
+                self._load_runs_data(rep, tag, concatenate)
 
         return self._datatype_to_reps[tag]
 
@@ -125,6 +125,10 @@ class SimCollection:
             self._trjtype_to_reps[tag] = all_trjs
 
         return self._trjtype_to_reps[tag]
+
+    def get_filebase(self, run, rep):
+        return self.filebase_template.format(self.filebase, run, rep,
+                self.conditions.fileformat)
 
     def _load_runs_trj(self, rep, tag):
         runs_remain = True
@@ -162,11 +166,21 @@ class SimCollection:
                     self._trjtype_to_reps[tag].append([])
                     continue
 
-                filebase = self.filebase_template.format(self.filebase, run,
+                filebase = self.decor_filebase_template.format(self.filebase,
                         rep, self.conditions.fileformat)
                 try:
-                    if tag in ['trj', 'vcf']:
+                    if 'trj' in tag:
+                        filename = '{}.trj'.format(filebase)
                         trj = files.UnparsedMultiLineStepInpFile(filename, 0)
+                    elif 'vcf' in tag:
+                        filename = '{}.vcf'.format(filebase)
+                        trj = files.UnparsedMultiLineStepInpFile(filename, 0)
+                    elif 'ores' in tag:
+                        filename = '{}.ores'.format(filebase)
+                        trj = files.UnparsedSingleLineStepInpFile(filename, 0)
+                    elif 'states' in tag:
+                        filename = '{}.states'.format(filebase)
+                        trj = files.UnparsedSingleLineStepInpFile(filename, 0)
                     else:
                         raise NotImplementedError
                 except IOError:
@@ -192,7 +206,7 @@ class SimCollection:
         if self._reps == None:
             self._reps = list(range(rep))
 
-    def _load_runs_data(self, rep, tag):
+    def _load_runs_data(self, rep, tag, concatenate):
         runs_remain = True
         run = 0
         all_series = []
@@ -207,8 +221,11 @@ class SimCollection:
 
             run += 1
 
-        series = datatypes.OutputData.concatenate(all_series)
-        self._datatype_to_reps[tag].append(series)
+        if concatenate:
+            series = datatypes.OutputData.concatenate(all_series)
+            self._datatype_to_reps[tag].append(series)
+        else:
+            self._datatype_to_reps[tag].append(all_series)
 
     def _load_concat_data(self, rep, tag):
         filebase = self.decor_filebase_template.format(self.filebase, rep,
@@ -223,11 +240,12 @@ class SimCollection:
 
     def _load_data_from_file(self, filebase, tag):
         if 'enes' in tag:
-            series = datatypes.Energies.from_file(filebase, self.conditions.temp)
+            series = datatypes.Energies.from_file(filebase, float(self.conditions.temp))
         if 'ops' in tag:
             series = datatypes.OrderParams.from_file(filebase)
         if 'staples' in tag:
             series = datatypes.NumStaplesOfType.from_file(filebase)
+        # staples is in staplestates. good thing this came after
         if 'staplestates' in tag:
             series = datatypes.StapleTypeStates.from_file(filebase)
 

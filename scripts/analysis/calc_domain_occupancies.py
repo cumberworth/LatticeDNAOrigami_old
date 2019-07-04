@@ -1,15 +1,16 @@
 #!/usr/bin/env python
 
-"""Carry out standard MBAR analysis on 1D REMC simulation output.
+"""Calculate scaffold domain occupancies for a simulation set"""
 
-The exchange variable is assumed to be temperature.
-in that order.
-"""
 
 import argparse
+import os.path
 
-from origamipy import conditions
+import numpy as np
+
 from origamipy import biases
+from origamipy import conditions
+from origamipy import datatypes
 from origamipy import outputs
 from origamipy import decorrelate
 from origamipy import mbar_wrapper
@@ -22,28 +23,24 @@ def main():
     inp_filebase = create_input_filepathbase(args)
     sim_collections = outputs.create_sim_collections(inp_filebase,
             all_conditions, args.reps)
-    decor_outs = decorrelate.DecorrelatedOutputs(sim_collections, all_conditions)
-    decor_outs.read_decors_from_files()
+    for sim_collection in sim_collections:
+        for rep in sim_collection._reps:
+            ops = sim_collection.get_reps_data('ops', concatenate=False)
+            runs = len(ops[rep])
+            for run in range(runs):
+                run_filebase = sim_collection.get_filebase(run, rep)
+                states_filename = '{}.states'.format(run_filebase)
+                states = np.loadtxt(states_filename)[:, :args.scaffold_domains]
+                states = states == 2
+                ops = datatypes.OrderParams.from_file(run_filebase)
+                for i in range(args.scaffold_domains):
+                    tag = 'domainstate{}'.format(i)
+                    if tag in ops.tags:
+                        ops[tag] = states[:, i]
+                    else:
+                        ops.add_column(tag, states[:, i])
 
-    mbarw = mbar_wrapper.MBARWrapper(decor_outs)
-    mbarw.perform_mbar()
-
-    out_filebase = create_output_filepathbase(args)
-    mbarw.calc_all_expectations(out_filebase)
-    mbarw.calc_1d_lfes(all_conditions, out_filebase)
-
-    # Hacky shit
-    all_tags = decor_outs.all_series_tags
-    for tag in all_tags:
-        if 'staplestates' in tag:
-            mbarw.calc_2d_lfes(tag, 'numfullyboundstaples', all_conditions, out_filebase)
-
-        if 'adj-d' in tag:
-            mbarw.calc_2d_lfes(tag, 'dist-sum', all_conditions, out_filebase)
-
-
-def parse_tag_pairs(tag_pairs):
-    return [tuple(tag_pair.split(',')) for tag_pair in tag_pairs]
+                ops.to_file(run_filebase)
 
 
 def construct_conditions(args, fileformatter):
@@ -82,13 +79,13 @@ def parse_args():
             type=str,
             help='Directory to output to')
     parser.add_argument(
-            'staple_m',
-            type=float,
-            help='Staple molarity (mol/V)')
+        'staple_m',
+        type=float,
+        help='Staple molarity (mol/V)')
     parser.add_argument(
-            'stack_ene',
-            type=float,
-            help='Stacking energy (kb K)')
+        'scaffold_domains',
+        type=int,
+        help='Number of scaffold domains')
     parser.add_argument(
             '--reps',
             nargs='+',
@@ -99,14 +96,6 @@ def parse_args():
             nargs='+',
             type=str,
             help='Temperatures')
-    parser.add_argument('--tags',
-            nargs='+',
-            type=str,
-            help='Order parameter tags')
-    parser.add_argument('--tag_pairs',
-            nargs='+',
-            type=str,
-            help='Tags to calculate 2D pmf for (comma delim)')
 
     return parser.parse_args()
 
