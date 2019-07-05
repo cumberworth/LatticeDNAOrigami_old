@@ -13,6 +13,8 @@ from origamipy import conditions
 from origamipy import decorrelate
 from origamipy import outputs
 
+import numpy as np
+
 
 def main():
     args = parse_args()
@@ -21,12 +23,12 @@ def main():
     inp_filebase = create_input_filepathbase(args)
     sim_collections = outputs.create_sim_collections(inp_filebase,
             all_conditions, args.reps)
-    reps = sim_collections[0]._reps
-    reps_converged = [False for i in range(reps)]:
+    reps = len(sim_collections[0]._reps)
+    reps_converged = [False for i in range(reps)]
     for rep in range(reps):
         for sim_collection in sim_collections:
-            ops = sim_collection.get_reps_data('ops')
-            stacked_pairs = ops['stacked_pairs']
+            ops = sim_collection.get_reps_data('ops')[rep]
+            stacked_pairs = ops['numstackedpairs']
             fully_stacked = np.where(stacked_pairs == args.fully_stacked_pairs)
             if len(fully_stacked[0]) == 0:
                 continue
