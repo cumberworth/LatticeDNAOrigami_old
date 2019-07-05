@@ -44,7 +44,7 @@ def main():
             
     for i, assembled_values in enumerate(args.all_assembled_values):
         ax = axes[i]
-        ax.axhline(values, linestyle='--', color='0.8')
+        ax.axhline(assembled_values, linestyle='--', color='0.8')
 
     for system, vari in zip(args.systems, args.varis):
         sim_filebases = '{}/{}-{}'.format(args.input_dir, system, vari)
