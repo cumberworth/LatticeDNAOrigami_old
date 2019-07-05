@@ -32,6 +32,8 @@ def main():
                                                wspace=0.3, hspace=0.3)
     axes = create_axes(f, gs_main, yaxis_labels)
 
+    all_assembled_values = [(int(float) for b in a.split(',') for a in
+            all_assembled_values]
     for assembled_values in args.all_assembled_values:
         ax = axes[i]
         ax.axhline(values, linestyle='--', color='0.8')
@@ -95,7 +97,7 @@ def parse_args():
             '--all_assembled_values',
             nargs='+',
             type=str,
-            help='Bound staples, bound domains, misbound domains, '
+            help='Bound staples,bound domains,misbound domains,'
                     'fully stacked pairs')
 
     return parser.parse_args()
