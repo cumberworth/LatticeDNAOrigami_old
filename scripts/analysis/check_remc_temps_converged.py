@@ -13,7 +13,7 @@ from origamipy import files
 
 def main():
     args = parse_args()
-    error = ((args.old_temps - args.new_temps)**2).sum()
+    error = ((np.array(args.old_temps) - np.array(args.new_temps))**2).sum()
     ave_error = error / len(args.old_temps)
     if ave_error < args.threshold_error:
         print(1)
