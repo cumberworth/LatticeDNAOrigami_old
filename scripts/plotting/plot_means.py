@@ -25,12 +25,12 @@ def main():
         'Bound domain pairs',
         'Misbound domain pairs',
         'Stacked pairs']
-    figsize = (plot.cm_to_inches(14), plot.cm_to_inches(10))
+    figsize = (plot.cm_to_inches(14), plot.cm_to_inches(11))
 
     plot.set_default_appearance()
     f = plt.figure(figsize=figsize, dpi=300)
-    gs = gridspec.GridSpec(2, 2, width_ratios=[1, 1], height_ratios=[1, 1])
-    gs_main = gridspec.GridSpecFromSubplotSpec(2, 2, subplot_spec=gs[:, 0:2],
+    gs = gridspec.GridSpec(3, 2, width_ratios=[1, 1], height_ratios=[10, 10, 1])
+    gs_main = gridspec.GridSpecFromSubplotSpec(2, 2, subplot_spec=gs[:2, :],
                                                wspace=0.3, hspace=0.3)
     axes = create_axes(f, gs_main, yaxis_labels)
 
@@ -42,9 +42,10 @@ def main():
 
         all_assembled_values.append(parsed_values)
             
-    for i, assembled_values in enumerate(args.all_assembled_values):
-        ax = axes[i]
-        ax.axhline(assembled_values, linestyle='--', color='0.8')
+    for assembled_values in all_assembled_values:
+        for i, assembled_value in enumerate(assembled_values):
+            ax = axes[i]
+            ax.axhline(assembled_value, linestyle='--', color='0.8')
 
     for system, vari in zip(args.systems, args.varis):
         sim_filebases = '{}/{}-{}'.format(args.input_dir, system, vari)
@@ -59,11 +60,11 @@ def main():
             ax.errorbar(temps, means, yerr=stds, marker='o', label=vari)
 
     # Plot legend
-#    gs_lgd = gridspec.GridSpecFromSubplotSpec(1, 1, subplot_spec=gs[:, 2])
-    #ax = f.add_subplot(gs_lgd[0])
-    #ax.set_axis_off()
-    #handles, labels = axes[0].get_legend_handles_labels()
-    #ax.legend(handles, labels, loc='center', frameon=False, ncol=1)
+    gs_lgd = gridspec.GridSpecFromSubplotSpec(1, 1, subplot_spec=gs[2, :])
+    ax = f.add_subplot(gs_lgd[0])
+    ax.set_axis_off()
+    handles, labels = axes[0].get_legend_handles_labels()
+    ax.legend(handles, labels, loc='center', frameon=False, ncol=1)
 
     gs.tight_layout(f, pad=1.0, h_pad=0, w_pad=0)
     f.savefig(args.output_filebase + '.png', transparent=True)
