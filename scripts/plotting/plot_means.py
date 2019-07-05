@@ -6,6 +6,8 @@ Plots number of bound staples, number of bound domains, number of misbound
 domains, and number of stacked pairs.
 """
 
+import argparse
+
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
 
