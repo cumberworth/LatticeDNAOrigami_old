@@ -32,8 +32,14 @@ def main():
                                                wspace=0.3, hspace=0.3)
     axes = create_axes(f, gs_main, yaxis_labels)
 
-    all_assembled_values = [(int(float) for b in a.split(',') for a in
-            all_assembled_values]
+    all_assembled_values = []
+    for assembled_values in args.all_assembled_values:
+        parsed_values = []
+        for assembled_value in assembled_values:
+            parsed_values.append(int(assembled_value))
+
+        all_assembled_values.append(parsed_values)
+            
     for assembled_values in args.all_assembled_values:
         ax = axes[i]
         ax.axhline(values, linestyle='--', color='0.8')
