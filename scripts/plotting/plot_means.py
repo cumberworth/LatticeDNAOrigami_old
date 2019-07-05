@@ -8,6 +8,8 @@ domains, and number of stacked pairs.
 
 import argparse
 
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
 
