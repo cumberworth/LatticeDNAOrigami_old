@@ -37,7 +37,7 @@ def main():
     all_assembled_values = []
     for assembled_values in args.all_assembled_values:
         parsed_values = []
-        for assembled_value in assembled_values:
+        for assembled_value in assembled_values.split(','):
             parsed_values.append(int(assembled_value))
 
         all_assembled_values.append(parsed_values)
