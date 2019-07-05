@@ -42,7 +42,7 @@ def main():
 
         all_assembled_values.append(parsed_values)
             
-    for assembled_values in args.all_assembled_values:
+    for i, assembled_values in enumerate(args.all_assembled_values):
         ax = axes[i]
         ax.axhline(values, linestyle='--', color='0.8')
 
