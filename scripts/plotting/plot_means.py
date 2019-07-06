@@ -96,12 +96,12 @@ def parse_args():
             '--systems',
             nargs='+',
             type=str,
-            help='System file')
+            help='Systems')
     parser.add_argument(
             '--varis',
             nargs='+',
             type=str,
-            help='Simulation variant names')
+            help='Simulation variants')
     parser.add_argument(
             '--all_assembled_values',
             nargs='+',
