@@ -33,7 +33,7 @@ def main():
             if len(fully_stacked[0]) == 0:
                 continue
 
-            steps = ops['steps']
+            steps = ops['step']
             first_fully_stacked_step = steps[fully_stacked[0][0]]
             steps_since_fully_stacked = steps[-1] - first_fully_stacked_step
             if steps_since_fully_stacked > args.prod_steps:
