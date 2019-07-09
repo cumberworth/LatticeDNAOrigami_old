@@ -30,7 +30,7 @@ def main():
             ops = sim_collection.get_reps_data('ops')[rep]
             stacked_pairs = ops['numstackedpairs']
             fully_stacked = np.where(stacked_pairs == args.fully_stacked_pairs)[0]
-            if len(fully_stacked[0]) == 0:
+            if len(fully_stacked) == 0:
                 continue
 
             steps_since_fully_stacked = len(stacked_pairs) - fully_stacked[0]
