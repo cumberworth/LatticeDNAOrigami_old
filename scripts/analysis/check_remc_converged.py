@@ -29,7 +29,7 @@ def main():
         for sim_collection in sim_collections:
             ops = sim_collection.get_reps_data('ops')[rep]
             stacked_pairs = ops['numstackedpairs']
-            fully_stacked = np.where(stacked_pairs == args.fully_stacked_pairs)
+            fully_stacked = np.where(stacked_pairs == args.fully_stacked_pairs)[0]
             if len(fully_stacked[0]) == 0:
                 continue
 
