@@ -33,9 +33,7 @@ def main():
             if len(fully_stacked[0]) == 0:
                 continue
 
-            steps = ops['step']
-            first_fully_stacked_step = steps[fully_stacked[0][0]]
-            steps_since_fully_stacked = steps[-1] - first_fully_stacked_step
+            steps_since_fully_stacked = len(stacked_pairs) - fully_stacked[0]
             if steps_since_fully_stacked > args.prod_steps:
                 reps_converged[rep] = True
 
