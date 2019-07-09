@@ -36,6 +36,7 @@ def main():
             steps_since_fully_stacked = len(stacked_pairs) - fully_stacked[0]
             if steps_since_fully_stacked > args.prod_steps:
                 reps_converged[rep] = True
+                break
 
     if np.all(reps_converged):
         print(1)
