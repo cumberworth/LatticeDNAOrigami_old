@@ -37,6 +37,7 @@ def main():
         if filtered_count == 0:
             continue
 
+        sampled_ops.append(i)
         all_decor_outs.append(decor_outs)
         mbarw = mbar_wrapper.MBARWrapper(decor_outs)
         mbarw.perform_mbar()
