@@ -27,12 +27,16 @@ def main():
 
     mbarws = []
     all_decor_outs = []
+    sampled_ops = []
     for i in range(1, args.assembled_op + 1):
         sim_collections = outputs.create_sim_collections(inp_filebase,
                 all_conditions, args.reps)
         decor_outs = decorrelate.DecorrelatedOutputs(sim_collections, all_conditions)
         decor_outs.read_decors_from_files(data_only=True)
-        decor_outs.filter_collections(args.tag, i)
+        filtered_count = decor_outs.filter_collections(args.tag, i)
+        if filtered_count == 0:
+            continue
+
         all_decor_outs.append(decor_outs)
         mbarw = mbar_wrapper.MBARWrapper(decor_outs)
         mbarw.perform_mbar()
@@ -53,12 +57,11 @@ def main():
 
     aves, stds = calc_reduced_expectations(conds, mbarws, all_decor_outs, all_tags)
 
-    ops = np.arange(1, args.assembled_op + 1).astype(float)
-    aves = np.concatenate([[ops], np.array(aves).T])
+    aves = np.concatenate([[sampled_ops], np.array(aves).T])
     aves_file = files.TagOutFile('{}-{}.aves'.format(out_filebase, args.tag))
     aves_file.write([args.tag] + all_tags, aves.T)
 
-    stds = np.concatenate([[ops], np.array(stds).T])
+    stds = np.concatenate([[sampled_ops], np.array(stds).T])
     stds_file = files.TagOutFile('{}-{}.stds'.format(out_filebase, args.tag))
     stds_file.write([args.tag] + all_tags, stds.T)
 
