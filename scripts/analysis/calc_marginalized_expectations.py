@@ -62,6 +62,41 @@ def main():
     stds_file = files.TagOutFile('{}-{}.stds'.format(out_filebase, args.tag))
     stds_file.write([args.tag] + all_tags, stds.T)
 
+    # Hacky calculation for plotting a melting temperature LFE curve
+    sim_collections = outputs.create_sim_collections(inp_filebase,
+            all_conditions, args.reps)
+    decor_outs = decorrelate.DecorrelatedOutputs(sim_collections, all_conditions)
+    decor_outs.read_decors_from_files()
+    mbarw = mbar_wrapper.MBARWrapper(decor_outs)
+    mbarw.perform_mbar()
+    values = decor_outs.get_concatenated_series(args.tag)
+    decor_enes = decor_outs.get_concatenated_datatype('enes')
+    decor_ops = decor_outs.get_concatenated_datatype('ops')
+    bins = list(set(values))
+    value_to_bin = {value: i for i, value in enumerate(bins)}
+    bin_index_series = [value_to_bin[i] for i in values]
+    bin_index_series = np.array(bin_index_series)
+    conds = conditions.SimConditions({'temp': halfway_temp, 'staple_m': args.staple_m,
+            'bias': biases.NoBias()}, fileformatter)
+    lfes, lfe_stds = calc_lfes(mbarw, conds, bins, bin_index_series, decor_enes,
+            decor_ops)
+    header = np.array(['ops', melting_temp])
+    lfes_filebase = '{}_{}-lfes-melting'.format(out_filebase, args.tag)
+    lfes_file = files.TagOutFile('{}.aves'.format(lfes_filebase))
+    lfes = np.concatenate([[bins], [lfes]]).T
+    lfes_file.write(header, lfes)
+    stds_file = files.TagOutFile('{}.stds'.format(lfes_filebase))
+    lfe_stds = np.concatenate([[bins], [lfe_stds]]).T
+    stds_file.write(header, lfe_stds)
+
+
+def calc_lfes(mbarw, conds, bins, bin_index_series, decor_enes, decor_ops):
+    rpots = utility.calc_reduced_potentials(decor_enes, decor_ops,
+            conds)
+
+    return mbarw._mbar.computePMF(
+        rpots, bin_index_series, len(bins))
+
 
 def calc_reduced_expectations(conds, mbarws, all_decor_outs, tags):
     all_aves = []
