@@ -84,7 +84,7 @@ def main():
             'bias': biases.NoBias()}, fileformatter)
     lfes, lfe_stds = calc_lfes(mbarw, conds, bins, bin_index_series, decor_enes,
             decor_ops)
-    header = np.array(['ops', melting_temp])
+    header = np.array(['ops', args.temp])
     lfes_filebase = '{}_{}-lfes-melting'.format(out_filebase, args.tag)
     lfes_file = files.TagOutFile('{}.aves'.format(lfes_filebase))
     lfes = np.concatenate([[bins], [lfes]]).T
