@@ -165,12 +165,14 @@ class DecorrelatedOutputs:
                         self._datatype_to_decors[datatype][i][j].to_file(filebase)
 
     def filter_collections(self, filter_tag, value):
+        filtered_count = 0
         for i, sim_collection in enumerate(self._sim_collections):
             for j, rep in enumerate(sim_collection._reps):
 
                 # Create mask
                 selected_op = self._datatype_to_decors['ops'][i][j][filter_tag]
                 mask = selected_op == value
+                filtered_count += mask.sum()
 
                 # Apply mask
                 for datatype in self._datatypes:
@@ -181,3 +183,5 @@ class DecorrelatedOutputs:
 
                     reduced_data = np.array(reduced_data)
                     self._datatype_to_decors[datatype][i][j]._data = reduced_data
+
+        return filtered_count
