@@ -38,6 +38,9 @@ def main():
         ax.axis('off')
 
         aves, stds = plot.read_expectations(inp_filebase)
+        if not op_value in aves[op_tag].values:
+            continue
+
         reduced_aves = aves[aves[op_tag] == op_value]
         freqs = [reduced_aves[t] for t in tags]
         freq_array = fill_assembled_shape_array(freqs, index_to_domaintype)
