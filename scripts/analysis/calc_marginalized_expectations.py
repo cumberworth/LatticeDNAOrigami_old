@@ -80,7 +80,7 @@ def main():
     value_to_bin = {value: i for i, value in enumerate(bins)}
     bin_index_series = [value_to_bin[i] for i in values]
     bin_index_series = np.array(bin_index_series)
-    conds = conditions.SimConditions({'temp': halfway_temp, 'staple_m': args.staple_m,
+    conds = conditions.SimConditions({'temp': args.temp, 'staple_m': args.staple_m,
             'bias': biases.NoBias()}, fileformatter)
     lfes, lfe_stds = calc_lfes(mbarw, conds, bins, bin_index_series, decor_enes,
             decor_ops)
