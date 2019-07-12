@@ -21,7 +21,7 @@ import origamipy.plot as plot
 def main():
     args = parse_args()
     skip = 1
-    out_filebase = '{}/{}-{}_timeseries-{}'.format(args.output_dir,
+    out_filebase = '{}/{}-{}_timeseries'.format(args.output_dir,
             args.system, args.vari)
     tags = ['numstaples', 'numfulldomains', 'nummisdomains', 'numstackedpairs']
     labels = [
