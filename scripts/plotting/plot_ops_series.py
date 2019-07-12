@@ -22,7 +22,7 @@ def main():
     args = parse_args()
     skip = 1
     out_filebase = '{}/{}-{}_timeseries-{}'.format(args.output_dir,
-            args.system, args.vari, args.temp_i)
+            args.system, args.vari)
     tags = ['numstaples', 'numfulldomains', 'nummisdomains', 'numstackedpairs']
     labels = [
         'Bound staples',
@@ -116,10 +116,6 @@ def parse_args():
             'temp',
             type=str,
             help='Temperature to plot')
-    parser.add_argument(
-            'temp_i',
-            type=str,
-            help='Index of temperature')
     parser.add_argument(
             'runs',
             type=int,

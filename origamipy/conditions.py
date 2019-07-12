@@ -62,7 +62,7 @@ class SimConditions:
     @property
     def condition_to_characteristic_value(self):
         condition_to_char_value = {}
-        for key, value in self._conditions.items():
+        for key, value in sorted(self._conditions.items()):
             if 'bias' in key:
                 value = value.fileformat_value
 
@@ -103,7 +103,7 @@ class AllSimConditions:
 
     @property
     def condition_tags(self):
-        return list(self._conditions.keys())
+        return list(sorted(self._conditions.keys()))
 
     @property
     def condition_to_characteristic_values(self):
