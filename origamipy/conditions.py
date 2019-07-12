@@ -110,6 +110,6 @@ class AllSimConditions:
         condition_values = []
         for conditions in self:
             char_values = conditions.condition_to_characteristic_value
-            condition_values.append([v for v in char_values.values()])
+            condition_values.append([v for k, v in sorted(char_values.items())])
 
         return condition_values
