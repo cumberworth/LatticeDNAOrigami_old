@@ -87,7 +87,7 @@ def find_barrier(lfes, temp):
         print('No barrier detected at {}'.format(temp))
         return -1
 
-    maxima = lfes[maxima_i]
+    maxima = lfes.iloc[maxima_i]
     maximum_i = maxima.idxmax()
 
     return maximum_i
