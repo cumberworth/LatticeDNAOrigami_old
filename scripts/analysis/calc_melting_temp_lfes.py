@@ -47,6 +47,7 @@ def main():
             args.assembled_op)
     print('Halfway temperature: {} K'.format(np.around(halfway_temp, decimals=3)))
     bins = list(set(values))
+    bins.sort()
     value_to_bin = {value: i for i, value in enumerate(bins)}
     bin_index_series = [value_to_bin[i] for i in values]
     bin_index_series = np.array(bin_index_series)

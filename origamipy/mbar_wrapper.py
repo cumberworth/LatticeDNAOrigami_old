@@ -94,6 +94,7 @@ class MBARWrapper:
             print('Calculating 1D LFEs of {} ({} of {})'.format(tag, i, len(series_tags)))
             values = self._decor_outs.get_concatenated_series(tag)
             bins = list(set(values))
+            bins.sort()
             lfes, stds = self._calc_lfes(bins, values, reduced_conditions)
 
             # Ugly
