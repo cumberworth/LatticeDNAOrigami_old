@@ -20,7 +20,6 @@ def main():
 
     out_filebase = '{}_{}-barrier-vs-temp'.format(args.output_filebase,
             args.tag)
-
     figsize = (plot.cm_to_inches(18), plot.cm_to_inches(12))
     plot.set_default_appearance()
     f = plt.figure(figsize=figsize, dpi=300)

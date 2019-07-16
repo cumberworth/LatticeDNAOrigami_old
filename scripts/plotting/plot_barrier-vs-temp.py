@@ -24,7 +24,7 @@ def main():
     figsize = (plot.cm_to_inches(18), plot.cm_to_inches(12))
     plot.set_default_appearance()
     f = plt.figure(figsize=figsize, dpi=300)
-    ax = f.add_subplot()
+    ax = f.add_subplot(111)
     ax.set_xlabel('Temperature / K')
 
     # Calculate barriers
