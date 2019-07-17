@@ -17,7 +17,7 @@ class StackingBias:
     def __init__(self, stack_energy, stack_mult):
         self._stack_energy = stack_energy
         self._stack_mult = stack_mult
-        self._complementary_stack_mult = 1 - stack_mult
+        self._complementary_stack_mult = 1 - float(stack_mult)
 
     def __call__(self, order_params):
         total_stack_energy = order_params[STACK_TAG]*self._stack_energy

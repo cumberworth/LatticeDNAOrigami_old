@@ -78,12 +78,14 @@ class MBARWrapper:
 
         return ave, std
 
-    def calc_1d_lfes(self, reduced_conditions, filebase):
+    def calc_1d_lfes(self, reduced_conditions, filebase, xtag='temp'):
         print('Calculating all 1D LFEs')
 
         # This is bad
-        temps = [c.temp for c in reduced_conditions]
-        all_tags = self._decor_outs.all_conditions.condition_tags
+        all_conds = reduced_conditions.condition_to_characteristic_values
+        all_tags = reduced_conditions.condition_tags
+        xvar_i = all_tags.index(xtag)
+        xvars = [c[xvar_i] for c in all_conds]
         series_tags = self._decor_outs.all_series_tags
 
         # Also bad
@@ -98,7 +100,7 @@ class MBARWrapper:
             lfes, stds = self._calc_lfes(bins, values, reduced_conditions)
 
             # Ugly
-            header = np.concatenate([['ops'], temps])
+            header = np.concatenate([['ops'], xvars])
             lfes_filebase = '{}_{}-lfes'.format(filebase, tag)
 
             lfes_file = files.TagOutFile('{}.aves'.format(lfes_filebase))

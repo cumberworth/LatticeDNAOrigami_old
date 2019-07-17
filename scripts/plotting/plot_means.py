@@ -52,12 +52,12 @@ def main():
         all_aves, all_stds = plot.read_expectations(sim_filebases)
         reduced_aves = all_aves[all_aves.bias == 0]
         reduced_stds = all_stds[all_stds.bias == 0]
-        temps = reduced_aves.temp
+        xvars = reduced_aves[args.xtag]
         for i, tag in enumerate(tags):
             means = reduced_aves[tag]
             stds = reduced_stds[tag]
             ax = axes[i]
-            ax.errorbar(temps, means, yerr=stds, marker='o', label=vari)
+            ax.errorbar(xvars, means, yerr=stds, marker='o', label=vari)
 
     # Plot legend
     gs_lgd = gridspec.GridSpecFromSubplotSpec(1, 1, subplot_spec=gs[2, :])
@@ -108,6 +108,11 @@ def parse_args():
             type=str,
             help='Bound staples,bound domains,misbound domains,'
                     'fully stacked pairs')
+    parser.add_argument(
+            '--xtag',
+            default='temp',
+            type=str,
+            help='Dependent variable tag')
 
     return parser.parse_args()
 

@@ -28,8 +28,8 @@ def main():
     ax = create_axis(f, gs, args.system)
     aves, stds = plot.read_expectations(filebase)
     for j, tag in enumerate(tags):
-        temps = aves.temp
-        ax.errorbar(temps, aves[tag], yerr=stds[tag], marker='o')
+        xvars = aves[args.xtag]
+        ax.errorbar(xvars, aves[tag], yerr=stds[tag], marker='o')
 
         # Write to file
         plt.tight_layout(pad=0.5, h_pad=0, w_pad=0)
@@ -79,6 +79,11 @@ def parse_args():
             'stapletypes',
             type=int,
             help='Number of staple types')
+    parser.add_argument(
+            '--xtag',
+            default='temp',
+            type=str,
+            help='Dependent variable tag')
 
     return parser.parse_args()
 
