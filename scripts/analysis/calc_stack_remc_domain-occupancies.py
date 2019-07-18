@@ -54,7 +54,7 @@ def construct_conditions(args, fileformatter):
         stack_bias = biases.StackingBias(1, stack_mult)
         stack_biases.append(stack_bias)
 
-    conditions_map = {'temp': args.temp,
+    conditions_map = {'temp': [args.temp],
                       'staple_m': [args.staple_m],
                       'bias': stack_biases}
 
