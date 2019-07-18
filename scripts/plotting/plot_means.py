@@ -50,12 +50,10 @@ def main():
     for system, vari in zip(args.systems, args.varis):
         sim_filebases = '{}/{}-{}'.format(args.input_dir, system, vari)
         all_aves, all_stds = plot.read_expectations(sim_filebases)
-        reduced_aves = all_aves[all_aves.bias == 0]
-        reduced_stds = all_stds[all_stds.bias == 0]
-        xvars = reduced_aves[args.xtag]
+        xvars = all_aves[args.xtag]
         for i, tag in enumerate(tags):
-            means = reduced_aves[tag]
-            stds = reduced_stds[tag]
+            means = all_aves[tag]
+            stds = all_stds[tag]
             ax = axes[i]
             ax.errorbar(xvars, means, yerr=stds, marker='o', label=vari)
 
