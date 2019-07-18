@@ -76,7 +76,7 @@ def construct_fileformatter():
 def construct_conditions(args, fileformatter):
     stack_biases = []
     for stack_mult in args.stack_mults:
-        stack_bias = biases.StackingBias(args.stack_ene, stack_mult)
+        stack_bias = biases.StackingBias(1, stack_mult)
         stack_biases.append(stack_bias)
 
     conditions_map = {'temp': args.temp,
