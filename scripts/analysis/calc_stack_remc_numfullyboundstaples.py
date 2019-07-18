@@ -41,17 +41,22 @@ def main():
                 back_ops.to_file(back_ops_filebase)
 
 
+def construct_fileformatter():
+    specs = [conditions.ConditionsFileformatSpec('bias', '{}')]
+    return conditions.ConditionsFileformatter(specs)
+
+
 def construct_conditions(args, fileformatter):
-    conditions_map = {'temp': args.temps,
+    stack_biases = []
+    for stack_mult in args.stack_mults:
+        stack_bias = biases.StackingBias(args.stack_ene, stack_mult)
+        stack_biases.append(stack_bias)
+
+    conditions_map = {'temp': args.temp,
                       'staple_m': [args.staple_m],
-                      'bias': [biases.NoBias()]}
+                      'bias': stack_biases}
 
     return conditions.AllSimConditions(conditions_map, fileformatter)
-
-
-def construct_fileformatter():
-    specs = [conditions.ConditionsFileformatSpec('temp', '{}')]
-    return conditions.ConditionsFileformatter(specs)
 
 
 def create_input_filepathbase(args):
@@ -76,6 +81,10 @@ def parse_args():
             'output_dir',
             type=str,
             help='Directory to output to')
+    parser.add_argument(
+        'temp',
+        type=float,
+        help='Temperature (K)')
     parser.add_argument(
         'staple_m',
         type=float,
