@@ -86,10 +86,10 @@ def parse_args():
             type=int,
             help='Reps (leave empty for all available)')
     parser.add_argument(
-            '--temps',
+            '--stack_mults',
             nargs='+',
             type=str,
-            help='Temperatures')
+            help='Stack multiplieres')
 
     return parser.parse_args()
 
