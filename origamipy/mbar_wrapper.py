@@ -46,6 +46,7 @@ class MBARWrapper:
             all_stds.append(stds)
 
         all_conds = self._decor_outs.all_conditions.condition_to_characteristic_values
+        all_conds = np.array(all_conds, dtype=float)
         aves_file = files.TagOutFile('{}.aves'.format(filebase))
         aves_file.write(all_tags, np.concatenate([all_conds,
                                                   np.array(all_aves).T], axis=1))
