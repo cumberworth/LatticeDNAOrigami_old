@@ -7,8 +7,6 @@ import random
 
 import numpy as np
 
-from origamipy.op_process import *
-
 def create_win_filename(win, filebase, ext):
     """Create filename for given window."""
     postfix = '_win'
@@ -61,6 +59,16 @@ def read_windows_file(filename):
 
 
     return tags, wins
+
+
+def get_op_tags_from_bias_functions(bias_functions, bias_tags):
+    op_tags = []
+    for bias_tag in bias_tags:
+        for bias in bias_functions['origami']['bias_functions']:
+            if bias_tag == bias['tag']:
+                op_tags.append(bias['ops'][0])
+
+    return op_tags
 
 
 def read_win_energies(win_filebases):

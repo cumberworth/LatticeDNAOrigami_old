@@ -34,10 +34,19 @@ class EnumCollection:
                                             axis=1))
 
 
-class SimCollection:
-    """Output data for all runs of each replica of a simulation."""
+def create_sim_collections(filebase, all_conditions, reps):
+    sim_collections = []
+    for conditions in all_conditions:
+        sim_collection = SimCollection(filebase, conditions, reps)
+        sim_collections.append(sim_collection)
 
-    filebase_template = '{}_run-{}_rep-{}-{}'
+    return sim_collections
+
+
+class SimCollection:
+    """Output data for single run and replica of a simulation."""
+
+    filebase_template = '{}_run-{}_rep-{}_{}'
     decor_filebase_template = '{}_rep-{}-{}_decor'
 
     def __init__(self, filebase, conditions, reps):
@@ -252,10 +261,47 @@ class SimCollection:
         return series
 
 
-def create_sim_collections(filebase, all_conditions, reps):
-    sim_collections = []
-    for conditions in all_conditions:
-        sim_collection = SimCollection(filebase, conditions, reps)
-        sim_collections.append(sim_collection)
+class SimpleSimCollection:
+    """Output data for all runs of each replica of a simulation."""
 
-    return sim_collections
+    def __init__(self, filebase, conditions, reps):
+        self.conditions = conditions
+        self.filebase = filebase
+        self._datatypes = {}
+        self._trjtypes = {}
+
+    def get_data(self, tag, concatenate=True):
+        if tag not in self._datatypes.keys():
+            self._datatypes[tag] = self._load_data(tag)
+
+        return self._datatypes[tag]
+
+    def _load_data(self, tag):
+        if 'enes' in tag:
+            series = datatypes.Energies.from_file(self.filebase,
+                    float(self.conditions.temp))
+        if 'ops' in tag:
+            series = datatypes.OrderParams.from_file(self.filebase)
+        if 'staples' in tag:
+            series = datatypes.NumStaplesOfType.from_file(self.filebase)
+        if 'staplestates' in tag:
+            series = datatypes.StapleTypeStates.from_file(self.filebase)
+
+        return series
+
+    def get_trj(self, tag):
+        if tag not in self._trjtypes.keys():
+            self._trjtypes[tag] = self._load_trj(tag)
+
+        return self._trjtypes[tag]
+
+    def _load_trj(self, tag):
+        filename = '{}.{}'.format(self.filebase, tag)
+        if tag in ['trj', 'vcf']:
+            trj = files.UnparsedMultiLineStepInpFile(filename, 0)
+        elif tag in ['ores', 'states']:
+            trj = files.UnparsedSingleLineStepInpFile(filename, 0)
+        else:
+            NotImplementedError
+
+        return trj
