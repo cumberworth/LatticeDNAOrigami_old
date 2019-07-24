@@ -22,7 +22,7 @@ def main():
     figsize = (plot.cm_to_inches(14), plot.cm_to_inches(10))
     plot.set_default_appearance()
     f = plt.figure(figsize=figsize, dpi=300)
-    ax = f.add_subplot()
+    ax = f.add_subplot(1, 1, 1)
     ax.set_ylabel('$k_\mathrm{b}T$')
     ax.set_ylim([-0.5, 20])
 
