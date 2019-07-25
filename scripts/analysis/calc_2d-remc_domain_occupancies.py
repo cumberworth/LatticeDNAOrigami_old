@@ -1,15 +1,16 @@
 #!/usr/bin/env python
 
-"""Carry out standard MBAR analysis on 2D REMC simulation output.
+"""Calculate scaffold domain occupancies for a simulation set"""
 
-The exchange variables are assumed to be temperature and stacking multiplier,
-in that order.
-"""
 
 import argparse
+import os.path
 
-from origamipy import conditions
+import numpy as np
+
 from origamipy import biases
+from origamipy import conditions
+from origamipy import datatypes
 from origamipy import outputs
 from origamipy import decorrelate
 from origamipy import mbar_wrapper
@@ -22,19 +23,24 @@ def main():
     inp_filebase = create_input_filepathbase(args)
     sim_collections = outputs.create_sim_collections(inp_filebase,
             all_conditions, args.reps)
-    decor_outs = decorrelate.DecorrelatedOutputs(sim_collections, all_conditions)
-    decor_outs.read_decors_from_files()
+    for sim_collection in sim_collections:
+        for rep in sim_collection._reps:
+            ops = sim_collection.get_reps_data('ops', concatenate=False)
+            runs = len(ops[rep])
+            for run in range(runs):
+                run_filebase = sim_collection.get_filebase(run, rep)
+                states_filename = '{}.states'.format(run_filebase)
+                states = np.loadtxt(states_filename)[:, :args.scaffold_domains]
+                states = states == 2
+                ops = datatypes.OrderParams.from_file(run_filebase)
+                for i in range(args.scaffold_domains):
+                    tag = 'domainstate{}'.format(i)
+                    if tag in ops.tags:
+                        ops[tag] = states[:, i]
+                    else:
+                        ops.add_column(tag, states[:, i])
 
-    mbarw = mbar_wrapper.MBARWrapper(decor_outs)
-    mbarw.perform_mbar()
-
-    out_filebase = create_output_filepathbase(args)
-    mbarw.calc_all_expectations(out_filebase)
-    for smult in args.stack_mults:
-        reduced_conditions = construct_variable_temp_conditions(
-            args, smult, fileformatter)
-        reduced_out_filebase = '{}-{}'.format(out_filebase, smult)
-        mbarw.calc_1d_lfes(reduced_conditions, reduced_out_filebase)
+                ops.to_file(run_filebase)
 
 
 def construct_conditions(args, fileformatter):
@@ -66,33 +72,20 @@ def create_output_filepathbase(args):
     return '{}/{}'.format(args.output_dir, args.filebase)
 
 
-def construct_variable_temp_conditions(args, stack_mult, fileformatter):
-    stack_bias = biases.StackingBias(args.stack_ene, stack_mult)
-    conditions_map = {'temp': args.temps,
-                      'staple_m': [args.staple_m],
-                      'bias': [stack_bias]}
-
-    return conditions.AllSimConditions(conditions_map, fileformatter)
-
-
-def parse_tag_pairs(tag_pairs):
-    return [tuple(tag_pair.split(',')) for tag_pair in tag_pairs]
-
-
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        'filebase',
-        type=str,
-        help='Base name for files')
+            'filebase',
+            type=str,
+            help='Base name for files')
     parser.add_argument(
-        'input_dir',
-        type=str,
-        help='Directory of inputs')
+            'input_dir',
+            type=str,
+            help='Directory of inputs')
     parser.add_argument(
-        'output_dir',
-        type=str,
-        help='Directory to output to')
+            'output_dir',
+            type=str,
+            help='Directory to output to')
     parser.add_argument(
         'staple_m',
         type=float,
@@ -102,25 +95,24 @@ def parse_args():
         type=float,
         help='Stacking energy (kb K)')
     parser.add_argument(
-        '--reps',
-        nargs='+',
+        'scaffold_domains',
         type=int,
-        help='Reps (leave empty for all available)')
+        help='Number of scaffold domains')
     parser.add_argument(
-        '--temps',
-        nargs='+',
-        type=str,
-        help='Temperatures')
+            '--reps',
+            nargs='+',
+            type=int,
+            help='Reps (leave empty for all available)')
+    parser.add_argument(
+            '--temps',
+            nargs='+',
+            type=str,
+            help='Temperatures')
     parser.add_argument(
         '--stack_mults',
         nargs='+',
         type=str,
         help='Stacking energy multipliers')
-    parser.add_argument(
-        '--tag_pairs',
-        nargs='+',
-        type=str,
-        help='Tags to calculate 2D pmf for (comma delim)')
 
     return parser.parse_args()
 

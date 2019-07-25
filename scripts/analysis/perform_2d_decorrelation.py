@@ -27,6 +27,7 @@ def main():
     decor_outs.apply_masks()
     decor_outs.write_decors_to_files()
 
+
 def construct_conditions(args, fileformatter):
     stack_biases = []
     for stack_mult in args.stack_mults:
@@ -42,8 +43,8 @@ def construct_conditions(args, fileformatter):
 
 def construct_fileformatter():
     specs = []
-    specs.append(conditions.ConditionsFileformatSpec('temp', '{:d}'))
-    specs.append(conditions.ConditionsFileformatSpec('bias', '{:.1f}'))
+    specs.append(conditions.ConditionsFileformatSpec('temp', '{}'))
+    specs.append(conditions.ConditionsFileformatSpec('bias', '{}'))
 
     return conditions.ConditionsFileformatter(specs)
 
@@ -90,12 +91,12 @@ def parse_args():
     parser.add_argument(
         '--temps',
         nargs='+',
-        type=int,
+        type=str,
         help='Temperatures')
     parser.add_argument(
         '--stack_mults',
         nargs='+',
-        type=float,
+        type=str,
         help='Stacking energy multipliers')
 
     return parser.parse_args()

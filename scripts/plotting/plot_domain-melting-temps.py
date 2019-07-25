@@ -33,6 +33,10 @@ def main():
     ax.axis('off')
 
     aves, stds = plot.read_expectations(inp_filebase)
+    if args.rtag:
+        aves = aves[aves[args.rtag] == args.rvalue]
+        stds = stds[stds[args.rtag] == args.rvalue]
+
     temps = aves.temp
 
     melting_points = estimate_melting_points(args.scaffolddomains, aves, temps)
@@ -101,6 +105,14 @@ def parse_args():
             'mapfile',
             type=str,
             help='Index-to-staple type map filename')
+    parser.add_argument(
+            '--rtag',
+            type=str,
+            help='Tag to slice on')
+    parser.add_argument(
+            '--rvalue',
+            type=float,
+            help='Slice value')
 
     return parser.parse_args()
 

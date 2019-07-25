@@ -27,6 +27,10 @@ def main():
     gs = gridspec.GridSpec(1, 2, width_ratios=[10, 1], height_ratios=[1])
     ax = create_axis(f, gs, args.system)
     aves, stds = plot.read_expectations(filebase)
+    if args.rtag:
+        aves = aves[aves[args.rtag] == args.rvalue]
+        stds = stds[stds[args.rtag] == args.rvalue]
+
     for j, tag in enumerate(tags):
         xvars = aves[args.xtag]
         ax.errorbar(xvars, aves[tag], yerr=stds[tag], marker='o')
@@ -84,6 +88,14 @@ def parse_args():
             default='temp',
             type=str,
             help='Dependent variable tag')
+    parser.add_argument(
+            '--rtag',
+            type=str,
+            help='Tag to slice on')
+    parser.add_argument(
+            '--rvalue',
+            type=float,
+            help='Slice value')
 
     return parser.parse_args()
 

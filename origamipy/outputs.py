@@ -46,7 +46,7 @@ def create_sim_collections(filebase, all_conditions, reps):
 class SimCollection:
     """Output data for single run and replica of a simulation."""
 
-    filebase_template = '{}_run-{}_rep-{}_{}'
+    filebase_template = '{}_run-{}_rep-{}-{}'
     decor_filebase_template = '{}_rep-{}-{}_decor'
 
     def __init__(self, filebase, conditions, reps):
