@@ -34,11 +34,12 @@ class StackingBias:
 
 class GridBias:
     """Grid bias with linear step well outside grid."""
-    def __init__(self, tags, window, min_outside_bias, slope, inp_filebase):
+    def __init__(self, tags, window, min_outside_bias, slope, temp, inp_filebase):
         self._tags = tags
         self._window = window
         self._min_outside_bias = min_outside_bias
         self._slope = slope
+        self._temp = temp
 
         # Create window file postfix
         self._postfix = '_win'
@@ -83,7 +84,7 @@ class GridBias:
 
             biases.append(bias)
 
-        return np.array(biases);
+        return np.array(biases) * self._temp;
 
     @property
     def fileformat_value(self):
