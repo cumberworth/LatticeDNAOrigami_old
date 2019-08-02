@@ -103,7 +103,7 @@ def parse_args():
     parser.add_argument(
         '--stack_mults',
         nargs='+',
-        type=float,
+        type=str,
         help='Stacking energy multipliers')
 
     return parser.parse_args()
