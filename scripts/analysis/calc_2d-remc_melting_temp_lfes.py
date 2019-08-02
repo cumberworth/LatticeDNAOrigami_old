@@ -45,7 +45,7 @@ def main():
     decor_ops = decor_outs.get_concatenated_datatype('ops')
     halfway_temp = estimate_halfway_temp(mbarw, values, all_conditions,
             args.assembled_op)
-    print('Halfway temperature: {} K'.format(np.around(halfway_temp, decimals=3)))
+    print('Halfway temperature: {:.3f} K'.format(np.around(halfway_temp, decimals=3)))
     bins = list(set(values))
     bins.sort()
     value_to_bin = {value: i for i, value in enumerate(bins)}
@@ -62,8 +62,8 @@ def main():
     barrier_i = find_barrier(lfes)
     melting_temp = np.around(melting_temp, decimals=3)
 
-    print('Estimated melting temperature: {} K'.format(melting_temp))
-    print('Barrier height: {} kT'.format(barrier_height))
+    print('Estimated melting temperature: {:.3f} K'.format(melting_temp))
+    print('Barrier height: {:.3f} kT'.format(barrier_height))
     print('Barrier peak: {}'.format(bins[barrier_i]))
 
     header = np.array(['ops', melting_temp])

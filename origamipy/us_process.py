@@ -196,3 +196,22 @@ def select_config_by_op_in_win(i, win, ops, op_to_config):
     config = possible_configs[sel_config]
 
     return config
+
+
+def find_closest_ops(point, ops):
+    """Find closest ops in given list that is closest to specified value
+    
+    Returns a list of all ops that are have the minimum distance found."""
+    dist = 0
+    points = []
+    while len(points) == 0:
+        dist += 1
+        for op in ops:
+            calc_dist = 0
+            for i in range(len(op)):
+                calc_dist += abs(point[i] - op[i])
+
+            if calc_dist <= dist:
+                points.append(op)
+
+    return points
