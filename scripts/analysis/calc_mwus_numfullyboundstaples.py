@@ -60,7 +60,7 @@ def construct_conditions(args, fileformatter, inp_filebase):
         for rep in range(args.reps):
             filebase = '{}_run-{}_rep-{}'.format(inp_filebase, args.run, rep)
             grid_biases.append(biases.GridBias(op_tags, window,
-                    min_outside_bias, slope, filebase))
+                    min_outside_bias, slope, args.temp, filebase))
 
     conditions_map = {'temp': [args.temp],
                       'staple_m': [args.staple_m],
