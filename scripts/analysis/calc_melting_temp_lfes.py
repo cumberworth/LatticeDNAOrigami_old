@@ -45,6 +45,9 @@ def main():
     decor_ops = decor_outs.get_concatenated_datatype('ops')
     halfway_temp = estimate_halfway_temp(mbarw, values, all_conditions,
             args.assembled_op)
+    if args.guess_temp is not None:
+        halfway_temp = args.guess_temp
+
     print('Halfway temperature: {:.3f} K'.format(np.around(halfway_temp, decimals=3)))
     bins = list(set(values))
     bins.sort()
@@ -249,6 +252,10 @@ def parse_args():
     parser.add_argument('scaffold_domains',
             type=int,
             help='Number of scaffold domains')
+    parser.add_argument(
+            '--guess_temp',
+            type=float,
+            help='Temperature (K)')
     parser.add_argument(
             '--reps',
             nargs='+',
