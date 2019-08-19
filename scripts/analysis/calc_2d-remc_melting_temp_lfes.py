@@ -60,9 +60,9 @@ def main():
             decor_ops)
     barrier_height = np.around(calc_forward_barrier_height(lfes), decimals=3)
     barrier_i = find_barrier(lfes)
-    melting_temp = np.around(melting_temp, decimals=3)
+    melting_temp = '{:.3f}'.format(np.around(melting_temp, decimals=3))
 
-    print('Estimated melting temperature: {:.3f} K'.format(melting_temp))
+    print('Estimated melting temperature: {} K'.format(melting_temp))
     print('Barrier height: {:.3f} kT'.format(barrier_height))
     print('Barrier peak: {}'.format(bins[barrier_i]))
 
