@@ -31,7 +31,6 @@ def main():
                 args.tag)
         lfes = pd.read_csv('{}.aves'.format(filebase), sep=' ', index_col=0)
         lfe_stds = pd.read_csv('{}.stds'.format(filebase), sep=' ', index_col=0)
-        temps = np.array(lfes.columns[1:], dtype=float)
         temp = lfes.columns[0]
         lfes = lfes[temp]
         lfe_stds = lfe_stds[temp]

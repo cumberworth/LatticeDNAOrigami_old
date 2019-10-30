@@ -74,6 +74,28 @@ def main():
     lfe_stds = np.concatenate([[bins], [lfe_stds]]).T
     stds_file.write(header, lfe_stds)
 
+    # Calculated 2D LFEs
+    tag2 = 'numfulldomains'
+    decor_op_pairs = list(zip(decor_outs.get_concatenated_series(args.tag),
+                             decor_outs.get_concatenated_series(tag2)))
+    bins = list(set(decor_op_pairs))
+    value_to_bin = {value: i for i, value in enumerate(bins)}
+    bin_index_series = [value_to_bin[i] for i in decor_op_pairs]
+    bin_index_series = np.array(bin_index_series)
+    lfes, lfe_stds = calc_lfes(mbarw, conds, bins, bin_index_series, decor_enes,
+            decor_ops)
+    header = np.array([args.tag, tag2, melting_temp])
+    lfes_filebase = '{}_{}-{}-lfes-melting'.format(out_filebase, args.tag, tag2)
+    bins = np.array(bins).reshape(len(bins), 2)
+
+    lfes = np.concatenate([bins, np.array(lfes, ndmin=2).T], axis=1)
+    lfes_file = files.TagOutFile('{}.aves'.format(lfes_filebase))
+    lfes_file.write(header, lfes)
+
+    lfe_stds = np.concatenate([bins, np.array(lfe_stds, ndmin=2).T], axis=1)
+    stds_file = files.TagOutFile('{}.stds'.format(lfes_filebase))
+    stds_file.write(header, lfe_stds)
+
     # Calculate expectations along the selected OP
     mbarws = []
     all_decor_outs = []

@@ -6,12 +6,13 @@
 .color_coded
 .prereqs.txt
 .ycm_extra_conf.py*
-LICENSE.old
+compile_commands.json
 prereqs.txt
 scripts/ideal_random_walks/num_walks.arch
 *__pycache__/
 .cache/
 .d/
+.vim/
 archive/
 bin/
 build/
