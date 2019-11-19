@@ -11,6 +11,7 @@ import numpy as np
 from origamipy import biases
 from origamipy import conditions
 from origamipy import datatypes
+from origamipy import files
 from origamipy import outputs
 from origamipy import decorrelate
 from origamipy import mbar_wrapper
@@ -18,11 +19,12 @@ from origamipy import mbar_wrapper
 
 def main():
     args = parse_args()
+    system_file = files.JSONStructInpFile(args.system_filename)
     fileformatter = construct_fileformatter()
-    all_conditions = construct_conditions(args, fileformatter)
+    all_conditions = construct_conditions(args, fileformatter, system_file)
     inp_filebase = create_input_filepathbase(args)
     sim_collections = outputs.create_sim_collections(inp_filebase,
-            all_conditions, args.reps)
+                                                     all_conditions, args.reps)
     for sim_collection in sim_collections:
         for rep in sim_collection._reps:
             ops = sim_collection.get_reps_data('ops', concatenate=False)
@@ -48,7 +50,7 @@ def construct_fileformatter():
     return conditions.ConditionsFileformatter(specs)
 
 
-def construct_conditions(args, fileformatter):
+def construct_conditions(args, fileformatter, system_file):
     stack_biases = []
     for stack_mult in args.stack_mults:
         stack_bias = biases.StackingBias(1, stack_mult)
@@ -58,7 +60,7 @@ def construct_conditions(args, fileformatter):
                       'staple_m': [args.staple_m],
                       'bias': stack_biases}
 
-    return conditions.AllSimConditions(conditions_map, fileformatter)
+    return conditions.AllSimConditions(conditions_map, fileformatter, system_file)
 
 
 def create_input_filepathbase(args):
@@ -72,17 +74,21 @@ def create_output_filepathbase(args):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-            'filebase',
-            type=str,
-            help='Base name for files')
+        'system_filename',
+        type=str,
+        help='System file')
     parser.add_argument(
-            'input_dir',
-            type=str,
-            help='Directory of inputs')
+        'filebase',
+        type=str,
+        help='Base name for files')
     parser.add_argument(
-            'output_dir',
-            type=str,
-            help='Directory to output to')
+        'input_dir',
+        type=str,
+        help='Directory of inputs')
+    parser.add_argument(
+        'output_dir',
+        type=str,
+        help='Directory to output to')
     parser.add_argument(
         'temp',
         type=float,
@@ -96,10 +102,10 @@ def parse_args():
         type=int,
         help='Number of scaffold domains')
     parser.add_argument(
-            '--reps',
-            nargs='+',
-            type=int,
-            help='Reps (leave empty for all available)')
+        '--reps',
+        nargs='+',
+        type=int,
+        help='Reps (leave empty for all available)')
     parser.add_argument(
         '--stack_mults',
         nargs='+',

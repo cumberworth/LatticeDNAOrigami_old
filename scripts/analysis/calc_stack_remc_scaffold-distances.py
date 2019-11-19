@@ -24,10 +24,10 @@ def main():
     domain_pairs = parse_domain_pairs(args.domain_pairs)
 
     fileformatter = construct_fileformatter()
-    all_conditions = construct_conditions(args, fileformatter)
+    all_conditions = construct_conditions(args, fileformatter, system_filename)
     inp_filebase = create_input_filepathbase(args)
     sim_collections = outputs.create_sim_collections(inp_filebase,
-            all_conditions, args.reps)
+                                                     all_conditions, args.reps)
     for sim_collection in sim_collections:
         for rep in sim_collection._reps:
             ops = sim_collection.get_reps_data('ops', concatenate=False)
@@ -43,15 +43,18 @@ def main():
                     for j, domain_pair in enumerate(domain_pairs):
                         pos_i = config[domain_pair[0]]
                         pos_j = config[domain_pair[1]]
-                        all_dists[j].append(config_process.calc_dist(pos_i, pos_j))
+                        all_dists[j].append(
+                            config_process.calc_dist(pos_i, pos_j))
 
                 for domain_pair, dists in zip(domain_pairs, all_dists):
-                    dist_tag = 'dist-d{}-d{}'.format(domain_pair[0], domain_pair[1])
+                    dist_tag = 'dist-d{}-d{}'.format(
+                        domain_pair[0], domain_pair[1])
                     if dist_tag in ops.tags:
                         ops[dist_tag] = dists
                     else:
                         ops.add_column(dist_tag, dists)
-                    adj_tag = 'adj-d{}-d{}'.format(domain_pair[0], domain_pair[1])
+                    adj_tag = 'adj-d{}-d{}'.format(
+                        domain_pair[0], domain_pair[1])
                     adj_sites = np.array(dists) == 1
                     if adj_tag in ops.tags:
                         ops[adj_tag] = adj_sites
@@ -73,7 +76,7 @@ def construct_fileformatter():
     return conditions.ConditionsFileformatter(specs)
 
 
-def construct_conditions(args, fileformatter):
+def construct_conditions(args, fileformatter, system_filename):
     stack_biases = []
     for stack_mult in args.stack_mults:
         stack_bias = biases.StackingBias(1, stack_mult)
@@ -83,7 +86,7 @@ def construct_conditions(args, fileformatter):
                       'staple_m': [args.staple_m],
                       'bias': stack_biases}
 
-    return conditions.AllSimConditions(conditions_map, fileformatter)
+    return conditions.AllSimConditions(conditions_map, fileformatter, system_filename)
 
 
 def create_input_filepathbase(args):
@@ -105,21 +108,21 @@ def parse_domain_pairs(domain_pair_strings):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-            'system_filename',
-            type=str,
-            help='System file')
+        'system_filename',
+        type=str,
+        help='System file')
     parser.add_argument(
-            'filebase',
-            type=str,
-            help='Base name for files')
+        'filebase',
+        type=str,
+        help='Base name for files')
     parser.add_argument(
-            'input_dir',
-            type=str,
-            help='Directory of inputs')
+        'input_dir',
+        type=str,
+        help='Directory of inputs')
     parser.add_argument(
-            'output_dir',
-            type=str,
-            help='Directory to output to')
+        'output_dir',
+        type=str,
+        help='Directory to output to')
     parser.add_argument(
         'temp',
         type=float,
@@ -129,20 +132,20 @@ def parse_args():
         type=float,
         help='Staple molarity (mol/V)')
     parser.add_argument(
-            '--reps',
-            nargs='+',
-            type=int,
-            help='Reps (leave empty for all available)')
+        '--reps',
+        nargs='+',
+        type=int,
+        help='Reps (leave empty for all available)')
     parser.add_argument(
         '--stack_mults',
         nargs='+',
         type=str,
         help='Stacking energy multipliers')
     parser.add_argument(
-            '--domain_pairs',
-            nargs='+',
-            type=str,
-            help='Scaffold domain pairs to calculate distances between')
+        '--domain_pairs',
+        nargs='+',
+        type=str,
+        help='Scaffold domain pairs to calculate distances between')
 
     return parser.parse_args()
 

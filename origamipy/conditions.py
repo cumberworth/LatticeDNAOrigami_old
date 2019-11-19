@@ -3,6 +3,8 @@
 import collections
 import itertools
 
+import numpy as np
+
 from origamipy import biases
 
 
@@ -29,12 +31,13 @@ class ConditionsFileformatter:
 
 
 class SimConditions:
-    def __init__(self, conditions, fileformat):
+    def __init__(self, conditions, fileformat, staple_lengths):
         self._conditions = conditions
         self._fileformat = fileformat
         self._total_bias = None
 
         self._construct_total_bias()
+        self._u_extra_states_term = 2*(staple_lengths - 1)*np.log(6)
 
     def _construct_total_bias(self):
         bs = [v for k, v in self._conditions.items() if 'bias' in k]
@@ -50,6 +53,10 @@ class SimConditions:
     @property
     def staple_m(self):
         return self['staple_m']
+
+    @property
+    def reduced_staple_us(self):
+        return np.log(self['staple_m']) - self._u_extra_states_term
 
     @property
     def total_bias(self):
@@ -73,14 +80,17 @@ class SimConditions:
 
 class AllSimConditions:
     """All combinations of given simulation conditions."""
-    def __init__(self, condition_map, fileformatter):
+    def __init__(self, condition_map, fileformatter, system_file):
         self._conditions_map = condition_map
         self._fileformatter = fileformatter
+        self._system_file = system_file
         self._conditions = None
         self._fileformat = None
         self._total_bias = None
         self._combos = None
 
+        staple_lengths = [len(ident) for ident in system_file.identities[0]]
+        self._staple_lengths = np.array(staple_lengths)
         self._reset_combo_iterator()
 
     def _reset_combo_iterator(self):
@@ -99,7 +109,7 @@ class AllSimConditions:
         self._conditions = dict(zip(self._conditions_map.keys(), combo))
         self._fileformat = self._fileformatter(self._conditions)
 
-        return SimConditions(self._conditions, self._fileformat)
+        return SimConditions(self._conditions, self._fileformat, self._staple_lengths)
 
     @property
     def condition_tags(self):

@@ -21,8 +21,10 @@ from origamipy import utility
 
 def main():
     args = parse_args()
+    system_file = files.JSONStructInpFile(args.system_filename)
+    staple_lengths = system_file._staple_lengths
     fileformatter = construct_fileformatter()
-    all_conditions = construct_conditions(args, fileformatter)
+    all_conditions = construct_conditions(args, fileformatter, system_file)
     inp_filebase = create_input_filepathbase(args)
 
     mbarws = []
@@ -30,8 +32,9 @@ def main():
     sampled_ops = []
     for i in range(1, args.assembled_op + 1):
         sim_collections = outputs.create_sim_collections(inp_filebase,
-                all_conditions, args.reps)
-        decor_outs = decorrelate.DecorrelatedOutputs(sim_collections, all_conditions)
+                                                         all_conditions, args.reps)
+        decor_outs = decorrelate.DecorrelatedOutputs(
+            sim_collections, all_conditions)
         decor_outs.read_decors_from_files(data_only=True)
         filtered_count = decor_outs.filter_collections(args.tag, i)
         if filtered_count == 0:
@@ -47,7 +50,7 @@ def main():
 
     # Calculate expectations across selected order parameter
     conds = conditions.SimConditions({'temp': args.temp, 'staple_m': args.staple_m,
-            'bias': biases.NoBias()}, fileformatter)
+                                      'bias': biases.NoBias()}, fileformatter, staple_lengths)
     all_tags = []
     for i in range(1, args.staple_types + 1):
         all_tags.append('staples{}'.format(i))
@@ -56,7 +59,8 @@ def main():
     for i in range(args.scaffold_domains):
         all_tags.append('domainstate{}'.format(i))
 
-    aves, stds = calc_reduced_expectations(conds, mbarws, all_decor_outs, all_tags)
+    aves, stds = calc_reduced_expectations(
+        conds, mbarws, all_decor_outs, all_tags)
 
     aves = np.concatenate([[sampled_ops], np.array(aves).T])
     aves_file = files.TagOutFile('{}-{}.aves'.format(out_filebase, args.tag))
@@ -68,8 +72,9 @@ def main():
 
     # Hacky calculation for plotting a melting temperature LFE curve
     sim_collections = outputs.create_sim_collections(inp_filebase,
-            all_conditions, args.reps)
-    decor_outs = decorrelate.DecorrelatedOutputs(sim_collections, all_conditions)
+                                                     all_conditions, args.reps)
+    decor_outs = decorrelate.DecorrelatedOutputs(
+        sim_collections, all_conditions)
     decor_outs.read_decors_from_files()
     mbarw = mbar_wrapper.MBARWrapper(decor_outs)
     mbarw.perform_mbar()
@@ -82,9 +87,9 @@ def main():
     bin_index_series = [value_to_bin[i] for i in values]
     bin_index_series = np.array(bin_index_series)
     conds = conditions.SimConditions({'temp': args.temp, 'staple_m': args.staple_m,
-            'bias': biases.NoBias()}, fileformatter)
+                                      'bias': biases.NoBias()}, fileformatter, staple_lengths)
     lfes, lfe_stds = calc_lfes(mbarw, conds, bins, bin_index_series, decor_enes,
-            decor_ops)
+                               decor_ops)
     header = np.array(['ops', args.temp])
     lfes_filebase = '{}_{}-lfes-melting'.format(out_filebase, args.tag)
     lfes_file = files.TagOutFile('{}.aves'.format(lfes_filebase))
@@ -97,7 +102,7 @@ def main():
 
 def calc_lfes(mbarw, conds, bins, bin_index_series, decor_enes, decor_ops):
     rpots = utility.calc_reduced_potentials(decor_enes, decor_ops,
-            conds)
+                                            conds)
 
     return mbarw._mbar.computePMF(
         rpots, bin_index_series, len(bins))
@@ -125,12 +130,12 @@ def parse_tag_pairs(tag_pairs):
     return [tuple(tag_pair.split(',')) for tag_pair in tag_pairs]
 
 
-def construct_conditions(args, fileformatter):
+def construct_conditions(args, fileformatter, system_file):
     conditions_map = {'temp': args.temps,
                       'staple_m': [args.staple_m],
                       'bias': [biases.NoBias()]}
 
-    return conditions.AllSimConditions(conditions_map, fileformatter)
+    return conditions.AllSimConditions(conditions_map, fileformatter, system_file)
 
 
 def construct_fileformatter():
@@ -149,51 +154,55 @@ def create_output_filepathbase(args):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-            'filebase',
-            type=str,
-            help='Base name for files')
+        'system_filename',
+        type=str,
+        help='System file')
     parser.add_argument(
-            'input_dir',
-            type=str,
-            help='Directory of inputs')
+        'filebase',
+        type=str,
+        help='Base name for files')
     parser.add_argument(
-            'output_dir',
-            type=str,
-            help='Directory to output to')
+        'input_dir',
+        type=str,
+        help='Directory of inputs')
     parser.add_argument(
-            'temp',
-            type=float,
-            help='Temperature')
+        'output_dir',
+        type=str,
+        help='Directory to output to')
     parser.add_argument(
-            'staple_m',
-            type=float,
-            help='Staple molarity (mol/V)')
+        'temp',
+        type=float,
+        help='Temperature')
     parser.add_argument(
-            'stack_ene',
-            type=float,
-            help='Stacking energy (kb K)')
+        'staple_m',
+        type=float,
+        help='Staple molarity (mol/V)')
+    parser.add_argument(
+        'stack_ene',
+        type=float,
+        help='Stacking energy (kb K)')
     parser.add_argument('tag',
-            type=str,
-            help='Order parameter tag')
+                        type=str,
+                        help='Order parameter tag')
     parser.add_argument('assembled_op',
-            type=int,
-            help='Value of order parameter in assembled state')
+                        type=int,
+                        help='Value of order parameter in assembled state')
     parser.add_argument('staple_types',
-            type=int,
-            help='Number of staple types')
+                        type=int,
+                        help='Number of staple types')
     parser.add_argument('scaffold_domains',
-            type=int,
-            help='Number of scaffold domains')
+                        type=int,
+                        help='Number of scaffold domains')
     parser.add_argument(
-            '--reps',
-            nargs='+',
-            type=int,
-            help='Reps (leave empty for all available)')
+        '--reps',
+        nargs='+',
+        type=int,
+        help='Reps (leave empty for all available)')
     parser.add_argument(
-            '--temps',
-            nargs='+',
-            type=str,
-            help='Temperatures')
+        '--temps',
+        nargs='+',
+        type=str,
+        help='Temperatures')
 
     return parser.parse_args()
 

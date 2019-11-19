@@ -27,12 +27,15 @@ from origamipy import utility
 
 def main():
     args = parse_args()
+    system_file = files.JSONStructInpFile(args.system_filename)
+    staple_lengths = system_file._staple_lengths
     fileformatter = construct_fileformatter()
-    all_conditions = construct_conditions(args, fileformatter)
+    all_conditions = construct_conditions(args, fileformatter, system_file)
     inp_filebase = create_input_filepathbase(args)
     sim_collections = outputs.create_sim_collections(inp_filebase,
-            all_conditions, args.reps)
-    decor_outs = decorrelate.DecorrelatedOutputs(sim_collections, all_conditions)
+                                                     all_conditions, args.reps)
+    decor_outs = decorrelate.DecorrelatedOutputs(
+        sim_collections, all_conditions)
     decor_outs.read_decors_from_files()
 
     mbarw = mbar_wrapper.MBARWrapper(decor_outs)
@@ -49,12 +52,12 @@ def main():
     bin_index_series = [value_to_bin[i] for i in values]
     bin_index_series = np.array(bin_index_series)
     conds = conditions.SimConditions({'temp': args.guess_temp, 'staple_m': args.staple_m,
-            'bias': biases.NoBias()}, fileformatter)
+                                      'bias': biases.NoBias()}, fileformatter, staple_lengths)
     melting_temp = minimize(squared_barrier_diff, args.guess_temp,
-            args=(mbarw, values, bins, bin_index_series, decor_enes, decor_ops,
-                conds)).x[0]
+                            args=(mbarw, values, bins, bin_index_series, decor_enes, decor_ops,
+                                  conds)).x[0]
     lfes, lfe_stds = calc_lfes(mbarw, conds, bins, bin_index_series, decor_enes,
-            decor_ops)
+                               decor_ops)
     barrier_height = np.around(calc_forward_barrier_height(lfes), decimals=3)
     barrier_i = find_barrier(lfes)
     melting_temp = '{:.3f}'.format(np.around(melting_temp, decimals=3))
@@ -77,15 +80,16 @@ def main():
     # Calculated 2D LFEs
     tag2 = 'numfulldomains'
     decor_op_pairs = list(zip(decor_outs.get_concatenated_series(args.tag),
-                             decor_outs.get_concatenated_series(tag2)))
+                              decor_outs.get_concatenated_series(tag2)))
     bins = list(set(decor_op_pairs))
     value_to_bin = {value: i for i, value in enumerate(bins)}
     bin_index_series = [value_to_bin[i] for i in decor_op_pairs]
     bin_index_series = np.array(bin_index_series)
     lfes, lfe_stds = calc_lfes(mbarw, conds, bins, bin_index_series, decor_enes,
-            decor_ops)
+                               decor_ops)
     header = np.array([args.tag, tag2, melting_temp])
-    lfes_filebase = '{}_{}-{}-lfes-melting'.format(out_filebase, args.tag, tag2)
+    lfes_filebase = '{}_{}-{}-lfes-melting'.format(
+        out_filebase, args.tag, tag2)
     bins = np.array(bins).reshape(len(bins), 2)
 
     lfes = np.concatenate([bins, np.array(lfes, ndmin=2).T], axis=1)
@@ -102,8 +106,9 @@ def main():
     sampled_ops = []
     for i in range(1, args.assembled_op + 1):
         sim_collections = outputs.create_sim_collections(inp_filebase,
-                all_conditions, args.reps)
-        decor_outs = decorrelate.DecorrelatedOutputs(sim_collections, all_conditions)
+                                                         all_conditions, args.reps)
+        decor_outs = decorrelate.DecorrelatedOutputs(
+            sim_collections, all_conditions)
         decor_outs.read_decors_from_files(data_only=True)
         filtered_count = decor_outs.filter_collections(args.tag, i)
         if filtered_count == 0:
@@ -126,7 +131,8 @@ def main():
     for i in range(args.scaffold_domains):
         all_tags.append('domainstate{}'.format(i))
 
-    aves, stds = calc_reduced_expectations(conds, mbarws, all_decor_outs, all_tags)
+    aves, stds = calc_reduced_expectations(
+        conds, mbarws, all_decor_outs, all_tags)
 
     aves = np.concatenate([[sampled_ops], np.array(aves).T])
     aves_file = files.TagOutFile('{}-{}.aves'.format(out_filebase, args.tag))
@@ -171,10 +177,10 @@ def estimate_halfway_temp(mbarw, values, all_conditions, max_op):
 
 
 def squared_barrier_diff(temp, mbarw, values, bins, bin_index_series,
-        decor_enes, decor_ops, conds):
+                         decor_enes, decor_ops, conds):
     conds._conditions['temp'] = temp
     lfes, lfes_stds = calc_lfes(mbarw, conds, bins, bin_index_series, decor_enes,
-            decor_ops)
+                                decor_ops)
     barrier_i = find_barrier(lfes)
     minima = find_minima(lfes, barrier_i)
 
@@ -183,7 +189,7 @@ def squared_barrier_diff(temp, mbarw, values, bins, bin_index_series,
 
 def calc_lfes(mbarw, conds, bins, bin_index_series, decor_enes, decor_ops):
     rpots = utility.calc_reduced_potentials(decor_enes, decor_ops,
-            conds)
+                                            conds)
 
     return mbarw._mbar.computePMF(
         rpots, bin_index_series, len(bins))
@@ -213,7 +219,7 @@ def parse_tag_pairs(tag_pairs):
     return [tuple(tag_pair.split(',')) for tag_pair in tag_pairs]
 
 
-def construct_conditions(args, fileformatter):
+def construct_conditions(args, fileformatter, system_file):
     stack_biases = []
     for stack_mult in args.stack_mults:
         stack_bias = biases.StackingBias(args.stack_ene, stack_mult)
@@ -223,7 +229,7 @@ def construct_conditions(args, fileformatter):
                       'staple_m': [args.staple_m],
                       'bias': stack_biases}
 
-    return conditions.AllSimConditions(conditions_map, fileformatter)
+    return conditions.AllSimConditions(conditions_map, fileformatter, system_file)
 
 
 def construct_fileformatter():
@@ -242,54 +248,58 @@ def create_output_filepathbase(args):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-            'filebase',
-            type=str,
-            help='Base name for files')
+        'system_filename',
+        type=str,
+        help='System file')
     parser.add_argument(
-            'input_dir',
-            type=str,
-            help='Directory of inputs')
+        'filebase',
+        type=str,
+        help='Base name for files')
     parser.add_argument(
-            'output_dir',
-            type=str,
-            help='Directory to output to')
+        'input_dir',
+        type=str,
+        help='Directory of inputs')
     parser.add_argument(
-            'temp',
-            type=float,
-            help='Temperature (K)')
+        'output_dir',
+        type=str,
+        help='Directory to output to')
     parser.add_argument(
-            'guess_temp',
-            type=float,
-            help='Temperature (K)')
+        'temp',
+        type=float,
+        help='Temperature (K)')
     parser.add_argument(
-            'staple_m',
-            type=float,
-            help='Staple molarity (mol/V)')
+        'guess_temp',
+        type=float,
+        help='Temperature (K)')
     parser.add_argument(
-            'stack_ene',
-            type=float,
-            help='Stacking energy (kb K)')
+        'staple_m',
+        type=float,
+        help='Staple molarity (mol/V)')
     parser.add_argument(
-            'tag',
-            type=str,
-            help='Order parameter tag')
+        'stack_ene',
+        type=float,
+        help='Stacking energy (kb K)')
     parser.add_argument(
-            'assembled_op',
-            type=int,
-            help='Value of order parameter in assembled state')
+        'tag',
+        type=str,
+        help='Order parameter tag')
     parser.add_argument(
-            'staple_types',
-            type=int,
-            help='Number of staple types')
+        'assembled_op',
+        type=int,
+        help='Value of order parameter in assembled state')
     parser.add_argument(
-            'scaffold_domains',
-            type=int,
-            help='Number of scaffold domains')
+        'staple_types',
+        type=int,
+        help='Number of staple types')
     parser.add_argument(
-            '--reps',
-            nargs='+',
-            type=int,
-            help='Reps (leave empty for all available)')
+        'scaffold_domains',
+        type=int,
+        help='Number of scaffold domains')
+    parser.add_argument(
+        '--reps',
+        nargs='+',
+        type=int,
+        help='Reps (leave empty for all available)')
     parser.add_argument(
         '--stack_mults',
         nargs='+',

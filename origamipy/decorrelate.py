@@ -82,8 +82,9 @@ class DecorrelatedOutputs:
     def _construct_decorrelation_mask(self, sim_collection, rep, skip):
         enes = sim_collection.reps_energies[rep]
         ops = sim_collection.reps_order_params[rep]
+        staples = sim_collection.reps_staples[rep]
         steps = enes.steps
-        rpots = utility.calc_reduced_potentials(enes, ops,
+        rpots = utility.calc_reduced_potentials(enes, ops, staples,
                                                 sim_collection.conditions)
         start_i, g, Neff = timeseries.detectEquilibration(rpots, nskip=skip)
         template = '{:<8} {:<8} {:<3} {:<4.1f} {:<.1f}'
