@@ -24,6 +24,7 @@ def main():
     enums = outputs.EnumCollection(inp_filebase, all_conditions)
     out_filebase = create_output_filepathbase(args)
     enums.calc_all_1d_means(out_filebase)
+    enums.calc_all_1d_lfes(out_filebase)
 
 
 def construct_conditions_map(args):

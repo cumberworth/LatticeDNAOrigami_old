@@ -9,18 +9,18 @@ class EnumerationWeights:
         self._tags, self._dataframe = self._read_weights_from_file(filename)
 
     @classmethod
-    def _read_weights_from_file(self, filename):
+    def _read_weights_from_file(cls, filename):
         data = pd.read_csv(filename, sep='\s|\)\s', header=None, skiprows=1,
                            engine='python')
         data[0] = data[0].str.lstrip('(').astype(int)
-        tags = self._get_tags(filename)
+        tags = cls._get_tags(filename)
         tags.append('weight')
         data.columns = tags
         tags.pop()
         return tags, data
 
     @classmethod
-    def _get_tags(self, filename):
+    def _get_tags(cls, filename):
         tags = []
         with open(filename) as f:
             tags = f.readline().rstrip().split()
@@ -35,6 +35,23 @@ class EnumerationWeights:
             means.append((weights.index*weights).sum())
 
         return means
+
+    def calc_1d_lfes(self, ops, tag):
+        lfes = []
+        for op in ops:
+            w = self._dataframe[self._dataframe[tag] == op]['weight'].sum()
+            lfes.append(-np.log(w))
+
+        lfes = np.array(lfes)
+        lfes -= lfes.min()
+
+        return lfes
+
+    def get_op_range(self, tag):
+        min_op = self._dataframe[tag].min()
+        max_op = self._dataframe[tag].max()
+
+        return list(range(min_op, max_op + 1))
 
     def _marginalize(self, tag):
         return self._dataframe.groupby(tag)['weight'].sum()

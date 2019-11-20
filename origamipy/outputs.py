@@ -33,6 +33,23 @@ class EnumCollection:
         out_file.write(tags, np.concatenate([all_conds, np.array(means)],
                                             axis=1))
 
+    def calc_all_1d_lfes(self, filebase):
+        for tag in self._enum_weights[0]._tags:
+            bins = self._enum_weights[0].get_op_range(tag)
+            for weights in self._enum_weights:
+                lfes = weights.calc_1d_lfes(bins, tag)
+
+            all_conds = self._all_conditions.condition_to_characteristic_values
+            all_tags = all_conds.condition_tags
+            temp_i = all_tags.index('temp')
+            temps = [c[temp_i] for c in all_conds]
+            header = np.concatenate([['ops'], temps])
+            bins = np.array(bins).reshape(len(bins), 1)
+            data = np.concatenate([bins, np.array(lfes).T], axis=1)
+            lfes_filebase = '{}_{}-lfes'.format(filebase, tag)
+            lfes_file = files.TagOutFile('{}.aves'.format(lfes_filebase))
+            lfes_file.write(header, lfes)
+
 
 def create_sim_collections(filebase, all_conditions, reps):
     sim_collections = []
