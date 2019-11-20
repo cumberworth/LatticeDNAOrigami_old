@@ -20,9 +20,10 @@ class MBARWrapper:
         conditions_rpots = []
         decor_enes = self._decor_outs.get_concatenated_datatype('enes')
         decor_ops = self._decor_outs.get_concatenated_datatype('ops')
+        decor_staples = self._decor_outs.get_concatenated_datatype('staples')
         for conditions in self._decor_outs.all_conditions:
             # What if I just want to do one rep?
-            rpots = utility.calc_reduced_potentials(decor_enes, decor_ops,
+            rpots = utility.calc_reduced_potentials(decor_enes, decor_ops, decor_staples,
                     conditions)
             conditions_rpots.append(rpots)
             # I should split this up if I want to separate mbar from calcs that use it
@@ -71,7 +72,8 @@ class MBARWrapper:
     def calc_expectation(self, values, conds):
         decor_enes = self._decor_outs.get_concatenated_datatype('enes')
         decor_ops = self._decor_outs.get_concatenated_datatype('ops')
-        rpots = utility.calc_reduced_potentials(decor_enes, decor_ops,
+        decor_staples = self._decor_outs.get_concatenated_datatype('staples')
+        rpots = utility.calc_reduced_potentials(decor_enes, decor_ops, decor_staples,
                 conds)
         ave, vari = self._mbar.computeExpectations(values, rpots)
         ave = ave[0].astype(float)
