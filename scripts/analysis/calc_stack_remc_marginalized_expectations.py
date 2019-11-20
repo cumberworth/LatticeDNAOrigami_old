@@ -81,6 +81,7 @@ def main():
     values = decor_outs.get_concatenated_series(args.tag)
     decor_enes = decor_outs.get_concatenated_datatype('enes')
     decor_ops = decor_outs.get_concatenated_datatype('ops')
+    decor_staples = decor_outs.get_concatenated_datatype('staples')
     bins = list(set(values))
     bins.sort()
     value_to_bin = {value: i for i, value in enumerate(bins)}
@@ -89,7 +90,7 @@ def main():
     conds = conditions.SimConditions({'temp': args.temp, 'staple_m': args.staple_m,
                                       'bias': biases.NoBias()}, fileformatter, staple_lengths)
     lfes, lfe_stds = calc_lfes(mbarw, conds, bins, bin_index_series, decor_enes,
-                               decor_ops)
+                               decor_ops, decor_staples)
     header = np.array(['ops', args.temp])
     lfes_filebase = '{}_{}-lfes-melting'.format(out_filebase, args.tag)
     lfes_file = files.TagOutFile('{}.aves'.format(lfes_filebase))
@@ -100,8 +101,8 @@ def main():
     stds_file.write(header, lfe_stds)
 
 
-def calc_lfes(mbarw, conds, bins, bin_index_series, decor_enes, decor_ops):
-    rpots = utility.calc_reduced_potentials(decor_enes, decor_ops,
+def calc_lfes(mbarw, conds, bins, bin_index_series, decor_enes, decor_ops, decor_staples):
+    rpots = utility.calc_reduced_potentials(decor_enes, decor_ops, decor_staples,
                                             conds)
 
     return mbarw._mbar.computePMF(

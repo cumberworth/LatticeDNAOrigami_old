@@ -46,6 +46,7 @@ def main():
     values = decor_outs.get_concatenated_series(args.tag)
     decor_enes = decor_outs.get_concatenated_datatype('enes')
     decor_ops = decor_outs.get_concatenated_datatype('ops')
+    decor_staples = decor_outs.get_concatenated_datatype('staples')
     halfway_temp = estimate_halfway_temp(mbarw, values, all_conditions,
                                          args.assembled_op)
     print('Halfway temperature: {:.3f} K'.format(
@@ -58,10 +59,10 @@ def main():
     conds = conditions.SimConditions({'temp': halfway_temp, 'staple_m': args.staple_m,
                                       'bias': biases.NoBias()}, fileformatter, staple_lengths)
     melting_temp = minimize(squared_barrier_diff, halfway_temp,
-                            args=(mbarw, values, bins, bin_index_series, decor_enes, decor_ops,
+                            args=(mbarw, values, bins, bin_index_series, decor_enes, decor_ops, decor_staples,
                                   conds)).x[0]
     lfes, lfe_stds = calc_lfes(mbarw, conds, bins, bin_index_series, decor_enes,
-                               decor_ops)
+                               decor_ops, decor_staples)
     barrier_height = np.around(calc_forward_barrier_height(lfes), decimals=3)
     barrier_i = find_barrier(lfes)
     melting_temp = '{:.3f}'.format(np.around(melting_temp, decimals=3))
@@ -158,19 +159,19 @@ def estimate_halfway_temp(mbarw, values, all_conditions, max_op):
 
 
 def squared_barrier_diff(temp, mbarw, values, bins, bin_index_series,
-                         decor_enes, decor_ops, conds):
+                         decor_enes, decor_ops, decor_staples, conds):
     conds._conditions['temp'] = temp
     lfes, lfes_stds = calc_lfes(mbarw, conds, bins, bin_index_series, decor_enes,
-                                decor_ops)
+                                decor_ops, decor_staples)
     barrier_i = find_barrier(lfes)
     minima = find_minima(lfes, barrier_i)
 
     return (minima[0] - minima[1])**2
 
 
-def calc_lfes(mbarw, conds, bins, bin_index_series, decor_enes, decor_ops):
+def calc_lfes(mbarw, conds, bins, bin_index_series, decor_enes, decor_ops, decor_staples):
     rpots = utility.calc_reduced_potentials(decor_enes, decor_ops,
-                                            conds)
+                                            conds, decor_staples)
 
     return mbarw._mbar.computePMF(
         rpots, bin_index_series, len(bins))
