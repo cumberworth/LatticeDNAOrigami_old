@@ -170,8 +170,8 @@ def squared_barrier_diff(temp, mbarw, values, bins, bin_index_series,
 
 
 def calc_lfes(mbarw, conds, bins, bin_index_series, decor_enes, decor_ops, decor_staples):
-    rpots = utility.calc_reduced_potentials(decor_enes, decor_ops,
-                                            conds, decor_staples)
+    rpots = utility.calc_reduced_potentials(decor_enes, decor_ops, decor_staples,
+                                            conds)
 
     return mbarw._mbar.computePMF(
         rpots, bin_index_series, len(bins))
