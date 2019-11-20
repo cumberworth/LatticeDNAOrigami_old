@@ -22,9 +22,9 @@ from origamipy import utility
 def main():
     args = parse_args()
     system_file = files.JSONStructInpFile(args.system_filename)
-    staple_lengths = system_file._staple_lengths
     fileformatter = construct_fileformatter()
     all_conditions = construct_conditions(args, fileformatter, system_file)
+    staple_lengths = all_conditions._staple_lengths
     inp_filebase = create_input_filepathbase(args)
 
     mbarws = []

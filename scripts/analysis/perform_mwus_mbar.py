@@ -20,11 +20,11 @@ from origamipy import utility
 def main():
     args = parse_args()
     system_file = files.JSONStructInpFile(args.system_filename)
-    staple_lengths = system_file._staple_lengths
     inp_filebase = create_input_filepathbase(args)
     fileformatter = construct_fileformatter()
     all_conditions = construct_conditions(
         args, fileformatter, inp_filebase, system_file)
+    staple_lengths = system_file._staple_lengths
     sim_collections = create_simplesim_collections(args, inp_filebase,
                                                    all_conditions)
     decor_outs = decorrelate.SimpleDecorrelatedOutputs(
