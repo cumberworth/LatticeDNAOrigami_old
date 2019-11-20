@@ -110,13 +110,12 @@ def rotate_vectors_quarter(vectors, rotation_axis, direction):
     return rotated_vectors
 
 
-NUM_STAPLES_TAG = 'numstaples'
-
 
 def calc_reduced_potentials(enes, ops, num_staples, conditions):
     """Reduced potentials as defined in shirts2008."""
     bias_collection = conditions.total_bias(ops)
     e = (enes.enthalpies + enes.stacking_energies + bias_collection)
+    G = (conditions.reduced_staple_us*num_staples._data[1:].T).sum(axis=1)
     renes = e/float(conditions.temp)
 
-    return renes - enes.entropies + (conditions.reduced_staple_us*num_staples).sum()
+    return renes - enes.entropies + G

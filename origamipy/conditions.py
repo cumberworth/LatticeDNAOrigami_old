@@ -89,7 +89,7 @@ class AllSimConditions:
         self._total_bias = None
         self._combos = None
 
-        staple_lengths = [len(ident) for ident in system_file.identities[:1]]
+        staple_lengths = [len(ident) for ident in system_file.identities[1:]]
         self._staple_lengths = np.array(staple_lengths)
         self._reset_combo_iterator()
 
