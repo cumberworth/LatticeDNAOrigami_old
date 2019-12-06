@@ -79,7 +79,7 @@ class OutputData:
     @classmethod
     def _load_file(cls, filename):
         data = np.loadtxt(filename, skiprows=cls._header_lines,
-                          dtype=cls._dtype)
+                          dtype=cls._dtype, ndmin=2)
         return data.transpose()
 
     @classmethod
