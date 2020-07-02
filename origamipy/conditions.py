@@ -37,7 +37,7 @@ class SimConditions:
         self._total_bias = None
 
         self._construct_total_bias()
-        self._u_extra_states_term = 2*(staple_lengths - 1)*np.log(6)
+        self._u_extra_states_term = (2*staple_lengths - 1)*np.log(6)
 
     def _construct_total_bias(self):
         bs = [v for k, v in self._conditions.items() if 'bias' in k]
