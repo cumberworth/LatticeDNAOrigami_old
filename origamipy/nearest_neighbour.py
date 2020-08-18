@@ -162,8 +162,8 @@ def calc_hybridization_enthalpy_and_entropy(sequence, cation_M):
     complementary_sequence = calc_complementary_sequence(sequence)
 
     # Initiation free energy
-    DH_init = NN_ENTHALPY['INITIATION']
-    DS_init = NN_ENTROPY['INITIATION']
+    #DH_init = NN_ENTHALPY['INITIATION']
+    #DS_init = NN_ENTROPY['INITIATION']
 
     # Symmetry penalty for palindromic sequences
     if sequence_is_palindromic(sequence):
@@ -202,12 +202,13 @@ def calc_hybridization_enthalpy_and_entropy(sequence, cation_M):
         DH_at = 0
         DS_at = 0
 
-    DH_hybrid = DH_init + DH_stack + DH_at
-    DS_hybrid = DS_init + DS_sym + DS_stack + DS_at
+    #DH_hybrid = DH_init + DH_stack + DH_at
+    #DS_hybrid = DS_init + DS_sym + DS_stack + DS_at
+    DH_hybrid = DH_stack + DH_at
+    DS_hybrid = DS_sym + DS_stack + DS_at
 
     # Apply salt correction
-    DS_hybrid = DS_hybrid + (0.368 * (len(sequence) / 2)
-                             * math.log(cation_M))/1000
+    DS_hybrid = DS_hybrid + (0.368 * len(sequence) * math.log(cation_M))/1000
 
     return DH_hybrid, DS_hybrid
 
