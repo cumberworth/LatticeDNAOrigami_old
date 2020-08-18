@@ -2,11 +2,13 @@
 
 set vmd_file_dir [lindex $argv 0]
 set filebase [lindex $argv 1]
+set staplelength [lindex $argv 2]
 
 source $vmd_file_dir/liborigami.tcl
 
 set origami [mol new $filebase.vsf]
 set num_scaffold_domains [calc_num_scaffold_domains]
+set num_staple_domains [calc_num_staple_domains]
 
 color Display Background white
 display shadows on
@@ -24,7 +26,7 @@ mol delrep 0 0
 create_domain_reps
 animate read vcf $filebase.vcf waitfor all $origami
 animate read vcf $filebase.vcf waitfor all $origami
-create_legend
+#create_legend
 axes location off
 display projection orthographic
 mol top $origami

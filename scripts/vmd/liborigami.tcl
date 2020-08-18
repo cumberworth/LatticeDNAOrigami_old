@@ -319,10 +319,10 @@ proc update_frame {} {
     lappend ores [lindex $ores 0]
 
     graphics $origami delete all
-    #update_colors
-    #update_radii
-    #draw_next_domain_vectors
-    #draw_ore_vectors
+    update_colors
+    draw_next_domain_vectors
+    draw_ore_vectors
+    update_radii
 }
 
 proc update_frame_trace {args} {
