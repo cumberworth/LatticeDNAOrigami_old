@@ -208,7 +208,7 @@ def calc_hybridization_enthalpy_and_entropy(sequence, cation_M):
     DS_hybrid = DS_sym + DS_stack + DS_at
 
     # Apply salt correction
-    DS_hybrid = DS_hybrid + (0.368 * len(sequence) * math.log(cation_M))/1000
+    DS_hybrid += (0.368 * len(sequence) * math.log(cation_M))/1000
 
     return DH_hybrid, DS_hybrid
 
