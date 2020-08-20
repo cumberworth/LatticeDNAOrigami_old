@@ -52,6 +52,10 @@ def remove_energy_units(ene):
     return ene * J_PER_CAL * 1000 / R
 
 
+def calc_init_energy(temp):
+    return remove_energy_units(NN_ENTHALPY['INITIATION'] - temp*NN_ENTROPY['INITIATION'])
+
+
 def calc_hybridization_energy(sequence, T, cation_M):
     """Energies in K to avoid multiplying by Kb when calculating acceptance.
 
