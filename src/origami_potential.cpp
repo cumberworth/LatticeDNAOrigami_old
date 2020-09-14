@@ -214,7 +214,7 @@ void JunctionBindingPotential::calc_stacking_and_steric_terms(
         }
         j++;
     }
-    check_central_triplet_stacking_combos(cd_i, cd_j);
+    //check_central_triplet_stacking_combos(cd_i, cd_j);
 }
 
 void JunctionBindingPotential::check_constraints(Domain* cd, int j) {
@@ -258,15 +258,15 @@ void JunctionBindingPotential::check_constraints(Domain* cd, int j) {
             if (check_pair_stacked(cd_prev, cd)) {
                 if (doubly_contiguous(cd_prev, cd) and
                     doubly_contiguous(cd, cd_forw)) {
-                    check_triply_contig_helix(cd_prev, cd, cd_forw);
+//                    check_triply_contig_helix(cd_prev, cd, cd_forw);
                     if (m_constraints_violated) {
                         return;
                     }
                 }
-                check_triplet_double_stacking(cd_prev, cd, cd_forw);
+//                check_triplet_double_stacking(cd_prev, cd, cd_forw);
             }
             else {
-                check_triplet_single_stacking(cd_prev, cd, cd_forw);
+//                check_triplet_single_stacking(cd_prev, cd, cd_forw);
             }
         }
     }
@@ -289,21 +289,21 @@ void JunctionBindingPotential::check_regular_pair_constraints(
         //                cd_2->m_c << " "
         //                     << cd_2->m_d << "\n";
         if (i == -1) {
-            check_backward_single_junction(cd_1, cd_2);
+//            check_backward_single_junction(cd_1, cd_2);
         }
         else {
-            check_forward_single_junction(cd_1, cd_2);
+//            check_forward_single_junction(cd_1, cd_2);
         }
     }
     else {
-        check_central_single_junction(cd_1, cd_2);
+//        check_central_single_junction(cd_1, cd_2);
     }
 
     if (i == -1) {
-        check_backward_triplet_stacking_combos(cd_1, cd_2, i);
+//        check_backward_triplet_stacking_combos(cd_1, cd_2, i);
     }
     else {
-        check_forward_triplet_stacking_combos(cd_1, cd_2, i);
+//        check_forward_triplet_stacking_combos(cd_1, cd_2, i);
     }
 }
 
@@ -326,12 +326,12 @@ void JunctionBindingPotential::check_doubly_contig_helix_pair(
             //                             << cd_2->m_d << "\n";
         }
         if (i == -1) {
-            check_backward_triplet_stacking_combos(cd_1, cd_2, i);
-            check_backward_single_junction(cd_1, cd_2);
+//            check_backward_triplet_stacking_combos(cd_1, cd_2, i);
+//            check_backward_single_junction(cd_1, cd_2);
         }
         else {
-            check_forward_triplet_stacking_combos(cd_1, cd_2, i);
-            check_forward_single_junction(cd_1, cd_2);
+//            check_forward_triplet_stacking_combos(cd_1, cd_2, i);
+//            check_forward_single_junction(cd_1, cd_2);
         }
     }
     else {
@@ -358,10 +358,10 @@ void JunctionBindingPotential::check_doubly_contig_junction_pair(
     cd_j4 = *cd_k2 + 1;
     if (check_domains_exist_and_bound({cd_j4})) {
         if (check_domains_exist_and_bound({cd_j1})) {
-            check_junction(cd_j1, cd_j2, cd_j3, cd_j4, cd_k1, cd_k2);
+//            check_junction(cd_j1, cd_j2, cd_j3, cd_j4, cd_k1, cd_k2);
         }
         if (check_pair_stacked(cd_j3, cd_j4)) {
-            check_triplet_single_stacking(cd_k1, cd_k2, cd_j4);
+//            check_triplet_single_stacking(cd_k1, cd_k2, cd_j4);
         }
     }
 
@@ -369,10 +369,10 @@ void JunctionBindingPotential::check_doubly_contig_junction_pair(
     cd_j4 = *cd_j3 + -1;
     if (check_domains_exist_and_bound({cd_j4})) {
         if (check_domains_exist_and_bound({cd_j1})) {
-            check_junction(cd_j1, cd_j2, cd_j3, cd_j4, cd_k1, cd_k2);
+//            check_junction(cd_j1, cd_j2, cd_j3, cd_j4, cd_k1, cd_k2);
         }
         if (check_pair_stacked(cd_j4, cd_j3)) {
-            check_triplet_single_stacking(cd_k1, cd_k2, cd_j4);
+//            check_triplet_single_stacking(cd_k1, cd_k2, cd_j4);
         }
     }
 }
