@@ -22,8 +22,9 @@ def main():
     all_conditions = construct_conditions(args, fileformatter, system_file)
     inp_filebase = create_input_filepathbase(args)
     sim_collections = outputs.create_sim_collections(inp_filebase,
-            all_conditions, args.reps)
-    decor_outs = decorrelate.DecorrelatedOutputs(sim_collections, all_conditions)
+                                                     all_conditions, args.reps)
+    decor_outs = decorrelate.DecorrelatedOutputs(
+        sim_collections, all_conditions)
     decor_outs.perform_decorrelation(args.skip)
     decor_outs.apply_masks()
     decor_outs.write_decors_to_files()
@@ -57,6 +58,10 @@ def create_output_filepathbase(args):
 
 def parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        'system_filename',
+        type=str,
+        help='System file')
     parser.add_argument(
         'filebase',
         type=str,
