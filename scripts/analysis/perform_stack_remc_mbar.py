@@ -32,10 +32,10 @@ def main():
     mbarw.perform_mbar()
 
     out_filebase = create_output_filepathbase(args)
-    tag_pairs = parse_tag_pairs(args.tag_pairs)
-    for tag_pair in tag_pairs:
-        mbarw.calc_2d_lfes(tag_pair[0], tag_pair[1],
-                           all_conditions, out_filebase)
+#    tag_pairs = parse_tag_pairs(args.tag_pairs)
+#    for tag_pair in tag_pairs:
+#        mbarw.calc_2d_lfes(tag_pair[0], tag_pair[1],
+#                           all_conditions, out_filebase)
 
     mbarw.calc_all_expectations(out_filebase)
     mbarw.calc_1d_lfes(all_conditions, out_filebase, xtag='bias')
