@@ -144,7 +144,9 @@ def create_output_filepathbase(args):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         'system_filename',
         type=str,
@@ -189,26 +191,32 @@ def parse_args():
         'run',
         type=int,
         help='Number of reps')
-    parser.add_argument('tag',
-                        type=str,
-                        help='Order parameter tag')
-    parser.add_argument('assembled_op',
-                        type=int,
-                        help='Value of order parameter in assembled state')
-    parser.add_argument('staple_types',
-                        type=int,
-                        help='Number of staple types')
-    parser.add_argument('scaffold_domains',
-                        type=int,
-                        help='Number of scaffold domains')
-    parser.add_argument('--tags',
-                        nargs='+',
-                        type=str,
-                        help='Order parameter tags')
-    parser.add_argument('--tag_pairs',
-                        nargs='+',
-                        type=str,
-                        help='Tags to calculate 2D pmf for (comma delim)')
+    parser.add_argument(
+        'tag',
+        type=str,
+        help='Order parameter tag')
+    parser.add_argument(
+        'assembled_op',
+        type=int,
+        help='Value of order parameter in assembled state')
+    parser.add_argument(
+        'staple_types',
+        type=int,
+        help='Number of staple types')
+    parser.add_argument(
+        'scaffold_domains',
+        type=int,
+        help='Number of scaffold domains')
+    parser.add_argument(
+        '--tags',
+        nargs='+',
+        type=str,
+        help='Order parameter tags')
+    parser.add_argument(
+        '--tag_pairs',
+        nargs='+',
+        type=str,
+        help='Tags to calculate 2D pmf for (comma delim)')
 
     return parser.parse_args()
 

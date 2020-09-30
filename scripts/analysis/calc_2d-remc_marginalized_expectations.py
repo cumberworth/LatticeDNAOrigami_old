@@ -161,7 +161,9 @@ def create_output_filepathbase(args):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        descriptions=__doc__,
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
         'system_filename',
         type=str,

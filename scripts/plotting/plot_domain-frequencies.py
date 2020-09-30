@@ -67,7 +67,9 @@ def fill_assembled_shape_array(flat_array, index_to_domaintype):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
             'input_dir',
             type=str,
