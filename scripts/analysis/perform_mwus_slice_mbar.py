@@ -24,7 +24,7 @@ def main():
     fileformatter = construct_fileformatter()
     all_conditions = construct_conditions(
         args, fileformatter, inp_filebase, system_file)
-    staple_lengths = system_file._staple_lengths
+    staple_lengths = all_conditions._staple_lengths
     out_filebase = create_output_filepathbase(args)
     conds = conditions.SimConditions({'temp': args.temp, 'staple_m': args.staple_m,
                                       'bias': biases.NoBias()}, fileformatter, staple_lengths)
