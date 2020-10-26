@@ -25,6 +25,7 @@ def main():
     all_conditions = construct_conditions(
         args, fileformatter, inp_filebase, system_file)
     staple_lengths = all_conditions._staple_lengths
+    num_staples = len(staple_lengths)
     sim_collections = create_simplesim_collections(args, inp_filebase,
                                                    all_conditions)
     decor_outs = decorrelate.SimpleDecorrelatedOutputs(
@@ -57,7 +58,7 @@ def main():
         bin_index_series = [value_to_bin[i] for i in values]
         bin_index_series = np.array(bin_index_series)
         rpots = utility.calc_reduced_potentials(decor_enes, decor_ops,
-                                                conds)
+                                                num_staples, conds)
         lfes, lfe_stds = mbarw._mbar.computePMF(
             rpots, bin_index_series, len(bins))
 
