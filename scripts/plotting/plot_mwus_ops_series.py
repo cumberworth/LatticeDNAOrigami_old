@@ -62,6 +62,9 @@ def main():
             times_filename = '{}.times'.format(filebase)
             times = np.loadtxt(times_filename, skiprows=1)[::skip, 1]
 
+            # Times are messed up for PTMWUS so just do the steps for now
+            times = [i for i in range(len(times))]
+
             for tag in tags:
                 timeseries[tag] = ops[tag]
 
