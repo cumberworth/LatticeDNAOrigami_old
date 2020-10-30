@@ -30,7 +30,6 @@ def main():
     decor_outs = decorrelate.SimpleDecorrelatedOutputs(
         sim_collections, all_conditions)
     decor_outs.read_decors_from_files()
-    decor_staples = decor_outs.get_concatenated_datatype('staples')
 
     mbarw = mbar_wrapper.MBARWrapper(decor_outs)
     mbarw.perform_mbar()
@@ -52,6 +51,7 @@ def main():
         values = decor_outs.get_concatenated_series(tag)
         decor_enes = decor_outs.get_concatenated_datatype('enes')
         decor_ops = decor_outs.get_concatenated_datatype('ops')
+        decor_staples = decor_outs.get_concatenated_datatype('staples')
         bins = list(set(values))
         bins.sort()
         value_to_bin = {value: i for i, value in enumerate(bins)}
