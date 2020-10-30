@@ -51,7 +51,8 @@ class GridBias:
             self._postfix += '-' + str(win_max)
         
         # Read biases from file
-        filename = '{}{}.biases'.format(inp_filebase, self._postfix)
+        self._postfix += '_iter-prod'
+        filename = '{}{}-inp.biases'.format(inp_filebase, self._postfix)
         grid_biases = json.load(open(filename))
         self._grid_biases = {}
         for entry in grid_biases['biases']:
@@ -59,7 +60,6 @@ class GridBias:
             bias = entry['bias']
             self._grid_biases[point] = bias
 
-        self._postfix += '_iter-prod'
 
     def __call__(self, order_params):
         biases = []
