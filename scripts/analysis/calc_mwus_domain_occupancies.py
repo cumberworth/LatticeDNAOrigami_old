@@ -65,7 +65,8 @@ def construct_conditions(args, fileformatter, inp_filebase, system_file):
         for rep in range(args.reps):
             filebase = '{}_run-{}_rep-{}'.format(inp_filebase, args.run, rep)
             grid_biases.append(biases.GridBias(op_tags, window,
-                                               min_outside_bias, slope, args.temp, filebase))
+                                               min_outside_bias, slope,
+                                               args.temp, filebase, args.itr))
 
     conditions_map = {'temp': [args.temp],
                       'staple_m': [args.staple_m],
@@ -146,6 +147,10 @@ def parse_args():
         'run',
         type=int,
         help='Number of reps')
+    parser.add_argument(
+        'itr',
+        type=int,
+        help='US iteration')
 
     return parser.parse_args()
 

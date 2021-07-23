@@ -55,8 +55,8 @@ def main():
             for win_max in window[1]:
                 postfix += '-' + str(win_max)
         
-            filebase = '{}/{}-{}_run-{}_rep-{}{}_iter-prod'.format(args.input_dir,
-                    args.system, args.vari, args.run, rep, postfix)
+            filebase = '{}/{}-{}_run-{}_rep-{}{}_iter-{}'.format(args.input_dir,
+                    args.system, args.vari, args.run, rep, postfix, args.itr)
             ops_filename = '{}.ops'.format(filebase)
             ops = read_ops_from_file(ops_filename, tags, skip)
             times_filename = '{}.times'.format(filebase)
@@ -138,6 +138,10 @@ def parse_args():
         'run',
         type=int,
         help='Number of reps')
+    parser.add_argument(
+        'itr',
+        type=int,
+        help='US iteration')
     parser.add_argument(
             '--assembled_values',
             nargs='+',

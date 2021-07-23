@@ -7,6 +7,7 @@ import random
 
 import numpy as np
 
+
 def create_win_filename(win, filebase, ext):
     """Create filename for given window."""
     postfix = '_win'
@@ -16,7 +17,6 @@ def create_win_filename(win, filebase, ext):
     postfix += '-'
     for win_max in win[1]:
         postfix += '-' + str(win_max)
-
 
     filename = filebase + postfix + ext
 
@@ -57,7 +57,6 @@ def read_windows_file(filename):
         win = (mins, maxs)
         wins.append(win)
 
-
     return tags, wins
 
 
@@ -69,96 +68,6 @@ def get_op_tags_from_bias_functions(bias_functions, bias_tags):
                 op_tags.append(bias['ops'][0])
 
     return op_tags
-
-
-def read_win_energies(win_filebases):
-    """Read in origami energies for given windows (without bias)"""
-    win_enes = []
-    for filebase in win_filebases:
-        filename = filebase + '_iter-prod.ene'
-        enes = np.loadtxt(filename, skiprows=1)
-        win_enes.append(enes[:, 1])
-
-    return win_enes
-
-
-def read_win_energies_from_log(win_filebases):
-    """Read in origami energies for given windows from log file (without bias)"""
-    win_enes = []
-    for filebase in win_filebases:
-        filename = filebase + '_iter-prod.out'
-        with open(filename) as inp:
-            lines = inp.readlines()
-
-        enes =[]
-        for line in lines:
-            words = line.split()
-            if len(words) == 0:
-                pass
-            else:
-                if words[0] == 'System':
-                    ene = float(words[-1])
-                    enes.append(ene)
-
-        enes = np.array(enes)
-        win_enes.append(enes)
-
-    return win_enes
-
-
-def read_win_order_params(win_filebases, tags):
-    """Read in order parameters for given windows"""
-    tags.append('numstaples')
-    #win_ops = {tag: [] for tag in tags}
-    win_ops = []
-    for filebase in win_filebases:
-        filename = filebase + '_iter-prod.ops'
-        ops = read_ops_from_file(filename, tags, 0)
-        win_ops.append(ops)
-
-        #for tag in tags:
-        #    win_ops[tag].append(ops[tag])
-
-    return win_ops
-
-
-def read_win_grid_biases(wins, win_filebases):
-    """Read grid biases for given windows
-    
-    Return list of dictionaries indexed by grid point tuples
-    """
-    win_biases = []
-    for filebase in win_filebases:
-        filename = filebase + '.biases'
-        biases = json.load(open(filename))
-        bias_dic = {}
-        for entry in biases['biases']:
-            point = tuple(entry['point'])
-            bias = entry['bias']
-            bias_dic[point] = bias
-
-        win_biases.append(bias_dic)
-
-    return win_biases
-
-
-def get_all_points(win, point, points, comp):
-    """
-    NOT REALLY SURE
-    
-    """
-    if len(point) == len(win[0]):
-        points.append(tuple(point))
-    else:
-        for i in range(win[0][comp], win[1][comp] + 1):
-            point.append(i)
-            comp += 1
-            points = get_all_points(win, point, points, comp)
-            point.pop()
-            comp -= 1
-
-
-    return points
 
 
 def select_config_by_op_in_win(i, win, ops, op_to_config):
@@ -200,7 +109,7 @@ def select_config_by_op_in_win(i, win, ops, op_to_config):
 
 def find_closest_ops(point, ops):
     """Find closest ops in given list that is closest to specified value
-    
+
     Returns a list of all ops that are have the minimum distance found."""
     dist = 0
     points = []

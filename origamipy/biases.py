@@ -33,8 +33,12 @@ class StackingBias:
 
 
 class GridBias:
-    """Grid bias with linear step well outside grid."""
-    def __init__(self, tags, window, min_outside_bias, slope, temp, inp_filebase):
+    """Grid bias with linear step well outside grid.
+
+    It assumes that the input bias is desired, not the bias calculated for that
+    iteration.
+    """
+    def __init__(self, tags, window, min_outside_bias, slope, temp, inp_filebase, itr):
         self._tags = tags
         self._window = window
         self._min_outside_bias = min_outside_bias
@@ -51,8 +55,8 @@ class GridBias:
             self._postfix += '-' + str(win_max)
         
         # Read biases from file
-        self._postfix += '_iter-prod'
-        filename = '{}{}-inp.biases'.format(inp_filebase, self._postfix)
+        self._postfix += f'_iter-{itr}'
+        filename = f'{inp_filebase}{self._postfix}-inp.biases'
         grid_biases = json.load(open(filename))
         self._grid_biases = {}
         for entry in grid_biases['biases']:
