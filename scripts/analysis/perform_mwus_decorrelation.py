@@ -20,9 +20,10 @@ def main():
     fileformatter = construct_fileformatter()
     all_conditions = construct_conditions(
         args, fileformatter, inp_filebase, system_file)
-    sim_collections = create_simplesim_collections(args, inp_filebase,
-                                                   all_conditions)
-    decor_outs = decorrelate.SimpleDecorrelatedOutputs(
+    sim_collections = outputs.create_sim_collections(inp_filebase,
+                                                     all_conditions, args.reps,
+                                                     args.starting_run)
+    decor_outs = decorrelate.DecorrelatedOutputs(
         sim_collections, all_conditions)
     decor_outs.perform_decorrelation(args.skip)
     decor_outs.apply_masks()
@@ -60,21 +61,6 @@ def construct_conditions(args, fileformatter, inp_filebase, system_file):
 
     # either get rid of this too or make a list of filebases for creating sim collections
     return conditions.AllSimConditions(conditions_map, fileformatter, system_file)
-
-
-def create_simplesim_collections(args, inp_filebase, all_conditions):
-    sim_collections = []
-    rep = 0
-    for conditions in all_conditions:
-        filebase = '{}_run-{}_rep-{}{}'.format(inp_filebase, args.run, rep,
-                                               conditions.fileformat)
-        sim_collection = outputs.SimpleSimCollection(
-            filebase, conditions, args.reps)
-        sim_collections.append(sim_collection)
-        rep += 1
-        rep %= args.reps
-
-    return sim_collections
 
 
 def create_input_filepathbase(args):
@@ -134,9 +120,9 @@ def parse_args():
         type=int,
         help='Number of reps')
     parser.add_argument(
-        'run',
+        'starting_run',
         type=int,
-        help='Number of reps')
+        help='Run to concatenate from')
     parser.add_argument(
         'itr',
         type=int,

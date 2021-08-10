@@ -34,9 +34,9 @@ def main():
     all_decor_outs = []
     sampled_ops = []
     for i in range(1, args.assembled_op + 1):
-        sim_collections = create_simplesim_collections(args, inp_filebase,
-                                                       all_conditions)
-        decor_outs = decorrelate.SimpleDecorrelatedOutputs(
+        sim_collections = outputs.create_sim_collections(inp_filebase,
+            all_conditions, args.reps, args.starting_run)
+        decor_outs = decorrelate.DecorrelatedOutputs(
             sim_collections, all_conditions)
         decor_outs.read_decors_from_files()
         filtered_count = decor_outs.filter_collections(args.tag, i)
@@ -121,21 +121,6 @@ def construct_conditions(args, fileformatter, inp_filebase, system_file):
     return conditions.AllSimConditions(conditions_map, fileformatter, system_file)
 
 
-def create_simplesim_collections(args, inp_filebase, all_conditions):
-    sim_collections = []
-    rep = 0
-    for conditions in all_conditions:
-        filebase = '{}_run-{}_rep-{}{}_decor'.format(inp_filebase, args.run, rep,
-                                                     conditions.fileformat)
-        sim_collection = outputs.SimpleSimCollection(
-            filebase, conditions, args.reps)
-        sim_collections.append(sim_collection)
-        rep += 1
-        rep %= args.reps
-
-    return sim_collections
-
-
 def create_input_filepathbase(args):
     return '{}/{}'.format(args.input_dir, args.filebase)
 
@@ -189,9 +174,9 @@ def parse_args():
         type=int,
         help='Number of reps')
     parser.add_argument(
-        'run',
+        'starting_run',
         type=int,
-        help='Number of reps')
+        help='Run to concatenate from')
     parser.add_argument(
         'itr',
         type=int,

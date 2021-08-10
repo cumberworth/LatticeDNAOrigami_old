@@ -29,7 +29,7 @@ class EnumCollection:
 
         all_conds = self._all_conditions.condition_to_characteristic_values
         tags = self._all_conditions.condition_tags + self._enum_weights[0].tags
-        out_file = files.TagOutFile('{}.aves'.format(filebase))
+        out_file = files.TagOutFile(f'{filebase}.aves')
         out_file.write(tags, np.concatenate([all_conds, np.array(means)],
                                             axis=1))
 
@@ -47,15 +47,16 @@ class EnumCollection:
             header = np.concatenate([['ops'], temps])
             bins = np.array(bins).reshape(len(bins), 1)
             data = np.concatenate([bins, np.array(lfes).T], axis=1)
-            lfes_filebase = '{}_{}-lfes'.format(filebase, tag)
-            lfes_file = files.TagOutFile('{}.aves'.format(lfes_filebase))
+            lfes_filebase = f'{filebase}_{tag}-lfes'
+            lfes_file = files.TagOutFile(f'{lfes_filebase}.aves')
             lfes_file.write(header, data)
 
 
-def create_sim_collections(filebase, all_conditions, reps):
+def create_sim_collections(filebase, all_conditions, reps, starting_run=0):
     sim_collections = []
     for conditions in all_conditions:
-        sim_collection = SimCollection(filebase, conditions, reps)
+        sim_collection = SimCollection(
+            filebase, conditions, reps, starting_run)
         sim_collections.append(sim_collection)
 
     return sim_collections
@@ -67,12 +68,13 @@ class SimCollection:
     filebase_template = '{}_run-{}_rep-{}-{}'
     decor_filebase_template = '{}_rep-{}-{}_decor'
 
-    def __init__(self, filebase, conditions, reps):
+    def __init__(self, filebase, conditions, reps, starting_run=0):
         self.conditions = conditions
         self.filebase = filebase
         self._datatype_to_reps = {}
         self._trjtype_to_reps = {}
         self._num_reps = 0
+        self._starting_run = starting_run
 
         # This is ugly
         self._reps = reps
@@ -125,7 +127,7 @@ class SimCollection:
         return self._datatype_to_reps[tag]
 
     def get_decor_reps_data(self, tag):
-        tag = 'decor_{}'.format(tag)
+        tag = f'decor_{tag}'
         if tag not in self._datatype_to_reps.keys():
             self._datatype_to_reps[tag] = []
             for rep in range(max(self._reps) + 1):
@@ -155,16 +157,16 @@ class SimCollection:
 
     def get_filebase(self, run, rep):
         return self.filebase_template.format(self.filebase, run, rep,
-                self.conditions.fileformat)
+                                             self.conditions.fileformat)
 
     def _load_runs_trj(self, rep, tag):
         runs_remain = True
-        run = 0
+        run = self._starting_run
         trjs = []
         while runs_remain:
             filebase = self.filebase_template.format(self.filebase, run, rep,
-                    self.conditions.fileformat)
-            filename = '{}.{}'.format(filebase, tag)
+                                                     self.conditions.fileformat)
+            filename = f'{filebase}.{tag}'
             try:
                 if tag in ['trj', 'vcf']:
                     trj = files.UnparsedMultiLineStepInpFile(filename, 0)
@@ -184,7 +186,7 @@ class SimCollection:
         return trjs
 
     def get_decor_reps_trj(self, tag):
-        tag = 'decor_{}'.format(tag)
+        tag = f'decor_{tag}'
         all_trjs = []
         if tag not in self._trjtype_to_reps.keys():
             self._trjtype_to_reps[tag] = []
@@ -194,19 +196,19 @@ class SimCollection:
                     continue
 
                 filebase = self.decor_filebase_template.format(self.filebase,
-                        rep, self.conditions.fileformat)
+                                                               rep, self.conditions.fileformat)
                 try:
                     if 'trj' in tag:
-                        filename = '{}.trj'.format(filebase)
+                        filename = f'{filebase}.trj'
                         trj = files.UnparsedMultiLineStepInpFile(filename, 0)
                     elif 'vcf' in tag:
-                        filename = '{}.vcf'.format(filebase)
+                        filename = f'{filebase}.vcf'
                         trj = files.UnparsedMultiLineStepInpFile(filename, 0)
                     elif 'ores' in tag:
-                        filename = '{}.ores'.format(filebase)
+                        filename = f'{filebase}.ores'
                         trj = files.UnparsedSingleLineStepInpFile(filename, 0)
                     elif 'states' in tag:
-                        filename = '{}.states'.format(filebase)
+                        filename = f'{filebase}.states'
                         trj = files.UnparsedSingleLineStepInpFile(filename, 0)
                     else:
                         raise NotImplementedError
@@ -239,7 +241,7 @@ class SimCollection:
         all_series = []
         while runs_remain:
             filebase = self.filebase_template.format(self.filebase, run, rep,
-                    self.conditions.fileformat)
+                                                     self.conditions.fileformat)
             try:
                 all_series.append(self._load_data_from_file(filebase, tag))
             except IOError:
@@ -256,7 +258,7 @@ class SimCollection:
 
     def _load_concat_data(self, rep, tag):
         filebase = self.decor_filebase_template.format(self.filebase, rep,
-                self.conditions.fileformat)
+                                                       self.conditions.fileformat)
         try:
             series = self._load_data_from_file(filebase, tag)
         except IOError:
@@ -267,7 +269,8 @@ class SimCollection:
 
     def _load_data_from_file(self, filebase, tag):
         if 'enes' in tag:
-            series = datatypes.Energies.from_file(filebase, float(self.conditions.temp))
+            series = datatypes.Energies.from_file(
+                filebase, float(self.conditions.temp))
         if 'ops' in tag:
             series = datatypes.OrderParams.from_file(filebase)
         if 'staples' in tag:
@@ -297,7 +300,7 @@ class SimpleSimCollection:
     def _load_data(self, tag):
         if 'enes' in tag:
             series = datatypes.Energies.from_file(self.filebase,
-                    float(self.conditions.temp))
+                                                  float(self.conditions.temp))
         if 'ops' in tag:
             series = datatypes.OrderParams.from_file(self.filebase)
         if 'staples' in tag:
@@ -314,7 +317,7 @@ class SimpleSimCollection:
         return self._trjtypes[tag]
 
     def _load_trj(self, tag):
-        filename = '{}.{}'.format(self.filebase, tag)
+        filename = f'{filebase}.{tag}'
         if tag in ['trj', 'vcf']:
             trj = files.UnparsedMultiLineStepInpFile(filename, 0)
         elif tag in ['ores', 'states']:

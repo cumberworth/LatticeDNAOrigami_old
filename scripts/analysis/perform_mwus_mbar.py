@@ -25,9 +25,9 @@ def main():
     all_conditions = construct_conditions(
         args, fileformatter, inp_filebase, system_file)
     staple_lengths = all_conditions._staple_lengths
-    sim_collections = create_simplesim_collections(args, inp_filebase,
-                                                   all_conditions)
-    decor_outs = decorrelate.SimpleDecorrelatedOutputs(
+    sim_collections = outputs.create_sim_collections(inp_filebase,
+                                                     all_conditions, args.reps)
+    decor_outs = decorrelate.DecorrelatedOutputs(
         sim_collections, all_conditions)
     decor_outs.read_decors_from_files()
 
@@ -118,21 +118,6 @@ def construct_conditions(args, fileformatter, inp_filebase, system_file):
     return conditions.AllSimConditions(conditions_map, fileformatter, system_file)
 
 
-def create_simplesim_collections(args, inp_filebase, all_conditions):
-    sim_collections = []
-    rep = 0
-    for conditions in all_conditions:
-        filebase = '{}_run-{}_rep-{}{}_decor'.format(inp_filebase, args.run, rep,
-                                                     conditions.fileformat)
-        sim_collection = outputs.SimpleSimCollection(
-            filebase, conditions, args.reps)
-        sim_collections.append(sim_collection)
-        rep += 1
-        rep %= args.reps
-
-    return sim_collections
-
-
 def create_input_filepathbase(args):
     return '{}/{}'.format(args.input_dir, args.filebase)
 
@@ -186,21 +171,23 @@ def parse_args():
         type=int,
         help='Number of reps')
     parser.add_argument(
-        'run',
+        'starting_run',
         type=int,
-        help='Number of reps')
+        help='Run to concatenate from')
     parser.add_argument(
         'itr',
         type=int,
         help='US iteration')
-    parser.add_argument('--tags',
-                        nargs='+',
-                        type=str,
-                        help='Order parameter tags')
-    parser.add_argument('--tag_pairs',
-                        nargs='+',
-                        type=str,
-                        help='Tags to calculate 2D pmf for (comma delim)')
+    parser.add_argument(
+        '--tags',
+        nargs='+',
+        type=str,
+        help='Order parameter tags')
+    parser.add_argument(
+        '--tag_pairs',
+        nargs='+',
+        type=str,
+        help='Tags to calculate 2D pmf for (comma delim)')
 
     return parser.parse_args()
 

@@ -70,6 +70,22 @@ def get_op_tags_from_bias_functions(bias_functions, bias_tags):
     return op_tags
 
 
+def get_all_points(win, point, points, comp):
+    """NOT REALLY SURE"""
+    if len(point) == len(win[0]):
+        points.append(tuple(point))
+    else:
+        for i in range(win[0][comp], win[1][comp] + 1):
+            point.append(i)
+            comp += 1
+            points = get_all_points(win, point, points, comp)
+            point.pop()
+            comp -= 1
+
+
+    return points
+
+
 def select_config_by_op_in_win(i, win, ops, op_to_config):
     """Select a configuration with an op in the given window
 
