@@ -65,8 +65,8 @@ def create_sim_collections(filebase, all_conditions, reps, starting_run=0):
 class SimCollection:
     """Output data for single run and replica of a simulation."""
 
-    filebase_template = '{}_run-{}_rep-{}-{}'
-    decor_filebase_template = '{}_rep-{}-{}_decor'
+    filebase_template = '{}_run-{}_rep-{}{}'
+    decor_filebase_template = '{}_rep-{}{}_decor'
 
     def __init__(self, filebase, conditions, reps, starting_run=0):
         self.conditions = conditions
@@ -237,7 +237,7 @@ class SimCollection:
 
     def _load_runs_data(self, rep, tag, concatenate):
         runs_remain = True
-        run = 0
+        run = self._starting_run
         all_series = []
         while runs_remain:
             filebase = self.filebase_template.format(self.filebase, run, rep,
