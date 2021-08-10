@@ -105,7 +105,7 @@ def construct_conditions(args, fileformatter, inp_filebase, system_file):
     grid_biases = []
     for window in windows:
         for rep in range(args.reps):
-            filebase = '{}_run-{}_rep-{}'.format(inp_filebase, args.run, rep)
+            filebase = '{}_run-{}_rep-{}'.format(inp_filebase, args.starting_run, rep)
             grid_biases.append(biases.GridBias(op_tags, window,
                                                min_outside_bias, slope,
                                                args.temp, filebase, args.itr))
