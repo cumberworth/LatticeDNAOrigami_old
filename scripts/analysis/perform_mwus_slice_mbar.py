@@ -34,8 +34,8 @@ def main():
     all_decor_outs = []
     sampled_ops = []
     for i in range(1, args.assembled_op + 1):
-        sim_collections = outputs.create_sim_collections(inp_filebase,
-            all_conditions, args.reps, args.starting_run)
+        sim_collections = outputs.create_sim_collections(
+            inp_filebase, all_conditions, list(range(args.reps)))
         decor_outs = decorrelate.DecorrelatedOutputs(
             sim_collections, all_conditions)
         decor_outs.read_decors_from_files()
@@ -108,7 +108,8 @@ def construct_conditions(args, fileformatter, inp_filebase, system_file):
     grid_biases = []
     for window in windows:
         for rep in range(args.reps):
-            filebase = '{}_run-{}_rep-{}'.format(inp_filebase, args.starting_run, rep)
+            filebase = '{}_run-{}_rep-{}'.format(
+                inp_filebase, args.starting_run, rep)
             grid_biases.append(biases.GridBias(op_tags, window,
                                                min_outside_bias, slope,
                                                args.temp, filebase, args.itr))

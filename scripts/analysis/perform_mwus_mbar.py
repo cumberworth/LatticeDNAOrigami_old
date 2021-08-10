@@ -25,8 +25,8 @@ def main():
     all_conditions = construct_conditions(
         args, fileformatter, inp_filebase, system_file)
     staple_lengths = all_conditions._staple_lengths
-    sim_collections = outputs.create_sim_collections(inp_filebase,
-                                                     all_conditions, args.reps)
+    sim_collections = outputs.create_sim_collections(
+            inp_filebase, all_conditions, list(range(args.reps)))
     decor_outs = decorrelate.DecorrelatedOutputs(
         sim_collections, all_conditions)
     decor_outs.read_decors_from_files()
