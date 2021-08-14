@@ -317,7 +317,7 @@ class SimpleSimCollection:
         return self._trjtypes[tag]
 
     def _load_trj(self, tag):
-        filename = f'{filebase}.{tag}'
+        filename = f'{self.filebase}.{tag}'
         if tag in ['trj', 'vcf']:
             trj = files.UnparsedMultiLineStepInpFile(filename, 0)
         elif tag in ['ores', 'states']:

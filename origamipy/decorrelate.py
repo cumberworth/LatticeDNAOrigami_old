@@ -74,7 +74,7 @@ class DecorrelatedOutputs:
         print('State,   configs, t0, g,   Neff')
         for sim_collection in self._sim_collections:
             self._decor_masks.append([])
-            for i, rep in enumerate(sim_collection._reps):
+            for rep in sim_collection._reps:
                 mask = self._construct_decorrelation_mask(sim_collection, rep,
                         skip)
                 self._decor_masks[-1].append(mask)
