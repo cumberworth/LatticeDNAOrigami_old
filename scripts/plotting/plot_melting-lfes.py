@@ -18,7 +18,7 @@ from origamipy import plot
 def main():
     args = parse_args()
 
-    out_filebase = '{}/{}_{}-lfes-melting'.format(args.filebase, args.tag)
+    out_filebase = '{}/{}_{}-lfes-melting'.format(args.output_dir, args.filebase, args.tag)
     figsize = (plot.cm_to_inches(14), plot.cm_to_inches(10))
     plot.set_default_appearance()
     f = plt.figure(figsize=figsize, dpi=300)
@@ -27,7 +27,7 @@ def main():
     ax.set_ylim([-0.5, 20])
 
     for system, vari in zip(args.systems, args.varis):
-        inp_filebase = '{}/{}_{}-lfes-melting'.format(args.filebase, args.tag)
+        inp_filebase = '{}/{}_{}-lfes-melting'.format(args.input_dir, args.filebase, args.tag)
         lfes = pd.read_csv('{}.aves'.format(inp_filebase), sep=' ', index_col=0)
         lfe_stds = pd.read_csv('{}.stds'.format(inp_filebase), sep=' ', index_col=0)
         temp = lfes.columns[0]
