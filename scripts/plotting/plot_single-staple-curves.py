@@ -17,6 +17,8 @@ def main():
     args = parse_args()
 
     tags = ['staplestates{}'.format(i) for i in range(1, args.stapletypes + 1)]
+    inp_filebase = '{}/{}'.format(
+            args.input_dir, args.filebase)
     out_filebase = '{}/{}_staplestates-means'.format(
             args.output_dir, args.filebase)
     figsize = (plot.cm_to_inches(18), plot.cm_to_inches(12))
@@ -25,7 +27,7 @@ def main():
     f = plt.figure(figsize=figsize, dpi=300)
     gs = gridspec.GridSpec(1, 2, width_ratios=[10, 1], height_ratios=[1])
     ax = create_axis(f, gs)
-    aves, stds = plot.read_expectations(filebase)
+    aves, stds = plot.read_expectations(inp_filebase)
     if args.rtag:
         aves = aves[aves[args.rtag] == args.rvalue]
         stds = stds[stds[args.rtag] == args.rvalue]
