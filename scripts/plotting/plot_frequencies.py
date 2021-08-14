@@ -23,13 +23,12 @@ def main():
     op_tag = 'numfullyboundstaples'
     tagbase = 'staplestates'
     tags = ['{}{}'.format(tagbase, i + 1) for i in range(args.stapletypes)]
-    inp_filebase = '{}/{}-{}-{}'.format(args.input_dir, args.system,
-            args.vari, op_tag)
+    inp_filebase = '{}/{}-{}'.format(args.input_dir, args.filebase, op_tag)
     figsize = (plot.cm_to_inches(18), plot.cm_to_inches(12))
     index_to_stapletype = np.loadtxt(args.mapfile, dtype=int)
     for op_value in range(1, args.stapletypes + 1):
-        out_filebase = '{}/{}-{}_{}-{}-{}-freqs'.format(args.output_dir, args.system,
-                args.vari, op_tag, op_value, tagbase)
+        out_filebase = '{}/{}_{}-{}-{}-freqs'.format(
+                args.output_dir, args.filebase, op_tag, op_value, tagbase)
 
         plot.set_default_appearance()
         f = plt.figure(figsize=figsize, dpi=300)
@@ -80,13 +79,9 @@ def parse_args():
             type=str,
             help='Output directory')
     parser.add_argument(
-            'system',
+            'filebase',
             type=str,
-            help='System')
-    parser.add_argument(
-            'vari',
-            type=str,
-            help='Simulation variant')
+            help='Filebase')
     parser.add_argument(
             'stapletypes',
             type=int,

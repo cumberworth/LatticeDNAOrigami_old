@@ -18,7 +18,7 @@ from origamipy import plot
 def main():
     args = parse_args()
 
-    out_filebase = '{}_{}-lfes-melting'.format(args.output_filebase, args.tag)
+    out_filebase = '{}/{}_{}-lfes-melting'.format(args.filebase, args.tag)
     figsize = (plot.cm_to_inches(14), plot.cm_to_inches(10))
     plot.set_default_appearance()
     f = plt.figure(figsize=figsize, dpi=300)
@@ -27,10 +27,9 @@ def main():
     ax.set_ylim([-0.5, 20])
 
     for system, vari in zip(args.systems, args.varis):
-        filebase = '{}/{}-{}_{}-lfes-melting'.format(args.input_dir, system, vari,
-                args.tag)
-        lfes = pd.read_csv('{}.aves'.format(filebase), sep=' ', index_col=0)
-        lfe_stds = pd.read_csv('{}.stds'.format(filebase), sep=' ', index_col=0)
+        inp_filebase = '{}/{}_{}-lfes-melting'.format(args.filebase, args.tag)
+        lfes = pd.read_csv('{}.aves'.format(inp_filebase), sep=' ', index_col=0)
+        lfe_stds = pd.read_csv('{}.stds'.format(inp_filebase), sep=' ', index_col=0)
         temp = lfes.columns[0]
         lfes = lfes[temp]
         lfe_stds = lfe_stds[temp]
@@ -53,9 +52,13 @@ def parse_args():
             type=str,
             help='Directory of inputs')
     parser.add_argument(
-            'output_filebase',
+            'output_dir',
             type=str,
-            help='Output filebase')
+            help='Directory of inputs')
+    parser.add_argument(
+            'filebase',
+            type=str,
+            help='Filebase')
     parser.add_argument(
             'tag',
             type=str,

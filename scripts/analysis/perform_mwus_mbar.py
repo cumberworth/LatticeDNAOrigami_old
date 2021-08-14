@@ -123,7 +123,11 @@ def create_input_filepathbase(args):
 
 
 def create_output_filepathbase(args):
-    return '{}/{}'.format(args.output_dir, args.filebase)
+    return '{}/{}_run-{}_iter-{}'.format(
+        args.output_dir,
+        args.filebase,
+        args.starting_run,
+        args.itr)
 
 
 def parse_args():

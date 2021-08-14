@@ -22,8 +22,8 @@ from origamipy import us_process
 def main():
     args = parse_args()
     skip = 1
-    out_filebase = '{}/{}-{}_timeseries'.format(args.output_dir,
-            args.system, args.vari)
+    out_filebase = '{}/{}-{}_run-{}_iter-{}_timeseries'.format(
+            args.output_dir, args.system, args.vari, args.run, args.itr)
     tags = ['numstaples', 'numfulldomains', 'nummisdomains', 'numstackedpairs']
     labels = [
         'Bound staples',

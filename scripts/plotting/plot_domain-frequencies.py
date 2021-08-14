@@ -23,12 +23,12 @@ def main():
     op_tag = 'numfulldomains'
     tagbase = 'domainstate'
     tags = ['{}{}'.format(tagbase, i) for i in range(args.scaffolddomains)]
-    inp_filebase = '{}/{}-{}-{}'.format(args.input_dir, args.system, args.vari, op_tag)
+    inp_filebase = '{}/{}-{}'.format(args.input_dir, args.filebase, op_tag)
     index_to_domaintype = np.loadtxt(args.mapfile, dtype=int)
     figsize = (plot.cm_to_inches(18), plot.cm_to_inches(12))
     for op_value in range(1, args.scaffolddomains + 1):
-        out_filebase = '{}/{}-{}_{}-{}-{}-freqs'.format(args.output_dir,
-                args.system, args.vari, op_tag, op_value, tagbase)
+        out_filebase = '{}/{}_{}-{}-{}-freqs'.format(
+                args.output_dir, args.filebase, op_tag, op_value, tagbase)
 
         plot.set_default_appearance()
         f = plt.figure(figsize=figsize, dpi=300)
@@ -79,13 +79,9 @@ def parse_args():
             type=str,
             help='Output directory')
     parser.add_argument(
-            'system',
+            'filebase',
             type=str,
-            help='System')
-    parser.add_argument(
-            'vari',
-            type=str,
-            help='Simulation variant')
+            help='Filebase')
     parser.add_argument(
             'scaffolddomains',
             type=int,
