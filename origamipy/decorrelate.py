@@ -14,125 +14,215 @@ NUM_STAPLES_TAG = 'numstaples'
 
 
 class DecorrelatedOutputs:
+    """Represents decorrelated outputs of a simulation."""
     _datatypes = ['enes', 'ops', 'staples', 'staplestates']
     _trjtypes = ['trj', 'vcf', 'ores', 'states']
-#    _trjtypes = ['trj', 'vcf', 'states']
 
-    def __init__(self, sim_collections, all_conditions):
+    def __init__(self, sim_collections, all_conditions=None,
+                 rep_conditions_equal=True):
         self.all_conditions = all_conditions
+
         self._sim_collections = sim_collections
         self._decor_masks = []
         self._num_decorrelated_steps = 0
         self._datatype_to_decors = {}
         self._trjtype_to_decors = {}
-
-    def get_concatenated_datatype(self, tag):
-        concat = []
-        for data in self._datatype_to_decors[tag]:
-            concat.append(datatypes.OutputData.concatenate(data))
-
-        return datatypes.OutputData.concatenate(concat)
-
-    def get_num_steps_per_condition(self):
-        steps = []
-        for rep_to_data in self._datatype_to_decors['enes']:
-            steps.append(sum([s.steps for s in rep_to_data]))
-
-        return steps
-
-    def get_concatenated_series(self, tag):
-        for reps_data in self._datatype_to_decors.values():
-            if tag in reps_data[0][0].tags:
-                concat = []
-                for data in reps_data:
-                    reps = []
-                    for series in data:
-                        reps.append(series[tag])
-
-                    concat.append(np.concatenate(reps))
-
-                return np.concatenate(concat)
-
-        else:
-            raise Exception
+        self._rep_conditions_equal = rep_conditions_equal
 
     @property
     def all_series_tags(self):
-        tags = []
+        se_tags = []
         for decors in self._datatype_to_decors.values():
             datatype = decors[0][0]
-            for tag in datatype.tags:
-                if tag == 'step':
+            for se_tag in datatype.tags:
+                if se_tag == 'step':
                     continue
 
-                tags.append(tag)
+                se_tags.append(se_tag)
 
-        return tags
+        return se_tags
 
-    def perform_decorrelation(self, skip):
+    @property
+    def num_steps_per_condition(self):
+        steps = []
+        for reps_data in self._datatype_to_decors['enes']:
+            if self._rep_conditions_equal:
+                steps.append(0)
+            for data in reps_data:
+                if self._rep_conditions_equal:
+                    steps[-1] += data.steps
+                else:
+                    steps.append(data.steps)
+
+        return steps
+
+    def get_concatenated_datatype(self, dt_tag):
+        """Concatenate across reps and conditions."""
+        concat = []
+        if self._rep_conditions_equal:
+            for j in range(len(self._datatype_to_decors[0])):
+                for rep_data in self._datatype_to_decors[dt_tag]:
+                    concat.append(rep_data[j])
+        else:
+            for rep_data in self._datatype_to_decors[dt_tag]:
+                concat.append(datatypes.OutputData.concatenate(rep_data))
+
+        return datatypes.OutputData.concatenate(concat)
+
+    def get_concatenated_series(self, se_tag):
+        """Get the raw series data from the datatype."""
+        if self._rep_conditions_equal:
+            for reps_data in self._datatype_to_decors.values():
+                if se_tag in reps_data[0][0]._tags:
+                    concat = []
+                    for j in range(len(self._datatype_to_decors[0])):
+                        for rep_data in reps_data:
+                            concat.append(rep_data[j][se_tag])
+
+                    return np.concatenate(concat)
+            else:
+                raise Exception
+        else:
+            for reps_data in self._datatype_to_decors.values():
+                if se_tag in reps_data[0][0]._tags:
+                    concat = []
+                    for rep_data in reps_data:
+                        conditions = []
+                        for data in rep_data:
+                            conditions.append(data[se_tag])
+
+                        concat.append(np.concatenate(conditions))
+
+                    return np.concatenate(concat)
+
+            else:
+                raise Exception
+
+    def perform_decorrelation(self, skip, detect_equil=False, g=None):
         print('Performing decorrelations')
-        print('State,   configs, t0, g,   Neff')
-        for sim_collection in self._sim_collections:
+        print('State'.ljust(20) +
+              'configs'.ljust(8) +
+              't0'.ljust(8) +
+              'g'.ljust(8) +
+              'Neff'.ljust(8))
+        for rep_sim_collections in self._sim_collections:
             self._decor_masks.append([])
-            for rep in sim_collection._reps:
-                mask = self._construct_decorrelation_mask(sim_collection, rep,
-                        skip)
+            for sim_collection in rep_sim_collections:
+                mask = self._construct_decorrelation_mask(
+                    sim_collection, skip, detect_equil, g)
                 self._decor_masks[-1].append(mask)
-
-    def _construct_decorrelation_mask(self, sim_collection, rep, skip):
-        enes = sim_collection.reps_energies[rep]
-        ops = sim_collection.reps_order_params[rep]
-        num_staples = sim_collection.reps_staples[rep]
-        steps = enes.steps
-        rpots = utility.calc_reduced_potentials(enes, ops, num_staples,
-                                                sim_collection.conditions)
-        start_i, g, Neff = timeseries.detectEquilibration(rpots, nskip=skip)
-        template = '{:<8} {:<8} {:<3} {:<4.1f} {:<.1f}'
-        print(template.format(sim_collection.conditions.fileformat, steps,
-                start_i, g, Neff))
-        indices = (timeseries.subsampleCorrelatedData(rpots[start_i:], g=skip*g))
-        return [i + start_i for i in indices]
 
     def read_decors_from_files(self, data_only=False):
         for datatype in self._datatypes:
             self._datatype_to_decors[datatype] = []
-            for sim_collection in self._sim_collections:
-                reps_series = sim_collection.get_decor_reps_data(datatype)
-                self._datatype_to_decors[datatype].append(reps_series)
+            for rep_sim_collections in self._sim_collections:
+                self._datatype_to_decors[datatype].append([])
+                for sim_collection in rep_sim_collections:
+                    data = sim_collection.get_decor_data(datatype)
+                    self._datatype_to_decors[datatype][-1].append(data)
 
         if not data_only:
             for trjtype in self._trjtypes:
                 self._trjtype_to_decors[trjtype] = []
-                for sim_collection in self._sim_collections:
-                    reps_series = sim_collection.get_decor_reps_trj(trjtype)
-                    self._trjtype_to_decors[trjtype].append(reps_series)
+                for rep_sim_collections in self._sim_collections:
+                    self._trjtype_to_decors[trjtype].append([])
+                    for sim_collection in rep_sim_collections:
+                        trj = sim_collection.get_decor_trj(trjtype)
+                        self._trjtype_to_decors[trjtype][-1].append(trj)
 
-    def apply_masks(self):
+    def apply_masks(self, out_filebase):
         # The mask numbering is different than the rep number
         for datatype in self._datatypes:
             self._datatype_to_decors[datatype] = []
-            for i, sim_collection in enumerate(self._sim_collections):
+            for i, rep_sim_collections in enumerate(self._sim_collections):
                 self._datatype_to_decors[datatype].append([])
-                reps_to_data = sim_collection.get_reps_data(datatype)
-                for j, rep in enumerate(sim_collection._reps):
-                    data = reps_to_data[rep]
+                for j, sim_collection in enumerate(rep_sim_collections):
+                    data = sim_collection.get_data(datatype)
                     data.apply_mask(self._decor_masks[i][j])
-                    self._datatype_to_decors[datatype][i].append(data)
+                    self._datatype_to_decors[datatype][-1].append(data)
 
+        # This immediately writes to file
         for trjtype in self._trjtypes:
             self._trjtype_to_decors[trjtype] = []
-            for i, sim_collection in enumerate(self._sim_collections):
+            for i, rep_sim_collections in enumerate(self._sim_collections):
                 self._trjtype_to_decors[trjtype].append([])
-                reps_to_trjs = sim_collection.get_reps_trj(trjtype)
-                for j, rep in enumerate(sim_collection._reps):
-                    trjs = reps_to_trjs[rep]
+                for j, sim_collection in enumerate(rep_sim_collections):
+                    trjs = sim_collection.get_trj(trjtype)
+
+                    # Would need to change for when using subset of reps
                     filebase = sim_collection.decor_filebase_template.format(
-                            sim_collection.filebase, rep,
-                            sim_collection.conditions.fileformat)
+                        out_filebase, sim_collection._start_run,
+                        sim_collection._end_run, i,
+                        sim_collection.conditions.fileformat)
                     filename = '{}.{}'.format(filebase, trjtype)
                     decor_trj = self._apply_mask_to_trjs(self._decor_masks[i][j],
-                            trjs, filename)
-                    self._trjtype_to_decors[trjtype][i].append(decor_trj)
+                                                         trjs, filename)
+                    self._trjtype_to_decors[trjtype][-1].append(decor_trj)
+
+    def write_decors_to_files(self, out_filebase):
+        for datatype in self._datatypes:
+            for i, rep_sim_collections in enumerate(self._sim_collections):
+                for j, sim_collection in enumerate(rep_sim_collections):
+
+                    # Would need to change for when using subset of reps
+                    filebase = sim_collection.decor_filebase_template.format(
+                        out_filebase, sim_collection._start_run,
+                        sim_collection._end_run, i,
+                        sim_collection.conditions.fileformat)
+                    if datatype == 'enes':
+                        self._datatype_to_decors[datatype][i][j].to_file( 
+                            filebase, float(sim_collection.conditions.temp))
+                    else:
+                        self._datatype_to_decors[datatype][i][j].to_file(
+                            filebase)
+
+    def filter_collections(self, op_tag, value):
+        filtered_count = 0
+        for i, rep_sim_collections in enumerate(self._sim_collections):
+            for j, sim_collection in enumerate(rep_sim_collections):
+
+                # Create mask
+                selected_op = self._datatype_to_decors['ops'][i][j][op_tag]
+                mask = selected_op == value
+                filtered_count += mask.sum()
+
+                # Apply mask
+                for datatype in self._datatypes:
+                    data = self._datatype_to_decors[datatype][i][j]._data
+                    reduced_data = []
+                    for series in data:
+                        reduced_data.append(series[mask])
+
+                    reduced_data = np.array(reduced_data)
+                    self._datatype_to_decors[datatype][i][j]._data = reduced_data
+
+        return filtered_count
+
+    def _construct_decorrelation_mask(self, sim_collection, skip, detect_equil, g):
+        enes = sim_collection.get_data('enes')
+        ops = sim_collection.get_data('ops')
+        num_staples = sim_collection.get_data('staples')
+        steps = enes.steps
+        rpots = utility.calc_reduced_potentials(
+            enes, ops, num_staples, sim_collection.conditions)
+        if g != None:
+            start_i = 0
+            indices = timeseries.subsampleCorrelatedData(rpots, g=skip*g)
+            Neff = len(indices)
+        elif detect_equil:
+            start_i, g, Neff = timeseries.detectEquilibration(rpots, nskip=skip)
+            indices = timeseries.subsampleCorrelatedData(
+                rpots[start_i:], g=skip*g)
+        else:
+            start_i = 0
+            g = timeseries.statisticalInefficiency(rpots)
+            indices = timeseries.subsampleCorrelatedData(rpots, g=skip*g)
+            Neff = len(indices)
+            
+        template = '{:<20}{:<8}{:<8}{:<8.1f}{:.1f}'
+        print(template.format(sim_collection.conditions.fileformat, steps,
+                              start_i, g, Neff))
+        return [i + start_i for i in indices]
 
     def _apply_mask_to_trjs(self, mask, trjs, filename):
         out_file = open(filename, 'w')
@@ -151,188 +241,3 @@ class DecorrelatedOutputs:
             trj.close()
 
         out_file.close()
-
-    def write_decors_to_files(self):
-        for datatype in self._datatypes:
-            for i, sim_collection in enumerate(self._sim_collections):
-                for j, rep in enumerate(sim_collection._reps):
-                    filebase = sim_collection.decor_filebase_template.format(
-                            sim_collection.filebase, rep,
-                            sim_collection.conditions.fileformat)
-                    if datatype == 'enes':
-                        self._datatype_to_decors[datatype][i][j].to_file(filebase,
-                                float(sim_collection.conditions.temp))
-                    else:
-                        self._datatype_to_decors[datatype][i][j].to_file(filebase)
-
-    def filter_collections(self, filter_tag, value):
-        filtered_count = 0
-        for i, sim_collection in enumerate(self._sim_collections):
-            for j, rep in enumerate(sim_collection._reps):
-
-                # Create mask
-                selected_op = self._datatype_to_decors['ops'][i][j][filter_tag]
-                mask = selected_op == value
-                filtered_count += mask.sum()
-
-                # Apply mask
-                for datatype in self._datatypes:
-                    data = self._datatype_to_decors[datatype][i][j]._data
-                    reduced_data = []
-                    for series in data:
-                        reduced_data.append(series[mask])
-
-                    reduced_data = np.array(reduced_data)
-                    self._datatype_to_decors[datatype][i][j]._data = reduced_data
-
-        return filtered_count
-
-
-class SimpleDecorrelatedOutputs:
-    _datatypes = ['enes', 'ops', 'staples', 'staplestates']
-    _trjtypes = ['trj', 'vcf', 'ores', 'states']
-
-    def __init__(self, sim_collections, all_conditions):
-        self.all_conditions = all_conditions
-        self._sim_collections = sim_collections
-        self._decor_masks = []
-        self._num_decorrelated_steps = 0
-        self._datatype_to_decors = {}
-        self._trjtype_to_decors = {}
-
-    def get_concatenated_datatype(self, tag):
-        return datatypes.OutputData.concatenate(self._datatype_to_decors[tag])
-
-    def get_num_steps_per_condition(self):
-        steps = []
-        for data in self._datatype_to_decors['enes']:
-            steps.append(data.steps)
-
-        return steps
-
-    def get_concatenated_series(self, tag):
-        for data in self._datatype_to_decors.values():
-            if tag in data[0].tags:
-                concat = []
-                for series in data:
-                    concat.append(series[tag])
-
-                return np.concatenate(concat)
-
-        else:
-            raise Exception
-
-    @property
-    def all_series_tags(self):
-        tags = []
-        for decors in self._datatype_to_decors.values():
-            datatype = decors[0]
-            for tag in datatype.tags:
-                if tag == 'step':
-                    continue
-
-                tags.append(tag)
-
-        return tags
-
-    def perform_decorrelation(self, skip):
-        print('Performing decorrelations')
-        print('State,   configs, t0, g,   Neff')
-        for sim_collection in self._sim_collections:
-            mask = self._construct_decorrelation_mask(sim_collection, skip)
-            self._decor_masks.append(mask)
-
-    def _construct_decorrelation_mask(self, sim_collection, skip):
-        enes = sim_collection.get_data('enes')
-        ops = sim_collection.get_data('ops')
-        num_staples = sim_collection.get_data('staples')
-        steps = enes.steps
-        rpots = utility.calc_reduced_potentials(enes, ops, num_staples,
-                                                sim_collection.conditions)
-        start_i, g, Neff = timeseries.detectEquilibration(rpots, nskip=skip)
-        template = '{:<8} {:<8} {:<3} {:<4.1f} {:<.1f}'
-        print(template.format(sim_collection.conditions.fileformat, steps,
-                start_i, g, Neff))
-        indices = (timeseries.subsampleCorrelatedData(rpots[start_i:], g=skip*g))
-        return [i + start_i for i in indices]
-
-    def read_decors_from_files(self, data_only=False):
-        for datatype in self._datatypes:
-            self._datatype_to_decors[datatype] = []
-            for sim_collection in self._sim_collections:
-                series = sim_collection.get_data(datatype)
-                self._datatype_to_decors[datatype].append(series)
-
-        if not data_only:
-            for trjtype in self._trjtypes:
-                self._trjtype_to_decors[trjtype] = []
-                for sim_collection in self._sim_collections:
-                    series = sim_collection.get_trj(trjtype)
-                    self._trjtype_to_decors[trjtype].append(series)
-
-    def apply_masks(self):
-        # The mask numbering is different than the rep number
-        for datatype in self._datatypes:
-            self._datatype_to_decors[datatype] = []
-            for i, sim_collection in enumerate(self._sim_collections):
-                data = sim_collection.get_data(datatype)
-                data.apply_mask(self._decor_masks[i])
-                self._datatype_to_decors[datatype].append(data)
-
-        for trjtype in self._trjtypes:
-            self._trjtype_to_decors[trjtype] = []
-            for i, sim_collection in enumerate(self._sim_collections):
-                trj = sim_collection.get_trj(trjtype)
-                filebase = '{}_decor'.format(sim_collection.filebase)
-                filename = '{}.{}'.format(filebase, trjtype)
-                decor_trj = self._apply_mask_to_trj(self._decor_masks[i],
-                        trj, filename)
-                self._trjtype_to_decors[trjtype].append(decor_trj)
-
-    def _apply_mask_to_trj(self, mask, trj, filename):
-        out_file = open(filename, 'w')
-        step_i = 0
-        mask_i = 0
-        for step in trj:
-            step_included = step_i == mask[mask_i]
-            if step_included:
-                out_file.write(step)
-                mask_i += 1
-                if mask_i == len(mask):
-                    return
-
-            step_i += 1
-        trj.close()
-
-        out_file.close()
-
-    def write_decors_to_files(self):
-        for datatype in self._datatypes:
-            for i, sim_collection in enumerate(self._sim_collections):
-                filebase = '{}_decor'.format(sim_collection.filebase)
-                if datatype == 'enes':
-                    self._datatype_to_decors[datatype][i].to_file(filebase,
-                            float(sim_collection.conditions.temp))
-                else:
-                    self._datatype_to_decors[datatype][i].to_file(filebase)
-
-    def filter_collections(self, filter_tag, value):
-        filtered_count = 0
-        for i, sim_collection in enumerate(self._sim_collections):
-
-            # Create mask
-            selected_op = self._datatype_to_decors['ops'][i][filter_tag]
-            mask = selected_op == value
-            filtered_count += mask.sum()
-
-            # Apply mask
-            for datatype in self._datatypes:
-                data = self._datatype_to_decors[datatype][i]._data
-                reduced_data = []
-                for series in data:
-                    reduced_data.append(series[mask])
-
-                reduced_data = np.array(reduced_data)
-                self._datatype_to_decors[datatype][i]._data = reduced_data
-
-        return filtered_count

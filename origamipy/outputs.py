@@ -52,126 +52,122 @@ class EnumCollection:
             lfes_file.write(header, data)
 
 
-def create_sim_collections(filebase, all_conditions, reps, starting_run=0):
+def create_sim_collections(filebase, all_conditions, rep, start_run=0, end_run=-1):
     sim_collections = []
     for conditions in all_conditions:
         sim_collection = SimCollection(
-            filebase, conditions, reps, starting_run)
+            filebase, conditions, rep, start_run, end_run)
         sim_collections.append(sim_collection)
 
     return sim_collections
 
 
 class SimCollection:
-    """Output data for single run and replica of a simulation."""
+    """A single condition of a simulation."""
 
     filebase_template = '{}_run-{}_rep-{}{}'
-    decor_filebase_template = '{}_rep-{}{}_decor'
+    decor_filebase_template = '{}_run-{}-{}_rep-{}{}_decor'
 
-    def __init__(self, filebase, conditions, reps, starting_run=0):
+    def __init__(self, filebase, conditions, rep, start_run=0, end_run=-1):
         self.conditions = conditions
         self.filebase = filebase
-        self._datatype_to_reps = {}
-        self._trjtype_to_reps = {}
-        self._num_reps = 0
-        self._starting_run = starting_run
+        self._datatype = {}
+        self._trjtype = {}
+        self._rep = rep
+        self._start_run = start_run
+        self._end_run = end_run
 
-        # This is ugly
-        self._reps = reps
-        self._find_num_reps()
+    def get_data(self, dt_tag, concatenate=True):
+        """Return datatype series.
 
-    # Maybe get rid of properties and off access by tag and rep
-    @property
-    def reps_energies(self):
-        return self.get_reps_data('enes')
+        If concatenate, will concatenate all runs to one series.
+        """
+        if dt_tag not in self._datatype.keys():
+            self._load_runs_data(dt_tag, concatenate)
 
-    @property
-    def reps_order_params(self):
-        return self.get_reps_data('ops')
+        return self._datatype[dt_tag]
 
-    @property
-    def reps_staples(self):
-        return self.get_reps_data('staples')
-
-    @property
-    def reps_staplestates(self):
-        return self.get_reps_data('staplestates')
-
-    @property
-    def decorrelated_energies(self):
-        return self.get_decor_reps_data('enes')
-
-    @property
-    def decorrelated_order_params(self):
-        return self.get_decor_reps_data('ops')
-
-    @property
-    def decorrelated_staples(self):
-        return self.get_decor_reps_data('staples')
-
-    @property
-    def decorrelated_staplestates(self):
-        return self.get_decor_reps_data('staplestates')
-
-    def get_reps_data(self, tag, concatenate=True):
-        if tag not in self._datatype_to_reps.keys():
-            self._datatype_to_reps[tag] = []
-            for rep in range(max(self._reps) + 1):
-                # This is ugly
-                if rep not in self._reps:
-                    self._datatype_to_reps[tag].append(0)
-                    continue
-
-                self._load_runs_data(rep, tag, concatenate)
-
-        return self._datatype_to_reps[tag]
-
-    def get_decor_reps_data(self, tag):
-        tag = f'decor_{tag}'
-        if tag not in self._datatype_to_reps.keys():
-            self._datatype_to_reps[tag] = []
-            for rep in range(max(self._reps) + 1):
-                # This is ugly
-                if rep not in self._reps:
-                    self._datatype_to_reps[tag].append(0)
-                    continue
-
-                self._load_concat_data(rep, tag)
-
-        return self._datatype_to_reps[tag]
-
-    def get_reps_trj(self, tag):
+    def get_trj(self, trj_tag):
         all_trjs = []
-        if tag not in self._trjtype_to_reps.keys():
-            self._trjtype_to_reps[tag] = []
-            for rep in range(max(self._reps) + 1):
-                if rep not in self._reps:
-                    self._trjtype_to_reps[tag].append([])
-                    continue
+        if trj_tag not in self._trjtype.keys():
+            self._load_runs_trj(trj_tag)
 
-                all_trjs.append(self._load_runs_trj(rep, tag))
+        return self._trjtype[trj_tag]
 
-            self._trjtype_to_reps[tag] = all_trjs
+    def get_filebase(self, run):
+        return self.filebase_template.format(
+            self.filebase, run, self._rep, self.conditions.fileformat)
 
-        return self._trjtype_to_reps[tag]
+    def get_decor_data(self, dt_tag):
+        """Return decorrelated datatype series.
 
-    def get_filebase(self, run, rep):
-        return self.filebase_template.format(self.filebase, run, rep,
-                                             self.conditions.fileformat)
+        The decorrelated data is already concatenated across runs.
+        I wonder if this should be here or on the decor class.
+        """
+        dt_tag = f'decor_{dt_tag}'
+        if dt_tag not in self._datatype.keys():
+            self._load_concat_data(dt_tag)
 
-    def _load_runs_trj(self, rep, tag):
+        return self._datatype[dt_tag]
+
+    def get_decor_trj(self, dt_tag):
+        dt_tag = f'decor_{dt_tag}'
+        if dt_tag not in self._trjtype.keys():
+            self._load_concat_trj(dt_tag)
+
+        return self._trjtype[dt_tag]
+
+    def _load_runs_data(self, dt_tag, concatenate):
         runs_remain = True
-        run = self._starting_run
-        trjs = []
-        while runs_remain:
-            filebase = self.filebase_template.format(self.filebase, run, rep,
-                                                     self.conditions.fileformat)
-            filename = f'{filebase}.{tag}'
+        run = self._start_run
+        all_series = []
+        while runs_remain and (self._end_run != -1 and run <= self._end_run):
+            filebase = self.filebase_template.format(
+                self.filebase, run, self._rep, self.conditions.fileformat)
             try:
-                if tag in ['trj', 'vcf']:
+                all_series.append(self._load_data_from_file(filebase, dt_tag))
+            except IOError:
+                runs_remain = False
+                break
+
+            run += 1
+
+        if self._end_run == -1:
+            self._end_run = run - 1
+
+        if concatenate:
+            series = datatypes.OutputData.concatenate(all_series)
+            self._datatype[dt_tag] = series
+        else:
+            self._datatype[dt_tag] = all_series
+
+    def _load_data_from_file(self, filebase, dt_tag):
+        if 'enes' in dt_tag:
+            series = datatypes.Energies.from_file(
+                filebase, float(self.conditions.temp))
+        if 'ops' in dt_tag:
+            series = datatypes.OrderParams.from_file(filebase)
+        if 'staples' in dt_tag:
+            series = datatypes.NumStaplesOfType.from_file(filebase)
+        # staples is in staplestates. good thing this came after
+        if 'staplestates' in dt_tag:
+            series = datatypes.StapleTypeStates.from_file(filebase)
+
+        return series
+
+    def _load_runs_trj(self, dt_tag):
+        runs_remain = True
+        run = self._start_run
+        trjs = []
+        while runs_remain and (self._end_run != -1 and run <= self._end_run):
+            filebase = self.filebase_template.format(
+                self.filebase, run, self._rep, self.conditions.fileformat)
+            filename = f'{filebase}.{dt_tag}'
+            try:
+                if dt_tag in ['trj', 'vcf']:
                     trj = files.UnparsedMultiLineStepInpFile(filename, 0)
                     trjs.append(trj)
-                elif tag in ['ores', 'states']:
+                elif dt_tag in ['ores', 'states']:
                     trj = files.UnparsedSingleLineStepInpFile(filename, 0)
                     trjs.append(trj)
                 else:
@@ -183,142 +179,83 @@ class SimCollection:
 
             run += 1
 
-        return trjs
+        self._trjtype[dt_tag] = trjs
 
-    def get_decor_reps_trj(self, tag):
-        tag = f'decor_{tag}'
-        all_trjs = []
-        if tag not in self._trjtype_to_reps.keys():
-            self._trjtype_to_reps[tag] = []
-            for rep in range(max(self._reps) + 1):
-                if rep not in self._reps:
-                    self._trjtype_to_reps[tag].append([])
-                    continue
-
-                filebase = self.decor_filebase_template.format(self.filebase,
-                                                               rep, self.conditions.fileformat)
-                try:
-                    if 'trj' in tag:
-                        filename = f'{filebase}.trj'
-                        trj = files.UnparsedMultiLineStepInpFile(filename, 0)
-                    elif 'vcf' in tag:
-                        filename = f'{filebase}.vcf'
-                        trj = files.UnparsedMultiLineStepInpFile(filename, 0)
-                    elif 'ores' in tag:
-                        filename = f'{filebase}.ores'
-                        trj = files.UnparsedSingleLineStepInpFile(filename, 0)
-                    elif 'states' in tag:
-                        filename = f'{filebase}.states'
-                        trj = files.UnparsedSingleLineStepInpFile(filename, 0)
-                    else:
-                        raise NotImplementedError
-                except IOError:
-                    print('Decorrelation not performed')
-                    raise Exception
-
-                all_trjs.append(trj)
-
-            self._trjtype_to_reps[tag] = all_trjs
-
-        return self._trjtype_to_reps[tag]
-
-    def _find_num_reps(self):
-        reps_remain = True
-        rep = -1
-        while reps_remain:
-            rep += 1
-            t = '{}_run-0_rep-{}-{}.ops'
-            fname = t.format(self.filebase, rep, self.conditions.fileformat)
-            reps_remain = os.path.isfile(fname)
-
-        self._num_reps = rep
-        if self._reps == None:
-            self._reps = list(range(rep))
-
-    def _load_runs_data(self, rep, tag, concatenate):
-        runs_remain = True
-        run = self._starting_run
-        all_series = []
-        while runs_remain:
-            filebase = self.filebase_template.format(self.filebase, run, rep,
-                                                     self.conditions.fileformat)
-            try:
-                all_series.append(self._load_data_from_file(filebase, tag))
-            except IOError:
-                runs_remain = False
-                break
-
-            run += 1
-
-        if concatenate:
-            series = datatypes.OutputData.concatenate(all_series)
-            self._datatype_to_reps[tag].append(series)
-        else:
-            self._datatype_to_reps[tag].append(all_series)
-
-    def _load_concat_data(self, rep, tag):
-        filebase = self.decor_filebase_template.format(self.filebase, rep,
-                                                       self.conditions.fileformat)
+    def _load_concat_data(self, dt_tag):
+        filebase = self.decor_filebase_template.format(
+            self.filebase, self._start_run, self._end_run, self._rep,
+            self.conditions.fileformat)
         try:
-            series = self._load_data_from_file(filebase, tag)
+            series = self._load_data_from_file(filebase, dt_tag)
         except IOError:
             print('Decorrelation not performed')
             raise Exception
 
-        self._datatype_to_reps[tag].append(series)
+        self._datatype[dt_tag] = series
 
-    def _load_data_from_file(self, filebase, tag):
-        if 'enes' in tag:
-            series = datatypes.Energies.from_file(
-                filebase, float(self.conditions.temp))
-        if 'ops' in tag:
-            series = datatypes.OrderParams.from_file(filebase)
-        if 'staples' in tag:
-            series = datatypes.NumStaplesOfType.from_file(filebase)
-        # staples is in staplestates. good thing this came after
-        if 'staplestates' in tag:
-            series = datatypes.StapleTypeStates.from_file(filebase)
+    def _load_concat_trj(self, trj_tag):
+        filebase = self.decor_filebase_template.format(
+            self.filebase, self._start_run, self._end_run, self._rep,
+            self.conditions.fileformat)
+        try:
+            if 'trj' in trj_tag:
+                filename = f'{filebase}.trj'
+                trj = files.UnparsedMultiLineStepInpFile(filename, 0)
+            elif 'vcf' in trj_tag:
+                filename = f'{filebase}.vcf'
+                trj = files.UnparsedMultiLineStepInpFile(filename, 0)
+            elif 'ores' in trj_tag:
+                filename = f'{filebase}.ores'
+                trj = files.UnparsedSingleLineStepInpFile(filename, 0)
+            elif 'states' in trj_tag:
+                filename = f'{filebase}.states'
+                trj = files.UnparsedSingleLineStepInpFile(filename, 0)
+            else:
+                raise NotImplementedError
+        except IOError:
+            print('Decorrelation not performed')
+            raise Exception
 
-        return series
+        self._trjtype[trj_tag] = trj
 
 
 class SimpleSimCollection:
     """Output data for all runs of each replica of a simulation."""
 
-    def __init__(self, filebase, conditions, reps):
+    def __init__(self, filebase, conditions):
         self.conditions = conditions
         self.filebase = filebase
-        self._datatypes = {}
-        self._trjtypes = {}
+        self._datatype = {}
+        self._trjtype = {}
 
     def get_data(self, tag, concatenate=True):
-        if tag not in self._datatypes.keys():
-            self._datatypes[tag] = self._load_data(tag)
+        if tag not in self._datatype.keys():
+            self._datatype[tag] = self._load_data(tag)
 
-        return self._datatypes[tag]
+        return self._datatype[tag]
 
-    def _load_data(self, tag):
-        if 'enes' in tag:
-            series = datatypes.Energies.from_file(self.filebase,
-                                                  float(self.conditions.temp))
-        if 'ops' in tag:
+    def _load_data(self, dt_tag):
+        if 'enes' in dt_tag:
+            series = datatypes.Energies.from_file(
+                self.filebase, float(self.conditions.temp))
+        if 'ops' in dt_tag:
             series = datatypes.OrderParams.from_file(self.filebase)
-        if 'staples' in tag:
+        if 'staples' in dt_tag:
             series = datatypes.NumStaplesOfType.from_file(self.filebase)
-        if 'staplestates' in tag:
+        if 'staplestates' in dt_tag:
             series = datatypes.StapleTypeStates.from_file(self.filebase)
 
         return series
 
-    def get_trj(self, tag):
-        if tag not in self._trjtypes.keys():
-            self._trjtypes[tag] = self._load_trj(tag)
+    def get_trj(self, trj_tag):
+        if trj_tag not in self._trjtype.keys():
+            self._trjtype[trj_tag] = self._load_trj(trj_tag)
 
-        return self._trjtypes[tag]
+        return self._trjtype[tag]
 
-    def _load_trj(self, tag):
+    def _load_trj(self, trj_tag):
         filename = f'{self.filebase}.{tag}'
-        if tag in ['trj', 'vcf']:
+        if trj_tag in ['trj', 'vcf']:
             trj = files.UnparsedMultiLineStepInpFile(filename, 0)
         elif tag in ['ores', 'states']:
             trj = files.UnparsedSingleLineStepInpFile(filename, 0)

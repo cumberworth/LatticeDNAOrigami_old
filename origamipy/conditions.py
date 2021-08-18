@@ -8,9 +8,8 @@ import numpy as np
 from origamipy import biases
 
 
-ConditionsFileformatSpec = collections.namedtuple('ConditionFileformatSpec', [
-                                                 'condition',
-                                                 'spec'])
+ConditionsFileformatSpec = collections.namedtuple(
+    'ConditionFileformatSpec', ['condition', 'spec'])
 
 
 class ConditionsFileformatter:
@@ -80,8 +79,11 @@ class SimConditions:
 
 class AllSimConditions:
     """All combinations of given simulation conditions."""
-    def __init__(self, condition_map, fileformatter, system_file):
-        self._conditions_map = condition_map
+
+    def __init__(self, conditions_keys, conditions_values, fileformatter,
+                 system_file):
+        self._conditions_keys = conditions_keys
+        self._conditions_values = conditions_values
         self._fileformatter = fileformatter
         self._system_file = system_file
         self._conditions = None
@@ -94,7 +96,11 @@ class AllSimConditions:
         self._reset_combo_iterator()
 
     def _reset_combo_iterator(self):
-        self._combos = itertools.product(*self._conditions_map.values())
+        combos = []
+        for vs in self._conditions_values:
+            combos.append(itertools.product(*vs))
+
+        self._combos = itertools.chain(*combos)
 
     def __iter__(self):
         return self
@@ -106,7 +112,7 @@ class AllSimConditions:
             self._reset_combo_iterator()
             raise
 
-        self._conditions = dict(zip(self._conditions_map.keys(), combo))
+        self._conditions = dict(zip(self._conditions_keys, combo))
         self._fileformat = self._fileformatter(self._conditions)
 
         return SimConditions(self._conditions, self._fileformat, self._staple_lengths)
@@ -120,6 +126,7 @@ class AllSimConditions:
         condition_values = []
         for conditions in self:
             char_values = conditions.condition_to_characteristic_value
-            condition_values.append([v for k, v in sorted(char_values.items())])
+            condition_values.append(
+                [v for k, v in sorted(char_values.items())])
 
         return condition_values
