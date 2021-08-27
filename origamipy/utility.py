@@ -119,3 +119,15 @@ def calc_reduced_potentials(enes, ops, num_staples, conditions):
     renes = e/float(conditions.temp)
 
     return renes - enes.entropies + G
+
+
+def calc_staple_lengths(system_file):
+    return np.array([len(ident) for ident in system_file.identities[1:]])
+
+
+def calc_num_staple_types(system_file):
+    return len(system_file.identities[1:])
+
+
+def calc_num_scaffold_domains(system_file):
+    return len(system_file.identities[0])

@@ -6,6 +6,9 @@ import argparse
 import json
 
 import numpy as np
+from scipy.signal import argrelextrema
+from scipy import interpolate
+from scipy.optimize import minimize
 
 from origamipy import biases
 from origamipy import conditions
@@ -20,10 +23,13 @@ from origamipy import utility
 def main():
     args = parse_args()
     system_file = files.JSONStructInpFile(args.system_filename)
+    staple_lengths = utility.calc_staple_lengths(system_file)
     inp_filebase = '{}/{}'.format(args.input_dir, args.filebase)
     fileformatter = construct_fileformatter()
-    reps_all_conditions = construct_conditions(
-        args, fileformatter, inp_filebase, system_file, False)
+    reps_all_conditions = conditions.construct_mwus_conditions(
+        args.windows_filename, args.bias_functions_filename, args.reps,
+        args.start_run, args.temp, args.itr, args.staple_m, fileformatter,
+        inp_filebase, staple_lengths, False)
     sim_collections = []
     for rep in range(args.reps):
         rep_sim_collections = outputs.create_sim_collections(
@@ -34,8 +40,10 @@ def main():
             args.end_run)
         sim_collections.append(rep_sim_collections)
 
-    all_conditions = construct_conditions(
-        args, fileformatter, inp_filebase, system_file, True)
+    all_conditions = conditions.construct_mwus_conditions(
+        args.windows_filename, args.bias_functions_filename, args.reps,
+        args.start_run, args.temp, args.itr, args.staple_m, fileformatter,
+        inp_filebase, staple_lengths, True)
     decor_outs = decorrelate.DecorrelatedOutputs(
         sim_collections, all_conditions=all_conditions,
         rep_conditions_equal=False)
@@ -50,52 +58,37 @@ def main():
         args.start_run,
         args.end_run,
         args.itr)
+    conds = conditions.SimConditions(
+        {'temp': args.temp,
+         'staple_m': args.staple_m,
+         'bias': biases.NoBias()},
+        fileformatter, staple_lengths)
+    se_tags = decor_outs.all_series_tags
+    lfes_filebase = f'{out_filebase}_lfes'
+    mbarw.calc_all_1d_lfes(lfes_filebase, se_tags, [conds])
+    mbarw.calc_all_expectations(out_filebase, se_tags, [conds])
 
-    staple_lengths = all_conditions._staple_lengths
-    conds = conditions.SimConditions({'temp': args.temp, 'staple_m': args.staple_m,
-                                      'bias': biases.NoBias()}, fileformatter, staple_lengths)
-    all_tags = decor_outs.all_conditions.condition_tags
-    aves = []
-    stds = []
-    for tag in decor_outs.all_series_tags:
-        all_tags.append(tag)
-        series = decor_outs.get_concatenated_series(tag)
-        ave, std = mbarw.calc_expectation(series, conds)
-        aves.append(ave)
-        stds.append(std)
+    melting_temp = mbarw.estimate_melting_temp(conds, args.temp)
 
-        # Hack calculate LFEs
-        values = decor_outs.get_concatenated_series(tag)
-        decor_enes = decor_outs.get_concatenated_datatype('enes')
-        decor_ops = decor_outs.get_concatenated_datatype('ops')
-        decor_staples = decor_outs.get_concatenated_datatype('staples')
-        bins = list(set(values))
-        bins.sort()
-        value_to_bin = {value: i for i, value in enumerate(bins)}
-        bin_index_series = [value_to_bin[i] for i in values]
-        bin_index_series = np.array(bin_index_series)
-        rpots = utility.calc_reduced_potentials(decor_enes, decor_ops,
-                                                decor_staples, conds)
-        lfes, lfe_stds = mbarw._mbar.computePMF(
-            rpots, bin_index_series, len(bins))
+    conds = conditions.SimConditions(
+        {'temp': melting_temp,
+         'staple_m': args.staple_m,
+         'bias': biases.NoBias()},
+        fileformatter, staple_lengths)
 
-        # Hack write LFEs to file
-        header = np.array(['ops', args.temp])
-        lfes_filebase = '{}_{}-lfes-melting'.format(out_filebase, tag)
-        lfes_file = files.TagOutFile('{}.aves'.format(lfes_filebase))
-        lfes = np.concatenate([[bins], [lfes]]).T
-        lfes_file.write(header, lfes)
-        stds_file = files.TagOutFile('{}.stds'.format(lfes_filebase))
-        lfe_stds = np.concatenate([[bins], [lfe_stds]]).T
-        stds_file.write(header, lfe_stds)
+    melting_temp_f = '{:.3f}'.format(np.around(melting_temp, decimals=3))
+    print(f'Estimated melting temperature: {melting_temp_f} K')
+    for se_tag in ['numfullyboundstaples', 'numfulldomains']:
+        lfes, stds, bins = mbarw.calc_1d_lfes(se_tag, conds)
+        barrier_i = mbar_wrapper.find_barrier(lfes)
+        barrier_height = mbar_wrapper.calc_forward_barrier_height(lfes)
+        print()
+        print(f'Barrier height, {se_tag}: {barrier_height:.3f} kT')
+        print(f'Barrier peak, {se_tag}: {bins[barrier_i]:.3f}')
 
-    # Hack to write expectations to file
-    aves_file = files.TagOutFile('{}.aves'.format(out_filebase))
-    cond_char_values = conds.condition_to_characteristic_value
-    cond_values = [v for k, v in sorted(cond_char_values.items())]
-    aves_file.write(all_tags, [np.concatenate([cond_values, np.array(aves)])])
-    stds_file = files.TagOutFile('{}.stds'.format(out_filebase))
-    stds_file.write(all_tags, [np.concatenate([cond_values, np.array(stds)])])
+    lfes_filebase = f'{out_filebase}_lfes-melting'
+    mbarw.calc_all_1d_lfes(lfes_filebase, se_tags, [conds])
+    mbarw.calc_all_expectations(out_filebase, se_tags, [conds])
 
 
 def parse_tag_pairs(tag_pairs):
@@ -105,48 +98,6 @@ def parse_tag_pairs(tag_pairs):
 def construct_fileformatter():
     specs = [conditions.ConditionsFileformatSpec('bias', '{}')]
     return conditions.ConditionsFileformatter(specs)
-
-
-def construct_conditions(args, fileformatter, inp_filebase, system_file,
-                         concatenate):
-    bias_tags, windows = us_process.read_windows_file(args.windows_filename)
-    bias_functions = json.load(open(args.bias_functions_filename))
-    op_tags = us_process.get_op_tags_from_bias_functions(
-        bias_functions, bias_tags)
-
-    # Linear square well functions are all the same
-    for bias_function in bias_functions['origami']['bias_functions']:
-        if bias_function['type'] == 'LinearStepWell':
-            slope = bias_function['slope']
-            min_outside_bias = bias_function['min_bias']
-            break
-
-    conditions_keys = ['temp', 'staple_m', 'bias']
-    conditions_valuesl = []
-    for rep in range(args.reps):
-        grid_biases = []
-        for window in windows:
-            filebase = '{}_run-{}_rep-{}'.format(
-                inp_filebase, args.start_run, rep)
-            grid_biases.append(
-                biases.GridBias(
-                    op_tags, window, min_outside_bias, slope, args.temp,
-                    filebase, args.itr))
-
-        conditions_valuesl.append([[args.temp], [args.staple_m], grid_biases])
-
-    if concatenate:
-        return conditions.AllSimConditions(
-            conditions_keys, conditions_valuesl, fileformatter,
-            system_file)
-    else:
-        reps_conditions = []
-        for conditions_values in conditions_valuesl:
-            reps_conditions.append(conditions.AllSimConditions(
-                conditions_keys, [conditions_values], fileformatter,
-                system_file))
-
-        return reps_conditions
 
 
 def parse_args():

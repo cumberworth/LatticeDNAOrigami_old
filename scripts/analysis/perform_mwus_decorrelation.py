@@ -11,20 +11,24 @@ from origamipy import decorrelate
 from origamipy import files
 from origamipy import outputs
 from origamipy import us_process
+from origamipy import utility
 
 
 def main():
     args = parse_args()
     system_file = files.JSONStructInpFile(args.system_filename)
+    staple_lengths = utility.calc_staple_lengths(system_file)
     inp_filebase = '{}/{}'.format(args.input_dir, args.filebase)
     fileformatter = construct_fileformatter()
+    reps_all_conditions = conditions.construct_mwus_conditions(
+        args.windows_filename, args.bias_functions_filename, args.reps,
+        args.start_run, args.temp, args.itr, args.staple_m, fileformatter,
+        inp_filebase, staple_lengths, False)
     sim_collections = []
     for rep in range(args.reps):
-        all_conditions = construct_conditions(
-            args, fileformatter, inp_filebase, rep, system_file)
         rep_sim_collections = outputs.create_sim_collections(
             inp_filebase,
-            all_conditions,
+            reps_all_conditions[rep],
             rep,
             args.start_run,
             args.end_run)
@@ -42,35 +46,6 @@ def main():
 def construct_fileformatter():
     specs = [conditions.ConditionsFileformatSpec('bias', '{}')]
     return conditions.ConditionsFileformatter(specs)
-
-
-def construct_conditions(args, fileformatter, inp_filebase, rep, system_file):
-    bias_tags, windows = us_process.read_windows_file(args.windows_filename)
-    bias_functions = json.load(open(args.bias_functions_filename))
-    op_tags = us_process.get_op_tags_from_bias_functions(
-        bias_functions, bias_tags)
-
-    # Linear square well functions are all the same
-    for bias_function in bias_functions['origami']['bias_functions']:
-        if bias_function['type'] == 'LinearStepWell':
-            slope = bias_function['slope']
-            min_outside_bias = bias_function['min_bias']
-            break
-
-    grid_biases = []
-    for window in windows:
-        filebase = '{}_run-{}_rep-{}'.format(
-            inp_filebase, args.start_run, rep)
-        grid_biases.append(
-            biases.GridBias(
-                op_tags, window, min_outside_bias, slope, args.temp,
-                filebase, args.itr))
-
-    conditions_keys = ['temp', 'staple_m', 'bias']
-    conditions_values = [[args.temp], [args.staple_m], grid_biases]
-
-    return conditions.AllSimConditions(
-            conditions_keys, [conditions_values], fileformatter, system_file)
 
 
 def parse_args():
