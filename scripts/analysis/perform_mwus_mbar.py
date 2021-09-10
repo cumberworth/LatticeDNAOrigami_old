@@ -52,6 +52,7 @@ def main():
     mbarw = mbar_wrapper.MBARWrapper(decor_outs)
     mbarw.perform_mbar()
 
+    # Calc LFEs and expectations with simulation temp
     out_filebase = '{}/{}_run-{}-{}_iter-{}'.format(
         args.output_dir,
         args.filebase,
@@ -68,8 +69,8 @@ def main():
     mbarw.calc_all_1d_lfes(lfes_filebase, se_tags, [conds])
     mbarw.calc_all_expectations(out_filebase, se_tags, [conds])
 
+    # Calc melting temp and use for LFEs and expectations
     melting_temp = mbarw.estimate_melting_temp(conds, args.temp)
-
     conds = conditions.SimConditions(
         {'temp': melting_temp,
          'staple_m': args.staple_m,
@@ -89,6 +90,24 @@ def main():
     lfes_filebase = f'{out_filebase}_lfes-melting'
     mbarw.calc_all_1d_lfes(lfes_filebase, se_tags, [conds])
     mbarw.calc_all_expectations(out_filebase, se_tags, [conds])
+
+    # Calc expectations for a range of temps around melting
+    temp_conds = []
+    for temp in np.linspace(melting_temp - 5, melting_temp + 5):
+        conds = conditions.SimConditions(
+            {'temp': melting,
+             'staple_m': args.staple_m,
+             'bias': biases.NoBias()},
+            fileformatter, staple_lengths)
+        temp_conds.append(conds)
+
+    out_filebase = '{}/{}_run-{}-{}_iter-{}_temps'.format(
+        args.output_dir,
+        args.filebase,
+        args.start_run,
+        args.end_run,
+        args.itr)
+    mbarw.calc_all_expectations(out_filebase, se_tags, temp_conds)
 
 
 def parse_tag_pairs(tag_pairs):
