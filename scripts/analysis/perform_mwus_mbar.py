@@ -95,7 +95,7 @@ def main():
     temp_conds = []
     for temp in np.linspace(melting_temp - 5, melting_temp + 5):
         conds = conditions.SimConditions(
-            {'temp': melting,
+            {'temp': temp,
              'staple_m': args.staple_m,
              'bias': biases.NoBias()},
             fileformatter, staple_lengths)
