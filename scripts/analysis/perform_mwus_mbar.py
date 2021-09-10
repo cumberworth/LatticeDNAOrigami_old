@@ -93,7 +93,7 @@ def main():
 
     # Calc expectations for a range of temps around melting
     temp_conds = []
-    for temp in np.linspace(melting_temp - 5, melting_temp + 5):
+    for temp in np.linspace(melting_temp - 5, melting_temp + 5, 100):
         conds = conditions.SimConditions(
             {'temp': temp,
              'staple_m': args.staple_m,
