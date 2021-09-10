@@ -140,7 +140,7 @@ class AllSimConditions:
     def conditions_to_characteristic_values(self):
         condition_values = []
         for conditions in self:
-            values = conditions.characteristic_value
+            values = conditions.characteristic_values
             condition_values.append(
                 [v for k, v in sorted(char_values.items())])
 
