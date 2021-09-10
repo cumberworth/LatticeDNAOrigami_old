@@ -49,7 +49,11 @@ class MBARWrapper:
 
         if type(all_conds) == list:
             conds_tags = all_conds[0].condition_tags
-            all_conds_values = [all_conds[0].characteristic_values]
+            all_conds_values = []
+            for conds in all_conds:
+                values = conditions.characteristic_value
+                all_conds_values.append(
+                    [v for k, v in sorted(char_values.items())])
         else:
             conds_tags = all_conds.condition_tags
             all_conds_values = all_conds.conditions_to_characteristic_values
@@ -57,11 +61,13 @@ class MBARWrapper:
         all_tags = np.concatenate([conds_tags, se_tags])
         all_conds_values = np.array(all_conds_values, dtype=float)
 
-        conds_aves = np.concatenate([all_conds_values, np.array(all_aves).T], axis=1)
+        conds_aves = np.concatenate(
+            [all_conds_values, np.array(all_aves).T], axis=1)
         aves_file = files.TagOutFile('f{filebase}.aves')
         aves_file.write(all_tags, conds_aves)
 
-        conds_stds = np.concatenate([all_conds_values, np.array(all_stds).T], axis=1)
+        conds_stds = np.concatenate(
+            [all_conds_values, np.array(all_stds).T], axis=1)
         stds_file = files.TagOutFile(f'{filebase}.stds')
         stds_file.write(all_tags, conds_stds)
 
@@ -182,7 +188,8 @@ class MBARWrapper:
         Find the global maximum that is not at the edge of the domain and then
         find minima on either side and minimize difference between them.
         """
-        series = self._decor_outs.get_concatenated_series('numfullyboundstaples')
+        series = self._decor_outs.get_concatenated_series(
+            'numfullyboundstaples')
         bins = list(set(series))
         bins.sort()
         lfes = self._calc_lfes(bins, series, conds)
