@@ -141,7 +141,7 @@ class AllSimConditions:
         condition_values = []
         for conditions in self:
             values = conditions.characteristic_values
-            condition_values.extend(values)
+            condition_values.append(values)
 
         return condition_values
 

@@ -52,7 +52,7 @@ class MBARWrapper:
             all_conds_values = []
             for conds in all_conds:
                 values = conds.characteristic_values
-                all_conds_values.extend(values)
+                all_conds_values.append(values)
         else:
             conds_tags = all_conds.condition_tags
             all_conds_values = all_conds.conditions_to_characteristic_values
