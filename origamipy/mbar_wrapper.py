@@ -62,7 +62,7 @@ class MBARWrapper:
 
         conds_aves = np.concatenate(
             [all_conds_values, np.array(all_aves).T], axis=1)
-        aves_file = files.TagOutFile('f{filebase}.aves')
+        aves_file = files.TagOutFile(f'{filebase}.aves')
         aves_file.write(all_tags, conds_aves)
 
         conds_stds = np.concatenate(
