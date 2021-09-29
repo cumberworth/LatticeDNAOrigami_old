@@ -28,7 +28,11 @@ class ConditionsFileformatter:
 
             fileformat_elements.append(spec.format(condition_value))
 
-        return '-'.join(fileformat_elements)
+        file_elements = '-'.join(fileformat_elements)
+        if 'bias' not in self._spec[0].condition:
+            file_elements = '-' + file_elements
+
+        return file_elements
 
 
 class SimConditions:
@@ -144,6 +148,13 @@ class AllSimConditions:
             condition_values.append(values)
 
         return condition_values
+
+
+def construct_remc_conditions(temps, staple_m, fileformatter, staple_lengths):
+    conditions_keys = ['temp', 'staple_m', 'bias']
+    conditions_values = [temps, [staple_m], [biases.NoBias()]]
+
+    return AllSimConditions(conditions_keys, [conditions_values], fileformatter, staple_lengths)
 
 
 # I don't like how many arguemnts this requires, but I don't know how else to

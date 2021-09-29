@@ -3,14 +3,11 @@
 """Perform decorrelation on MWUS simulation output."""
 
 import argparse
-import json
 
-from origamipy import biases
 from origamipy import conditions
 from origamipy import decorrelate
 from origamipy import files
 from origamipy import outputs
-from origamipy import us_process
 from origamipy import utility
 
 
@@ -18,8 +15,8 @@ def main():
     args = parse_args()
     system_file = files.JSONStructInpFile(args.system_filename)
     staple_lengths = utility.calc_staple_lengths(system_file)
-    inp_filebase = '{}/{}'.format(args.input_dir, args.filebase)
     fileformatter = construct_fileformatter()
+    inp_filebase = '{}/{}'.format(args.input_dir, args.filebase)
     reps_all_conditions = conditions.construct_mwus_conditions(
         args.windows_filename, args.bias_functions_filename, args.reps,
         args.start_run, args.temp, args.itr, args.staple_m, fileformatter,
@@ -36,7 +33,8 @@ def main():
 
     decor_outs = decorrelate.DecorrelatedOutputs(
         sim_collections, rep_conditions_equal=False)
-    #decor_outs.perform_decorrelation(args.skip, g=100)
+#    decor_outs.perform_decorrelation(args.skip, g=100)
+#    decor_outs.perform_decorrelation(args.skip, detect_equil=True)
     decor_outs.perform_decorrelation(args.skip)
     out_filebase = '{}/{}'.format(args.output_dir, args.filebase)
     decor_outs.apply_masks(out_filebase)

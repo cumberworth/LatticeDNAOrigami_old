@@ -1,7 +1,5 @@
 """Analysis of REMC simulations"""
 
-import collections
-
 from origamipy import files
 
 

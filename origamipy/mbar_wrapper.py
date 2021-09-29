@@ -197,6 +197,22 @@ class MBARWrapper:
 
         return melting_temp
 
+    def estimate_melting_temp_endpoints(self, conds, guess_temp):
+        """Estimate the melting temperature assuming barrier exists.
+
+        Find the global maximum that is not at the edge of the domain and then
+        find minima on either side and minimize difference between them.
+        """
+        series = self._decor_outs.get_concatenated_series(
+            'numfullyboundstaples')
+        bins = list(set(series))
+        bins.sort()
+        lfes = self._calc_lfes(bins, series, conds)
+        melting_temp = minimize(self._squared_endpoints_diff, guess_temp, args=(
+            bins, series, conds)).x[0]
+
+        return melting_temp
+
     def _calc_decorrelated_rpots_for_all_conditions(self):
         conditions_rpots = []
         enes = self._decor_outs.get_concatenated_datatype('enes')
@@ -229,13 +245,11 @@ class MBARWrapper:
         data = np.concatenate([bins, np.array(series).T], axis=1)
         file.write(header, data)
 
-    def _squared_barrier_diff(self, temp, bins, series, conds):
+    def _squared_endpoints_diff(self, temp, bins, series, conds):
         conds._conditions['temp'] = temp
         lfes, stds = self._calc_lfes(bins, series, conds)
-        barrier_i = find_barrier(lfes)
-        minima = find_minima(lfes, barrier_i)
 
-        return (minima[0] - minima[1])**2
+        return (lfes[0] - lfes[-1])**2
 
 
 # Maybe these should be somewhere else?

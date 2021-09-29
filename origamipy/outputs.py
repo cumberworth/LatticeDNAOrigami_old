@@ -121,7 +121,7 @@ class SimCollection:
         runs_remain = True
         run = self._start_run
         all_series = []
-        while runs_remain and (self._end_run != -1 and run <= self._end_run):
+        while runs_remain and (self._end_run == -1 or run <= self._end_run):
             filebase = self.filebase_template.format(
                 self.filebase, run, self._rep, self.conditions.fileformat)
             try:
@@ -141,6 +141,27 @@ class SimCollection:
         else:
             self._datatype[dt_tag] = all_series
 
+    def _find_end_run(self):
+        run = self._start_run
+        if self._end_run != -1:
+            return 
+
+        runs_remain = True
+        while runs_remain:
+            filebase = self.filebase_template.format(
+                self.filebase, run, self._rep, self.conditions.fileformat)
+            try:
+                self._load_data_from_file(filebase, 'enes')
+            except IOError:
+                runs_remain = False
+                break
+
+            run += 1
+
+        self._end_run = run - 1
+
+        return
+
     def _load_data_from_file(self, filebase, dt_tag):
         if 'enes' in dt_tag:
             series = datatypes.Energies.from_file(
@@ -159,7 +180,7 @@ class SimCollection:
         runs_remain = True
         run = self._start_run
         trjs = []
-        while runs_remain and (self._end_run != -1 and run <= self._end_run):
+        while runs_remain and (self._end_run == -1 or run <= self._end_run):
             filebase = self.filebase_template.format(
                 self.filebase, run, self._rep, self.conditions.fileformat)
             filename = f'{filebase}.{dt_tag}'
@@ -182,6 +203,7 @@ class SimCollection:
         self._trjtype[dt_tag] = trjs
 
     def _load_concat_data(self, dt_tag):
+        self._find_end_run()
         filebase = self.decor_filebase_template.format(
             self.filebase, self._start_run, self._end_run, self._rep,
             self.conditions.fileformat)

@@ -45,12 +45,14 @@ class DecorrelatedOutputs:
     @property
     def num_steps_per_condition(self):
         steps = []
-        for reps_data in self._datatype_to_decors['enes']:
-            if self._rep_conditions_equal:
+        if self._rep_conditions_equal:
+            for data in self._datatype_to_decors['enes'][0]:
                 steps.append(0)
-            for data in reps_data:
+
+        for reps_data in self._datatype_to_decors['enes']:
+            for i, data in enumerate(reps_data):
                 if self._rep_conditions_equal:
-                    steps[-1] += data.steps
+                    steps[i] += data.steps
                 else:
                     steps.append(data.steps)
 
@@ -60,7 +62,7 @@ class DecorrelatedOutputs:
         """Concatenate across reps and conditions."""
         concat = []
         if self._rep_conditions_equal:
-            for j in range(len(self._datatype_to_decors[0])):
+            for j in range(len(self._datatype_to_decors[dt_tag][0])):
                 for rep_data in self._datatype_to_decors[dt_tag]:
                     concat.append(rep_data[j])
         else:
@@ -75,7 +77,7 @@ class DecorrelatedOutputs:
             for reps_data in self._datatype_to_decors.values():
                 if se_tag in reps_data[0][0]._tags:
                     concat = []
-                    for j in range(len(self._datatype_to_decors[0])):
+                    for j in range(len(self._datatype_to_decors['enes'][0])):
                         for rep_data in reps_data:
                             concat.append(rep_data[j][se_tag])
 

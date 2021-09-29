@@ -13,21 +13,29 @@ from origamipy import conditions
 from origamipy import decorrelate
 from origamipy import files
 from origamipy import outputs
+from origamipy import utility
 
 
 def main():
     args = parse_args()
     system_file = files.JSONStructInpFile(args.system_filename)
+    staple_lengths = utility.calc_staple_lengths(system_file)
     fileformatter = construct_fileformatter()
-    all_conditions = construct_conditions(args, fileformatter, system_file)
-    inp_filebase = create_input_filepathbase(args)
-    sim_collections = outputs.create_sim_collections(inp_filebase,
-                                                     all_conditions, args.reps)
+    all_conditions = conditions.construct_remc_conditions(
+        args.temps, args.staple_m, fileformatter, staple_lengths)
+    inp_filebase = f'{args.input_dir}/{args.filebase}'
+    sim_collections = []
+    for rep in range(args.reps):
+        rep_sim_collections = outputs.create_sim_collections(
+            inp_filebase, all_conditions, rep)
+        sim_collections.append(rep_sim_collections)
+
     decor_outs = decorrelate.DecorrelatedOutputs(
-        sim_collections, all_conditions)
+        sim_collections, rep_conditions_equal=True)
     decor_outs.perform_decorrelation(args.skip)
-    decor_outs.apply_masks()
-    decor_outs.write_decors_to_files()
+    out_filebase = '{}/{}'.format(args.output_dir, args.filebase)
+    decor_outs.apply_masks(out_filebase)
+    decor_outs.write_decors_to_files(out_filebase)
 
 
 def construct_fileformatter():
@@ -41,10 +49,6 @@ def construct_conditions(args, fileformatter, system_file):
                       'bias': [biases.NoBias()]}
 
     return conditions.AllSimConditions(conditions_map, fileformatter, system_file)
-
-
-def create_input_filepathbase(args):
-    return '{}/{}'.format(args.input_dir, args.filebase)
 
 
 def create_output_filepathbase(args):
@@ -84,10 +88,9 @@ def parse_args():
         type=int,
         help='Number of steps to skip')
     parser.add_argument(
-        '--reps',
-        nargs='+',
+        'reps',
         type=int,
-        help='Reps (leave empty for all available)')
+        help='Number of reps')
     parser.add_argument(
         '--temps',
         nargs='+',
