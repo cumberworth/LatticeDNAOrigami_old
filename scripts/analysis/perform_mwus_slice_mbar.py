@@ -21,7 +21,7 @@ def main():
     args = parse_args()
     system_file = files.JSONStructInpFile(args.system_filename)
     staple_lengths = utility.calc_staple_lengths(system_file)
-    inp_filebase = '{}/{}'.format(args.input_dir, args.filebase)
+    inp_filebase = f'{args.input_dir}/{args.filebase}'
     fileformatter = construct_fileformatter()
     reps_all_conditions = conditions.construct_mwus_conditions(
         args.windows_filename, args.bias_functions_filename, args.reps,
@@ -61,16 +61,16 @@ def main():
         mbarw.perform_mbar()
         mbarws.append(mbarw)
 
-    # Calculate expectations across selected order parameter
+    # Calculate expectations for staple and domain states
     se_tags = []
     num_staple_types = utility.calc_num_staple_types(system_file)
     for i in range(1, num_staple_types + 1):
-        se_tags.append('staples{}'.format(i))
-        se_tags.append('staplestates{}'.format(i))
+        se_tags.append(f'staples{i}')
+        se_tags.append(f'staplestates{i}')
 
     num_scaffold_domains = utility.calc_num_scaffold_domains(system_file)
     for i in range(num_scaffold_domains):
-        se_tags.append('domainstate{}'.format(i))
+        se_tags.append(f'domainstate{i}')
 
     conds = conditions.SimConditions(
         {'temp': args.temp,
@@ -87,11 +87,11 @@ def main():
         args.itr)
 
     aves = np.concatenate([[sampled_ops], np.array(aves).T])
-    aves_file = files.TagOutFile('{}-{}.aves'.format(out_filebase, args.tag))
+    aves_file = files.TagOutFile('{out_filebase}-{args.tag}.aves')
     aves_file.write([args.tag] + se_tags, aves.T)
 
     stds = np.concatenate([[sampled_ops], np.array(stds).T])
-    stds_file = files.TagOutFile('{}-{}.stds'.format(out_filebase, args.tag))
+    stds_file = files.TagOutFile('{out_filebase}-{args.tag}.stds')
     stds_file.write([args.tag] + se_tags, stds.T)
 
 

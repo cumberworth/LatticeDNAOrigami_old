@@ -51,10 +51,6 @@ def construct_conditions(args, fileformatter, system_file):
     return conditions.AllSimConditions(conditions_map, fileformatter, system_file)
 
 
-def create_output_filepathbase(args):
-    return '{}/{}'.format(args.output_dir, args.filebase)
-
-
 def parse_args():
     parser = argparse.ArgumentParser(
         description=__doc__,
