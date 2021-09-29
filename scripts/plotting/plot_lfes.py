@@ -1,46 +1,70 @@
 #!/usr/bin/python
 
-"""Plot melting LFEs given order parameter."""
+"""Plot LFEs of given order parameter."""
 
 import argparse
 import sys
 
-import matplotlib as mpl
-mpl.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
 import pandas as pd
 
-from origamipy import plot
+from matplotlibstyles import styles
 
 
 def main():
     args = parse_args()
+    f = setup_figure()
+    gs = gridspec.GridSpec(1, 1, figure=f)
+    ax = f.add_subplot(gs[0, 0])
+    if args.post_lfes == None:
+        args.post_lfes = ['' for i in range(len(args.systems))]
 
-    out_filebase = '{}/{}_{}-lfes-melting'.format(args.output_dir, args.filebase, args.tag)
-    figsize = (plot.cm_to_inches(14), plot.cm_to_inches(10))
-    plot.set_default_appearance()
-    f = plt.figure(figsize=figsize, dpi=300)
-    ax = f.add_subplot(1, 1, 1)
-    ax.set_ylabel('$k_\mathrm{b}T$')
-    ax.set_ylim([-0.5, 20])
+    plot_figure(f, ax, args.systems, args.varis, args.input_dir, args.tag,
+                args.post_lfes)
+    setup_axis(ax, args.tag)
+    #set_labels(ax)
+    save_figure(f, args.plot_filebase)
 
-    for system, vari in zip(args.systems, args.varis):
-        inp_filebase = '{}/{}_{}-lfes-melting'.format(args.input_dir, args.filebase, args.tag)
-        lfes = pd.read_csv('{}.aves'.format(inp_filebase), sep=' ', index_col=0)
-        lfe_stds = pd.read_csv('{}.stds'.format(inp_filebase), sep=' ', index_col=0)
+
+def setup_figure():
+    styles.set_default_style()
+    figsize = (styles.cm_to_inches(10), styles.cm_to_inches(7))
+
+    return plt.figure(figsize=figsize, dpi=300, constrained_layout=True)
+
+
+def plot_figure(f, ax, systems, varis, input_dir, tag, post_lfes):
+    for system, vari, post_lfe in zip(systems, varis, post_lfes):
+        if post_lfe != '':
+            post_lfe = '-' + post_lfe
+
+        inp_filebase = f'{input_dir}/{system}-{vari}_lfes{post_lfe}-{tag}'
+        lfes = pd.read_csv(f'{inp_filebase}.aves', sep=' ', index_col=0)
+        lfe_stds = pd.read_csv(f'{inp_filebase}.stds', sep=' ', index_col=0)
         temp = lfes.columns[0]
         lfes = lfes[temp]
         lfe_stds = lfe_stds[temp]
 
-        ax.errorbar(lfes.index, lfes, yerr=lfe_stds, marker='o',
-                label='{}-{}, {} K'.format(system, vari, temp))
+        label = f'{system}-{vari}'
+        ax.errorbar(lfes.index, lfes, yerr=lfe_stds, marker='o', label=label)
 
+
+def setup_axis(ax, tag):
+    ax.set_ylabel('$k_\mathrm{b}T$')
+    ax.set_xlabel(tag)
+#    ax.set_ylim([-0.5, 20])
+
+
+def set_labels(ax):
     plt.legend()
-    plt.tight_layout(pad=0.5, h_pad=0, w_pad=0)
-    f.savefig('{}.png'.format(out_filebase), transparent=True)
-    f.savefig('{}.pdf'.format(out_filebase), transparent=True)
+
+
+def save_figure(f, plot_filebase):
+    #f.savefig(plot_filebase + '.pgf', transparent=True)
+    f.savefig(plot_filebase + '.pdf', transparent=True)
+    f.savefig(plot_filebase + '.png', transparent=True)
 
 
 def parse_args():
@@ -48,31 +72,32 @@ def parse_args():
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
-            'input_dir',
-            type=str,
-            help='Directory of inputs')
+        'input_dir',
+        type=str,
+        help='Input directory')
     parser.add_argument(
-            'output_dir',
-            type=str,
-            help='Directory of inputs')
+        'plot_filebase',
+        type=str,
+        help='Plots directory')
     parser.add_argument(
-            'filebase',
-            type=str,
-            help='Filebase')
+        'tag',
+        type=str,
+        help='OP tag')
     parser.add_argument(
-            'tag',
-            type=str,
-            help='OP tag')
+        '--systems',
+        nargs='+',
+        type=str,
+        help='Systems')
     parser.add_argument(
-            '--systems',
-            nargs='+',
-            type=str,
-            help='Systems')
+        '--varis',
+        nargs='+',
+        type=str,
+        help='Simulation variants')
     parser.add_argument(
-            '--varis',
-            nargs='+',
-            type=str,
-            help='Simulation variants')
+        '--post_lfes',
+        nargs='+',
+        type=str,
+        help='Filename additions after lfes, if any')
 
     return parser.parse_args()
 
