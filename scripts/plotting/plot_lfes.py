@@ -16,7 +16,7 @@ from matplotlibstyles import styles
 def main():
     args = parse_args()
     f = setup_figure()
-    gs = gridspec.GridSpec(1, 1, figure=f)
+    gs = gridspec.GridSpec(1, 1, f)
     ax = f.add_subplot(gs[0, 0])
     if args.post_lfes == None:
         args.post_lfes = ['' for i in range(len(args.systems))]

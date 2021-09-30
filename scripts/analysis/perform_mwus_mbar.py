@@ -79,31 +79,32 @@ def main():
          'bias': biases.NoBias()},
         fileformatter, staple_lengths)
 
+    out_filebase = f'{out_filebase}-melting'
     lfes_filebase = f'{out_filebase}_lfes-melting'
     mbarw.calc_all_1d_lfes(lfes_filebase, se_tags, [conds])
     mbarw.calc_all_expectations(out_filebase, se_tags, [conds])
 
     # Calc melting temps for other stacking energies
-    for stack_mult in [0, 0.25, 0.5, 0.75]:
-        print()
-        print(f'Stack mult: {stack_mult}')
-        stack_bias = biases.StackingBias(args.stack_ene, stack_mult)
-        conds = conditions.SimConditions(
-            {'temp': args.temp,
-             'staple_m': args.staple_m,
-             'bias': stack_bias},
-            fileformatter, staple_lengths)
-        melting_temp = est_melting_temp_and_barrier(
-            mbarw, fileformatter, staple_lengths, conds, stack_bias, args)
-        conds = conditions.SimConditions(
-            {'temp': melting_temp,
-             'staple_m': args.staple_m,
-             'bias': stack_bias},
-            fileformatter, staple_lengths)
-
-        lfes_filebase = f'{out_filebase}_lfes-melting-stack-{stack_mult}'
-        mbarw.calc_all_1d_lfes(lfes_filebase, se_tags, [conds])
-        mbarw.calc_all_expectations(out_filebase, se_tags, [conds])
+#    for stack_mult in [0, 0.25, 0.5, 0.75]:
+#        print()
+#        print(f'Stack mult: {stack_mult}')
+#        stack_bias = biases.StackingBias(args.stack_ene, stack_mult)
+#        conds = conditions.SimConditions(
+#            {'temp': args.temp,
+#             'staple_m': args.staple_m,
+#             'bias': stack_bias},
+#            fileformatter, staple_lengths)
+#        melting_temp = est_melting_temp_and_barrier(
+#            mbarw, fileformatter, staple_lengths, conds, stack_bias, args)
+#        conds = conditions.SimConditions(
+#            {'temp': melting_temp,
+#             'staple_m': args.staple_m,
+#             'bias': stack_bias},
+#            fileformatter, staple_lengths)
+#
+#        lfes_filebase = f'{out_filebase}_lfes-melting-stack-{stack_mult}'
+#        mbarw.calc_all_1d_lfes(lfes_filebase, se_tags, [conds])
+#        mbarw.calc_all_expectations(out_filebase, se_tags, [conds])
 
     # Calc expectations for a range of temps around melting
     temp_conds = []

@@ -139,6 +139,19 @@ def calc_staple_melting_point(seqs, strand_M, cation_M):
     return staple_DH / (staple_DS + R * math.log(strand_M))
 
 
+def calc_excess_bound_fractions(DH, DS, strand_M, temp_margin):
+    melting_point = DH / (DS + math.log(strand_M))
+    temps = np.linspace(
+        melting_point - temp_margin, melting_point + temp_margin, 50)
+    fractions = []
+    for temp in temps:
+        DG = DH - DS*temp
+        fraction = calc_excess_bound_fraction(DG, strand_M, temp)
+        fractions.append(fraction)
+
+    return np.array(fractions)
+    
+
 def calc_excess_bound_fraction(DG, staple_M, temp):
     """Calculate fraction scaffold domains bound with excess staple strand"""
     bound_to_unbound = staple_M * np.exp(-DG / temp)

@@ -1,34 +1,30 @@
 #!/usr/bin/python
 
-"""Plot four order parameters from multiple simulations.
-
-Plots number of bound staples, number of bound domains, number of misbound
-domains, and number of stacked pairs.
-"""
+"""Plot an order parameter from multiple simulations."""
 
 import argparse
 
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
+import numpy as np
+from scipy import interpolate
 
-from origamipy import plot
 from matplotlibstyles import styles
+import origamipy.nearest_neighbour as nn
+from origamipy import plot
 
 
 def main():
     args = parse_args()
     f = setup_figure()
-    gs_main = gridspec.GridSpec(
-        2, 2, width_ratios=[1, 1], height_ratios=[1, 1], figure=f)
-#    gs_main = gridspec.GridSpecFromSubplotSpec(
-#        2, 2, subplot_spec=gs[:2, :], wspace=0.3, hspace=0.3)
-    axes = [f.add_subplot(gs_main[i]) for i in range(4)]
-    plot_figure(f, axes, args.systems, args.varis, args.input_dir,
-                args.all_assembled_values, args.xtag, args.post)
-    setup_axes(axes)
-#    gs_lgd = gridspec.GridSpecFromSubplotSpec(1, 1, subplot_spec=gs[2, :])
-#    ax = f.add_subplot(gs_lgd[0])
-#    set_labels(ax, axes)
+    gs = gridspec.GridSpec(1, 1, f)
+    ax = f.add_subplot(gs[0])
+    plot_figure(
+        f, ax, args.systems, args.varis, args.input_dir, args.tag,
+        args.assembled_value, args.post, args.nncurve, args.staple_M,
+        args.binds, args.bindh, args.stackene, args.continuous)
+    setup_axis(ax)
+#    set_labels(ax, ax)
     save_figure(f, args.plot_filebase)
 
 
@@ -39,50 +35,41 @@ def setup_figure():
     return plt.figure(figsize=figsize, dpi=300, constrained_layout=True)
 
 
-def plot_figure(f, axes, systems, varis, input_dir, all_assembled_values, xtag,
-                post):
+def plot_figure(
+        f, ax, systems, varis, input_dir, tag, assembled_value, post, nncurve,
+        staple_M, binds, bindh, stackene, contin):
 
-    tags = ['numstaples', 'numfulldomains', 'nummisdomains', 'numstackedpairs']
-
-    # Parse assembled values
-    all_assembled_values = []
-    for assembled_values in all_assembled_values:
-        parsed_values = []
-        for assembled_value in assembled_values.split(','):
-            parsed_values.append(int(assembled_value))
-
-        all_assembled_values.append(parsed_values)
-
-    for assembled_values in all_assembled_values:
-        for i, assembled_value in enumerate(assembled_values):
-            ax = axes[i]
-            ax.axhline(assembled_value, linestyle='--', color='0.8')
+    ax.axhline(assembled_value, linestyle='--')
 
     for system, vari in zip(systems, varis):
         inp_filebase = f'{input_dir}/{system}-{vari}{post}'
         all_aves, all_stds = plot.read_expectations(inp_filebase)
-        xvars = all_aves[xtag]
-        for i, tag in enumerate(tags):
-            means = all_aves[tag]
-            stds = all_stds[tag]
-            ax = axes[i]
-            ax.errorbar(xvars, means, yerr=stds, marker='o', label=vari)
+        temps = all_aves['temp']
+        means = all_aves[tag]
+        stds = all_stds[tag]
+        if nncurve:
+            fracs = nn.calc_excess_bound_fractions(bindh, binds, staple_M, 10)
+            interpolated_temp = interpolate.interp1d(means, temps, kind='linear')
+            halfway_temp = interpolated_temp(assembled_value/2)
+            occ_temps = np.linspace(halfway_temp - 10, halfway_temp + 10, 50)
+            ax.plot(occ_temps, fracs*assembled_value)
+
+        if contin:
+            ax.fill_between(temps, means + stds, means - stds, label=vari,
+                            color='0.8')
+            ax.plot(temps, means, marker='None', label=vari)
+        else:
+            ax.errorbar(temps, means, yerr=stds, marker='o', label=vari)
 
 
-def setup_axes(axes):
-    yaxis_labels = [
-        '(Mis)bound staples',
-        'Bound domain pairs',
-        'Misbound domain pairs',
-        'Stacked pairs']
-    for ax, label in zip(axes, yaxis_labels):
-        ax.set_xlabel(r'$T / K$')
-        ax.set_ylabel(label)
+def setup_axis(ax):
+    ax.set_xlabel(r'$T / K$')
+    ax.set_ylabel('Order parameter')
 
 
-def set_labels(ax, axes):
+def set_labels(ax):
     ax.set_axis_off()
-    handles, labels = axes[0].get_legend_handles_labels()
+    handles, labels = ax.get_legend_handles_labels()
     ax.legend(handles, labels, loc='center', frameon=False, ncol=1)
 
 
@@ -105,6 +92,14 @@ def parse_args():
         type=str,
         help='Plots directory')
     parser.add_argument(
+        'tag',
+        type=str,
+        help='OP tag')
+    parser.add_argument(
+        'assembled_value',
+        type=int,
+        help='Value of OP in assembled state')
+    parser.add_argument(
         '--systems',
         nargs='+',
         type=str,
@@ -115,21 +110,40 @@ def parse_args():
         type=str,
         help='Simulation variants')
     parser.add_argument(
-        '--all_assembled_values',
-        nargs='+',
-        type=str,
-        help='Bound staples,bound domains,misbound domains,'
-        'fully stacked pairs')
-    parser.add_argument(
-        '--xtag',
-        default='temp',
-        type=str,
-        help='Dependent variable tag')
-    parser.add_argument(
         '--post',
         default='',
         type=str,
         help='Extra part of mean name (e.g. _temps for MWUS extrapolation')
+    parser.add_argument(
+        '--nncurve',
+        default='',
+        type=bool,
+        help='Include shifted NN curve')
+    parser.add_argument(
+        '--staple_M',
+        default='',
+        type=float,
+        help='Staple concentration')
+    parser.add_argument(
+        '--binds',
+        default='',
+        type=float,
+        help='Domain binding entropy')
+    parser.add_argument(
+        '--bindh',
+        default='',
+        type=float,
+        help='Domain binding enthalpy')
+    parser.add_argument(
+        '--stackene',
+        default='',
+        type=float,
+        help='Stacking energy')
+    parser.add_argument(
+        '--continuous',
+        default=False,
+        type=bool,
+        help='Plot curves as continuous')
 
     return parser.parse_args()
 

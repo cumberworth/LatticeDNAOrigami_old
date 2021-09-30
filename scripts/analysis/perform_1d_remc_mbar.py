@@ -44,13 +44,14 @@ def main():
     mbarw.perform_mbar()
 
     # Calculate expectations and LFEs for simulations temperatures
+    all_se_tags = decor_outs.all_series_tags
     if args.tags == None:
-        se_tags = decor_outs.all_series_tags
+        se_tags = all_se_tags
     else:
         se_tags = args.tags
 
     out_filebase = f'{args.output_dir}/{args.filebase}'
-    mbarw.calc_all_expectations(out_filebase, se_tags, all_conditions)
+    mbarw.calc_all_expectations(out_filebase, all_se_tags, all_conditions)
     lfes_filebase = f'{out_filebase}_lfes'
     mbarw.calc_all_1d_lfes(lfes_filebase, se_tags, all_conditions)
 
@@ -78,9 +79,10 @@ def main():
         fileformatter, staple_lengths)
 
     # Calculate expectations and LFEs for melting temperature
+    out_filebase = f'{out_filebase}-melting'
     lfes_filebase = f'{out_filebase}_lfes-melting'
     mbarw.calc_all_1d_lfes(lfes_filebase, se_tags, [conds])
-    mbarw.calc_all_expectations(out_filebase, se_tags, [conds])
+    mbarw.calc_all_expectations(out_filebase, all_se_tags, [conds])
 
     # Calculate expectations along OP slices
     mbarws = []

@@ -3,6 +3,7 @@
 import math
 import itertools
 import scipy.constants
+from scipy import interpolate
 
 import numpy as np
 
@@ -131,3 +132,41 @@ def calc_num_staple_types(system_file):
 
 def calc_num_scaffold_domains(system_file):
     return len(system_file.identities[0])
+
+
+def estimate_melting_points(unittypes, aves, temps, tagbase):
+    melting_points = []
+    offset = 0
+    if 'staple' in tagbase:
+        offset = 1
+
+    for unit_i in range(offset, unittypes + offset):
+        tag = f'{tagbase}{unit_i}'
+        ave_states = aves[tag]
+        if ave_states.iloc[-1] >= 0.5:
+            mp = np.NaN
+        else:
+            mp = float(interpolate.interp1d(ave_states, temps)(0.5))
+
+        melting_points.append(mp)
+
+    return np.array(melting_points)
+
+
+def estimate_staple_melting_points(stapletypes, aves, temps):
+    return estimate_melting_points(stapletypes, aves, temps, 'staplestates')
+
+
+def estimate_domain_melting_points(scaffolddomains, aves, temps):
+    return estimate_melting_points(scaffolddomains, aves, temps, 'domainstate')
+
+
+def fill_assembled_shape_array(flat_array, index_to_unittype):
+    rows = index_to_unittype.shape[0]
+    cols = index_to_unittype.shape[1]
+    assembled_array = np.zeros([rows, cols])
+    for row, unittypes in enumerate(index_to_unittype):
+        for col, unittype in enumerate(unittypes):
+            assembled_array[row, col] = flat_array[unittype - 1]
+
+    return assembled_array
