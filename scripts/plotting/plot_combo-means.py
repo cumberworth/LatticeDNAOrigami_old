@@ -18,14 +18,11 @@ from matplotlibstyles import styles
 def main():
     args = parse_args()
     f = setup_figure()
-    gs_main = gridspec.GridSpec(
-        2, 2, width_ratios=[1, 1], height_ratios=[1, 1], figure=f)
+    gs_main = gridspec.GridSpec(2, 2, figure=f)
 #    gs_main = gridspec.GridSpecFromSubplotSpec(
 #        2, 2, subplot_spec=gs[:2, :], wspace=0.3, hspace=0.3)
     axes = [f.add_subplot(gs_main[i]) for i in range(4)]
-    plot_figure(f, axes, args.systems, args.varis, args.input_dir,
-                args.all_assembled_values, args.xtag, args.post,
-                args.continuous)
+    plot_figure(f, axes, vars(args))
     setup_axes(axes)
 #    gs_lgd = gridspec.GridSpecFromSubplotSpec(1, 1, subplot_spec=gs[2, :])
 #    ax = f.add_subplot(gs_lgd[0])
@@ -40,8 +37,13 @@ def setup_figure():
     return plt.figure(figsize=figsize, dpi=300, constrained_layout=True)
 
 
-def plot_figure(f, axes, systems, varis, input_dir, raw_assembled_values, xtag,
-                post, contin):
+def plot_figure(f, axes, args):
+    systems = args['systems']
+    varis = args['varis']
+    input_dir = args['input_dir']
+    raw_assembled_values = args['all_assembled_values']
+    xtag = args['xtag']
+    contin = args['contin']
 
     tags = ['numstaples', 'numfulldomains', 'nummisdomains', 'numstackedpairs']
 

@@ -21,8 +21,7 @@ def main():
     if args.post_lfes == None:
         args.post_lfes = ['' for i in range(len(args.systems))]
 
-    plot_figure(f, ax, args.systems, args.varis, args.input_dir, args.tag,
-                args.post_lfes)
+    plot_figure(f, ax, vars(args))
     setup_axis(ax, args.tag)
     #set_labels(ax)
     save_figure(f, args.plot_filebase)
@@ -35,7 +34,13 @@ def setup_figure():
     return plt.figure(figsize=figsize, dpi=300, constrained_layout=True)
 
 
-def plot_figure(f, ax, systems, varis, input_dir, tag, post_lfes):
+def plot_figure(f, ax, args):
+    systems = args['systems']
+    varis = args['varis']
+    input_dir = args['input_dir']
+    tag = args['tag']
+    post_lfes = args['post_lfes']
+
     for system, vari, post_lfe in zip(systems, varis, post_lfes):
         if post_lfe != '':
             post_lfe = '-' + post_lfe

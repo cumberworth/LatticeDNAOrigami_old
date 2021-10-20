@@ -19,10 +19,7 @@ def main():
     f = setup_figure()
     gs = gridspec.GridSpec(1, 1, f)
     ax = f.add_subplot(gs[0])
-    plot_figure(
-        f, ax, args.systems, args.varis, args.input_dir, args.tag,
-        args.assembled_value, args.post, args.nncurve, args.staple_M,
-        args.binds, args.bindh, args.stackene, args.continuous)
+    plot_figure(f, ax, vars(args))
     setup_axis(ax)
 #    set_labels(ax, ax)
     save_figure(f, args.plot_filebase)
@@ -35,9 +32,19 @@ def setup_figure():
     return plt.figure(figsize=figsize, dpi=300, constrained_layout=True)
 
 
-def plot_figure(
-        f, ax, systems, varis, input_dir, tag, assembled_value, post, nncurve,
-        staple_M, binds, bindh, stackene, contin):
+def plot_figure(f, ax, args):
+    systems = args['systems']
+    varis = args['varis']
+    input_dir = args['input_dir']
+    tag = args['tag']
+    assembled_value = args['assembled_value']
+    post = args['post']
+    nncurve = args['nncurve']
+    staple_M = args['staple_M']
+    binds = args['binds']
+    bindh = args['bindh']
+    stackene = args['stackene']
+    contin = args['continuous']
 
     ax.axhline(assembled_value, linestyle='--')
 

@@ -19,9 +19,7 @@ def main():
     f = setup_figure()
     gs = gridspec.GridSpec(1, 1, f)
     ax = f.add_subplot(gs[0])
-    plot_figure(
-        f, ax, args.input_dir, args.filebase,
-        args.scaffolddomains, args.mapfile, args.rtag, args.rvalue)
+    plot_figure(f, ax, vars(args))
     setup_axis(ax)
     plot_filebase = f'{args.plot_dir}/{args.filebase}_domainstate-melting'
     save_figure(f, plot_filebase)
@@ -34,8 +32,13 @@ def setup_figure():
     return plt.figure(figsize=figsize, dpi=300, constrained_layout=True)
 
 
-def plot_figure(f, ax, input_dir, filebase, scaffolddomains, mapfile, rtag,
-                rvalue):
+def plot_figure(f, ax, args):
+    input_dir = args['input_dir']
+    filebase = args['filebase']
+    scaffold_domains = args['scaffolddomains']
+    mapfile = args['mapfile']
+    rtag = args['rtag']
+    rvalue = args['rvalue']
 
     inp_filebase = f'{input_dir}/{filebase}'
     index_to_domaintype = np.loadtxt(mapfile, dtype=int)

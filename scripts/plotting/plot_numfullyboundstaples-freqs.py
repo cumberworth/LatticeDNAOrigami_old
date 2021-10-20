@@ -17,20 +17,16 @@ from origamipy import utility
 def main():
     args = parse_args()
     f = setup_figure()
-    gs = gridspec.GridSpec(
-        args.stapletypes - 1, 1, f, height_ratios=[1]*(args.stapletypes - 1))
+    gs = gridspec.GridSpec(args.stapletypes - 1, 1, f)
     axes = []
     for i in range(args.stapletypes - 1):
         axes.append(f.add_subplot(gs[i, 0]))
 
-    slice_tag = 'numfullyboundstaples'
-    tagbase = 'staplestates'
-    plot_figure(
-        f, axes, args.input_dir, args.filebase, args.stapletypes, slice_tag,
-        tagbase, args.mapfile)
+    mappable = plot_figure(f, axes, vars(args))
     setup_axes(axes)
-    plot_filebase = (f'{args.plot_dir}/{args.filebase}_{slice_tag}-{tagbase}_'
-        'freqs')
+    set_labels(f, axes, mappable)
+    plot_filebase = (f'{args.plot_dir}/{args.filebase}_'
+                     f'{args.slice_tag}-{args.tagbase}_freqs')
     save_figure(f, plot_filebase)
 
 
@@ -41,9 +37,18 @@ def setup_figure():
     return plt.figure(figsize=figsize, dpi=300, constrained_layout=True)
 
 
-def plot_figure(
-        f, axes, input_dir, filebase, stapletypes, slice_tag, tagbase,
-        mapfile):
+def plot_figure(f, axes, args):
+    input_dir = args['input_dir']
+    filebase = args['filebase']
+    stapletypes = args['stapletypes']
+    slice_tag = args['slice_tag']
+    tagbase = args['tagbase']
+    mapfile = args['mapfile']
+
+    min_t = np.min(0)
+    max_t = np.max(1)
+    cmap = cm.get_cmap('viridis')
+    mappable = styles.create_linear_mappable(cmap, min_t, max_t)
 
     tags = [f'{tagbase}{i + 1}' for i in range(stapletypes)]
     inp_filebase = f'{input_dir}/{filebase}-{slice_tag}'
@@ -58,21 +63,22 @@ def plot_figure(
         ax = axes[i]
         reduced_aves = aves[aves[slice_tag] == op_value]
         freqs = [reduced_aves[t] for t in tags]
-        freq_array = utility.fill_assembled_shape_array(freqs, index_to_stapletype)
+        freq_array = utility.fill_assembled_shape_array(
+            freqs, index_to_stapletype)
 
         # Plot simulation melting points
-        min_t = np.min(0)
-        max_t = np.max(1)
-        cmap = cm.get_cmap('viridis')
-        mappable = styles.create_linear_mappable(cmap, min_t, max_t)
-        im = ax.imshow(freq_array, vmin=min_t, vmax=max_t, cmap=cmap)
+        ax.imshow(freq_array, vmin=min_t, vmax=max_t, cmap=cmap)
 
-#    plt.colorbar(im, orientation='horizontal')
+    return mappable
 
 
 def setup_axes(axes):
     for ax in axes:
         ax.axis('off')
+
+
+def set_labels(f, ax, mappable):
+    f.colorbar(mappable, orientation='horizontal')
 
 
 def save_figure(f, plot_filebase):
@@ -105,6 +111,16 @@ def parse_args():
         'mapfile',
         type=str,
         help='Index-to-staple type map filename')
+    parser.add_argument(
+        '--slice_tag',
+        default='numfullyboundstaples',
+        type=str,
+        help='OP tag to slice along')
+    parser.add_argument(
+        '--tagbase',
+        default='staplestates',
+        type=str,
+        help='OP tag base')
 
     return parser.parse_args()
 

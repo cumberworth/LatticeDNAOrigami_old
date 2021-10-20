@@ -19,10 +19,9 @@ def main():
     f = setup_figure()
     gs = gridspec.GridSpec(1, 1, f)
     ax = f.add_subplot(gs[0])
-    plot_figure(
-        f, ax, args.input_dir, args.filebase, args.stapletypes,
-        args.mapfile, args.rtag, args.rvalue)
+    mappable = plot_figure(f, ax, vars(args))
     setup_axis(ax)
+    set_labels(f, ax, mappable)
     plot_filebase = f'{args.plot_dir}/{args.filebase}_staplestates-melting'
     save_figure(f, plot_filebase)
 
@@ -34,8 +33,13 @@ def setup_figure():
     return plt.figure(figsize=figsize, dpi=300, constrained_layout=True)
 
 
-def plot_figure(
-        f, ax, input_dir, filebase, stapletypes, mapfile, rtag, rvalue):
+def plot_figure(f, ax, args):
+    input_dir = args['input_dir']
+    filebase = args['filebase']
+    stapletypes = args['stapletypes']
+    mapfile = args['mapfile']
+    rtag = args['rtag']
+    rvalue = args['rvalue']
 
     inp_filebase = f'{input_dir}/{filebase}'
     index_to_stapletype = np.loadtxt(mapfile, dtype=int)
@@ -58,13 +62,17 @@ def plot_figure(
         for col, staple_type in enumerate(staple_types):
             assembled_array[row, col] = melting_points[staple_type - 1]
 
-    # Plot simulation melting points
-    im = ax.imshow(assembled_array, vmin=min_t, vmax=max_t, cmap=cmap)
-    plt.colorbar(im, orientation='horizontal')
+    ax.imshow(assembled_array, vmin=min_t, vmax=max_t, cmap=cmap)
+
+    return mappable
 
 
 def setup_axis(ax):
     ax.axis('off')
+
+
+def set_labels(f, ax, mappable):
+    f.colorbar(mappable, orientation='horizontal')
 
 
 def save_figure(f, plot_filebase):

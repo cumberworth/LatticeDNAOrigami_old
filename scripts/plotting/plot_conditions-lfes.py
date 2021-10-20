@@ -17,12 +17,11 @@ from matplotlibstyles import styles
 def main():
     args = parse_args()
     f = setup_figure()
-    gs = gridspec.GridSpec(
-        2, 1, f, width_ratios=[1], height_ratios=[20, 1])
+    gs = gridspec.GridSpec(2, 1, f)
     ax = f.add_subplot(gs[0, 0])
-    ax_c = f.add_subplot(gs[1, 0])
-    plot_figure(f, ax, ax_c, args.filebase, args.input_dir)
-    setup_axis(ax, ax_c)
+    mappable = plot_figure(f, ax, vars(args))
+    setup_axis(ax)
+    set_labels(f, ax, mappable)
     plot_filebase = f'{args.output_dir}/{args.filebase}'
     save_figure(f, plot_filebase)
 
@@ -34,31 +33,35 @@ def setup_figure():
     return plt.figure(figsize=figsize, dpi=300, constrained_layout=True)
 
 
-def plot_figure(f, ax, ax_c, filebase, input_dir):
+def plot_figure(f, ax, args):
+    filebase = args['filebase']
+    input_dir = args['input_dir']
+
     inp_filebase = f'{input_dir}/{filebase}'
     aves = pd.read_csv(f'{inp_filebase}.aves', sep=' ')
     temps = np.array(aves.columns[1:], dtype=float)
     norm = mpl.colors.Normalize(vmin=temps[0], vmax=temps[-1])
     cmap = mpl.cm.viridis
-    scalarmap = mpl.cm.ScalarMappable(norm=norm, cmap=cmap)
+    mappable = mpl.cm.ScalarMappable(norm=norm, cmap=cmap)
 
     stds = pd.read_csv(f'{inp_filebase}.stds', sep=' ')
     for i, temp in enumerate(temps):
         temp_key = f'{temp:.3f}'
         ax.errorbar(
             aves.index, aves[temp_key], yerr=stds[temp_key], marker='o',
-            color=scalarmap.to_rgba(temp))
+            color=mappable.to_rgba(temp))
 
-    # Colorbar
-    cbar = mpl.colorbar.ColorbarBase(
-        ax_c, orientation='horizontal', cmap=cmap, norm=norm)
+    return mappable
 
 
-def setup_axis(ax, ax_c):
+def setup_axis(ax):
     ax.set_ylabel('$k_\mathrm{b}T$')
     ax.set_ylim([-0.5, 20])
 
-    ax_c.set_xlabel('Temperature / K')
+
+def set_labels(f, ax, mappable):
+    cbar = f.colorbar(mappable, orientation='horizontal')
+    cbar.ax.set_xlabel('Temperature / K')
 
 
 def save_figure(f, plot_filebase):

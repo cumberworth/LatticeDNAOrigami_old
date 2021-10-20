@@ -20,10 +20,9 @@ def main():
     gs = gridspec.GridSpec(
         1, 2, f, width_ratios=[10, 1], height_ratios=[1])
     ax = f.add_subplot(gs[0])
-    plot_figure(f, ax, args.input_dir, args.filebase, args.stapletypes,
-                args.rtag, args.rvalue, args.xtag, args.continuous)
+    mappable = plot_figure(f, ax, vars(args))
     setup_axis(ax)
-#    set_labels(ax, axes)
+    set_labels(f, ax, mappable)
     plot_filebase = f'{args.plot_dir}/{args.filebase}_staplestates-means'
     save_figure(f, plot_filebase)
 
@@ -35,13 +34,21 @@ def setup_figure():
     return plt.figure(figsize=figsize, dpi=300, constrained_layout=True)
 
 
-def plot_figure(f, ax, input_dir, filebase, stapletypes, rtag, rvalue, xtag,
-                contin):
+def plot_figure(f, ax, args):
+    input_dir = args['input_dir']
+    filebase = args['filebase']
+    stapletypes = args['stapletypes']
+    rtag = args['rtag']
+    rvalue = args['rvalue']
+    xtag = args['xtag']
+    contin = args['continuous']
+
     inp_filebase = f'{input_dir}/{filebase}'
-    tags = ['staplestates{}'.format(i) for i in range(1, stapletypes + 1)]
+    tagbase = 'staplestates'
+    tags = [f'{tagbase}{i}' for i in range(1, stapletypes + 1)]
     aves, stds = plot.read_expectations(inp_filebase)
     temps = aves['temp']
-    melting_points = utility.estimate_melting_points(stapletypes, aves, temps)
+    melting_points = utility.estimate_staple_melting_points(stapletypes, aves, temps)
     min_t = np.min(melting_points)
     max_t = np.max(melting_points)
     cmap = cm.get_cmap('viridis')
@@ -64,10 +71,16 @@ def plot_figure(f, ax, input_dir, filebase, stapletypes, rtag, rvalue, xtag,
 
         ax.plot(xvars, aves[tag], color=color, marker='None')
 
+    return mappable
+
 
 def setup_axis(ax):
     ax.set_xlabel('$T$ / K')
     ax.set_ylabel('Staple state')
+
+
+def set_labels(f, ax, mappable):
+    f.colorbar(mappable, orientation='vertical')
 
 
 def save_figure(f, plot_filebase):
