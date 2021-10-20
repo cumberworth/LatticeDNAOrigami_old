@@ -79,10 +79,10 @@ def main():
         fileformatter, staple_lengths)
 
     # Calculate expectations and LFEs for melting temperature
-    out_filebase = f'{out_filebase}-melting'
+    exps_filebase = f'{out_filebase}-melting'
     lfes_filebase = f'{out_filebase}_lfes-melting'
     mbarw.calc_all_1d_lfes(lfes_filebase, se_tags, [conds])
-    mbarw.calc_all_expectations(out_filebase, all_se_tags, [conds])
+    mbarw.calc_all_expectations(exps_filebase, all_se_tags, [conds])
 
     # Calculate expectations along OP slices
     mbarws = []
@@ -121,11 +121,11 @@ def main():
         conds, mbarws, all_decor_outs, all_tags)
 
     aves = np.concatenate([[sampled_ops], np.array(aves).T])
-    aves_file = files.TagOutFile('{out_filebase}-{args.tag}.aves')
+    aves_file = files.TagOutFile(f'{out_filebase}-{args.tag}.aves')
     aves_file.write([args.tag] + all_tags, aves.T)
 
     stds = np.concatenate([[sampled_ops], np.array(stds).T])
-    stds_file = files.TagOutFile('{out_filebase}-{args.tag}.stds')
+    stds_file = files.TagOutFile(f'{out_filebase}-{args.tag}.stds')
     stds_file.write([args.tag] + all_tags, stds.T)
 
 

@@ -79,10 +79,10 @@ def main():
          'bias': biases.NoBias()},
         fileformatter, staple_lengths)
 
-    out_filebase = f'{out_filebase}-melting'
+    exps_filebase = f'{out_filebase}-melting'
     lfes_filebase = f'{out_filebase}_lfes-melting'
     mbarw.calc_all_1d_lfes(lfes_filebase, se_tags, [conds])
-    mbarw.calc_all_expectations(out_filebase, se_tags, [conds])
+    mbarw.calc_all_expectations(exps_filebase, se_tags, [conds])
 
     # Calc melting temps for other stacking energies
 #    for stack_mult in [0, 0.25, 0.5, 0.75]:
@@ -179,11 +179,11 @@ def main():
         args.itr)
 
     aves = np.concatenate([[sampled_ops], np.array(aves).T])
-    aves_file = files.TagOutFile('{out_filebase}-{args.tag}.aves')
+    aves_file = files.TagOutFile(f'{out_filebase}-{args.tag}.aves')
     aves_file.write([args.tag] + se_tags, aves.T)
 
     stds = np.concatenate([[sampled_ops], np.array(stds).T])
-    stds_file = files.TagOutFile('{out_filebase}-{args.tag}.stds')
+    stds_file = files.TagOutFile(f'{out_filebase}-{args.tag}.stds')
     stds_file.write([args.tag] + se_tags, stds.T)
 
 
