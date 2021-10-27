@@ -4,7 +4,6 @@
 
 
 import argparse
-import json
 import os.path
 
 import numpy as np
@@ -24,7 +23,7 @@ def main():
     args = parse_args()
     system_file = files.JSONStructInpFile(args.system_filename)
     staple_lengths = utility.calc_staple_lengths(system_file)
-    inp_filebase = '{}/{}'.format(args.input_dir, args.filebase)
+    inp_filebase = f'{args.input_dir}/{args.filebase}'
     fileformatter = construct_fileformatter()
     reps_all_conditions = conditions.construct_mwus_conditions(
         args.windows_filename, args.bias_functions_filename, args.reps,
@@ -81,10 +80,6 @@ def parse_args():
         'input_dir',
         type=str,
         help='Directory of inputs')
-    parser.add_argument(
-        'output_dir',
-        type=str,
-        help='Directory to output to')
     parser.add_argument(
         'windows_filename',
         type=str,
