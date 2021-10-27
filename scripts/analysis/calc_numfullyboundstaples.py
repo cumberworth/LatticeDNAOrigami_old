@@ -15,28 +15,33 @@ from origamipy import files
 from origamipy import outputs
 from origamipy import decorrelate
 from origamipy import mbar_wrapper
+from origamipy import utility
 
 
 def main():
     args = parse_args()
     system_file = files.JSONStructInpFile(args.system_filename)
+    staple_lengths = utility.calc_staple_lengths(system_file)
+    inp_filebase = f'{args.input_dir}/{args.filebase}'
     fileformatter = construct_fileformatter()
-    all_conditions = construct_conditions(args, fileformatter, system_file)
-    inp_filebase = create_input_filepathbase(args)
-    sim_collections = outputs.create_sim_collections(inp_filebase,
-                                                     all_conditions, args.reps)
+    all_conditions = conditions.construct_remc_conditions(
+        args.temps, args.staple_m, fileformatter, staple_lengths)
+    sim_collections = []
+    for rep in range(args.reps):
+        rep_sim_collections = outputs.create_sim_collections(
+            inp_filebase, all_conditions, rep)
+        sim_collections.append(rep_sim_collections)
 
     tag = 'numfullyboundstaples'
-    for sim_collection in sim_collections:
-        staple_states = sim_collection.get_reps_data(
-            'staplestates', concatenate=False)
-        for rep in sim_collection._reps:
-            runs = len(staple_states[rep])
+    for rep_sim_collections in sim_collections:
+        for sim_collection in rep_sim_collections:
+            staple_states = sim_collection.get_data(
+                'staplestates', concatenate=False)
+            runs = len(staple_states)
             for run in range(runs):
-                back_ops_filebase = sim_collection.get_filebase(run, rep)
+                back_ops_filebase = sim_collection.get_filebase(run)
                 back_ops = datatypes.OrderParams.from_file(back_ops_filebase)
-                total_staples = staple_states[rep][run]._data[1:, :].sum(
-                    axis=0)
+                total_staples = staple_states[run]._data[1:, :].sum(axis=0)
                 if tag in back_ops.tags:
                     back_ops[tag] = total_staples
                 else:
@@ -45,25 +50,9 @@ def main():
                 back_ops.to_file(back_ops_filebase)
 
 
-def construct_conditions(args, fileformatter, system_file):
-    conditions_map = {'temp': args.temps,
-                      'staple_m': [args.staple_m],
-                      'bias': [biases.NoBias()]}
-
-    return conditions.AllSimConditions(conditions_map, fileformatter, system_file)
-
-
 def construct_fileformatter():
     specs = [conditions.ConditionsFileformatSpec('temp', '{}')]
     return conditions.ConditionsFileformatter(specs)
-
-
-def create_input_filepathbase(args):
-    return '{}/{}'.format(args.input_dir, args.filebase)
-
-
-def create_output_filepathbase(args):
-    return '{}/{}'.format(args.output_dir, args.filebase)
 
 
 def parse_args():
@@ -83,18 +72,13 @@ def parse_args():
         type=str,
         help='Directory of inputs')
     parser.add_argument(
-        'output_dir',
-        type=str,
-        help='Directory to output to')
-    parser.add_argument(
         'staple_m',
         type=float,
         help='Staple molarity (mol/V)')
     parser.add_argument(
-        '--reps',
-        nargs='+',
+        'reps',
         type=int,
-        help='Reps (leave empty for all available)')
+        help='Number of reps')
     parser.add_argument(
         '--temps',
         nargs='+',

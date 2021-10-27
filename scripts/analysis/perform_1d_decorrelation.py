@@ -20,10 +20,10 @@ def main():
     args = parse_args()
     system_file = files.JSONStructInpFile(args.system_filename)
     staple_lengths = utility.calc_staple_lengths(system_file)
+    inp_filebase = f'{args.input_dir}/{args.filebase}'
     fileformatter = construct_fileformatter()
     all_conditions = conditions.construct_remc_conditions(
         args.temps, args.staple_m, fileformatter, staple_lengths)
-    inp_filebase = f'{args.input_dir}/{args.filebase}'
     sim_collections = []
     for rep in range(args.reps):
         rep_sim_collections = outputs.create_sim_collections(
@@ -41,14 +41,6 @@ def main():
 def construct_fileformatter():
     specs = [conditions.ConditionsFileformatSpec('temp', '{}')]
     return conditions.ConditionsFileformatter(specs)
-
-
-def construct_conditions(args, fileformatter, system_file):
-    conditions_map = {'temp': args.temps,
-                      'staple_m': [args.staple_m],
-                      'bias': [biases.NoBias()]}
-
-    return conditions.AllSimConditions(conditions_map, fileformatter, system_file)
 
 
 def parse_args():

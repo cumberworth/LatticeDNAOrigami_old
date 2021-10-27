@@ -15,28 +15,35 @@ from origamipy import files
 from origamipy import outputs
 from origamipy import decorrelate
 from origamipy import mbar_wrapper
+from origamipy import utility
 
 
 def main():
     args = parse_args()
     system_file = files.JSONStructInpFile(args.system_filename)
+    staple_lengths = utility.calc_staple_lengths(system_file)
+    inp_filebase = f'{args.input_dir}/{args.filebase}'
     fileformatter = construct_fileformatter()
-    all_conditions = construct_conditions(args, fileformatter, system_file)
-    inp_filebase = create_input_filepathbase(args)
-    sim_collections = outputs.create_sim_collections(inp_filebase,
-                                                     all_conditions, args.reps)
-    for sim_collection in sim_collections:
-        for rep in sim_collection._reps:
-            ops = sim_collection.get_reps_data('ops', concatenate=False)
-            runs = len(ops[rep])
+    all_conditions = conditions.construct_remc_conditions(
+        args.temps, args.staple_m, fileformatter, staple_lengths)
+    sim_collections = []
+    for rep in range(args.reps):
+        rep_sim_collections = outputs.create_sim_collections(
+            inp_filebase, all_conditions, rep)
+        sim_collections.append(rep_sim_collections)
+
+    for rep_sim_collections in sim_collections:
+        for sim_collection in rep_sim_collections:
+            ops = sim_collection.get_data('ops', concatenate=False)
+            runs = len(ops)
             for run in range(runs):
-                run_filebase = sim_collection.get_filebase(run, rep)
-                states_filename = '{}.states'.format(run_filebase)
+                run_filebase = sim_collection.get_filebase(run)
+                states_filename = f'{run_filebase}.states'
                 states = np.loadtxt(states_filename)[:, :args.scaffold_domains]
                 states = states == 2
                 ops = datatypes.OrderParams.from_file(run_filebase)
                 for i in range(args.scaffold_domains):
-                    tag = 'domainstate{}'.format(i)
+                    tag = f'domainstate{i}'
                     if tag in ops.tags:
                         ops[tag] = states[:, i]
                     else:
@@ -58,14 +65,6 @@ def construct_fileformatter():
     return conditions.ConditionsFileformatter(specs)
 
 
-def create_input_filepathbase(args):
-    return '{}/{}'.format(args.input_dir, args.filebase)
-
-
-def create_output_filepathbase(args):
-    return '{}/{}'.format(args.output_dir, args.filebase)
-
-
 def parse_args():
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -83,10 +82,6 @@ def parse_args():
         type=str,
         help='Directory of inputs')
     parser.add_argument(
-        'output_dir',
-        type=str,
-        help='Directory to output to')
-    parser.add_argument(
         'staple_m',
         type=float,
         help='Staple molarity (mol/V)')
@@ -95,10 +90,9 @@ def parse_args():
         type=int,
         help='Number of scaffold domains')
     parser.add_argument(
-        '--reps',
-        nargs='+',
+        'reps',
         type=int,
-        help='Reps (leave empty for all available)')
+        help='Number of reps')
     parser.add_argument(
         '--temps',
         nargs='+',
