@@ -6,7 +6,9 @@ import argparse
 import sys
 
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
+from matplotlib import cm
+from matplotlib import gridspec
+from matplotlib.ticker import MaxNLocator
 import numpy as np
 import pandas as pd
 
@@ -40,8 +42,25 @@ def plot_figure(f, ax, args):
     input_dir = args['input_dir']
     tag = args['tag']
     post_lfes = args['post_lfes']
+    stacking_enes = args['stacking_enes']
 
-    for system, vari, post_lfe in zip(systems, varis, post_lfes):
+    if stacking_enes is not None:
+        stacking_enes = [abs(e) for e in stacking_enes]
+        cmap = styles.create_truncated_colormap(
+            0.2, 0.8, name='plasma')
+        #mappable = styles.create_linear_mappable(
+        #    cmap, abs(stacking_enes[0]), abs(stacking_enes[-1]))
+        #colors = [mappable.to_rgba(abs(e)) for e in stacking_enes]
+        increment = stacking_enes[1] - stacking_enes[0]
+        cmap, norm, colors = styles.create_segmented_colormap(cmap, stacking_enes, increment)
+    else:
+        cmap = cm.get_cmap('tab10')
+        colors = [cmap(i) for i in range(len(systems))]
+
+    for i in range(len(systems)):
+        system = systems[i]
+        vari = varis[i]
+        post_lfe = post_lfes[i]
         if post_lfe != '':
             post_lfe = '-' + post_lfe
 
@@ -53,13 +72,21 @@ def plot_figure(f, ax, args):
         lfe_stds = lfe_stds[temp]
 
         label = f'{system}-{vari}'
-        ax.errorbar(lfes.index, lfes, yerr=lfe_stds, marker='o', label=label)
+        ax.errorbar(lfes.index, lfes, yerr=lfe_stds, marker='o', label=label,
+                    color=colors[i])
+
+    if stacking_enes is not None:
+        label = r'$U_\text{stack} / \SI{1000}{\kb\kelvin}$'
+        tick_labels = [f'{-e/1000:.1f}' for e in stacking_enes]
+        styles.plot_segmented_colorbar(f, ax, cmap, norm, label, tick_labels)
 
 
-def setup_axis(ax, tag):
-    ax.set_ylabel('$k_\mathrm{b}T$')
-    ax.set_xlabel(tag)
-#    ax.set_ylim([-0.5, 20])
+def setup_axis(ax, ylabel=None, xlabel=None, ylim_top=None, xlim_right=None):
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    ax.set_ylabel(ylabel)
+    ax.set_xlabel(xlabel)
+    ax.set_ylim(top=ylim_top)
+    ax.set_xlim(right=xlim_right)
 
 
 def set_labels(ax):
@@ -103,6 +130,11 @@ def parse_args():
         nargs='+',
         type=str,
         help='Filename additions after lfes, if any')
+    parser.add_argument(
+        '--stacking_enes',
+        nargs='+',
+        type=float,
+        help='Stacking energies (for colormap)')
 
     return parser.parse_args()
 

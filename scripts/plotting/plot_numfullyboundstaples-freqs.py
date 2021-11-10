@@ -22,9 +22,9 @@ def main():
     for i in range(args.stapletypes - 1):
         axes.append(f.add_subplot(gs[i, 0]))
 
-    mappable = plot_figure(f, axes, vars(args))
+    plot_figure(f, axes, vars(args))
     setup_axes(axes)
-    set_labels(f, axes, mappable)
+    set_labels(f, axes)
     plot_filebase = (f'{args.plot_dir}/{args.filebase}_'
                      f'{args.slice_tag}-{args.tagbase}_freqs')
     save_figure(f, plot_filebase)
@@ -45,10 +45,7 @@ def plot_figure(f, axes, args):
     tagbase = args['tagbase']
     mapfile = args['mapfile']
 
-    min_t = np.min(0)
-    max_t = np.max(1)
     cmap = cm.get_cmap('viridis')
-    mappable = styles.create_linear_mappable(cmap, min_t, max_t)
 
     tags = [f'{tagbase}{i + 1}' for i in range(stapletypes)]
     inp_filebase = f'{input_dir}/{filebase}-{slice_tag}'
@@ -67,9 +64,7 @@ def plot_figure(f, axes, args):
             freqs, index_to_stapletype)
 
         # Plot simulation melting points
-        ax.imshow(freq_array, vmin=min_t, vmax=max_t, cmap=cmap)
-
-    return mappable
+        ax.imshow(freq_array, vmin=0, vmax=1, cmap=cmap)
 
 
 def setup_axes(axes):
@@ -77,8 +72,10 @@ def setup_axes(axes):
         ax.axis('off')
 
 
-def set_labels(f, ax, mappable):
-    f.colorbar(mappable, orientation='horizontal')
+def set_labels(f, axes):
+    cmap = cm.get_cmap('viridis')
+    mappable = styles.create_linear_mappable(cmap, 0, 1)
+    f.colorbar(mappable, ax=axes, orientation='horizontal')
 
 
 def save_figure(f, plot_filebase):

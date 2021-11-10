@@ -5,6 +5,7 @@
 import argparse
 
 import matplotlib.pyplot as plt
+from matplotlib import cm
 from matplotlib import gridspec
 import numpy as np
 from scipy import interpolate
@@ -20,7 +21,7 @@ def main():
     gs = gridspec.GridSpec(1, 1, f)
     ax = f.add_subplot(gs[0])
     plot_figure(f, ax, vars(args))
-    setup_axis(ax)
+    setup_axis(ax, args.tag)
 #    set_labels(ax, ax)
     save_figure(f, args.plot_filebase)
 
@@ -37,18 +38,38 @@ def plot_figure(f, ax, args):
     varis = args['varis']
     input_dir = args['input_dir']
     tag = args['tag']
-    assembled_value = args['assembled_value']
-    post = args['post']
-    nncurve = args['nncurve']
+    assembled_values = args['assembled_values']
+    posts = args['posts']
+    nncurves = args['nncurves']
     staple_M = args['staple_M']
     binds = args['binds']
     bindh = args['bindh']
     stackene = args['stackene']
-    contin = args['continuous']
+    contins = args['continuous']
 
-    ax.axhline(assembled_value, linestyle='--')
+    cmap = cm.get_cmap('tab10')
 
-    for system, vari in zip(systems, varis):
+    for i in range(len(systems)):
+        system = systems[i]
+        vari = varis[i]
+        assembled_value = assembled_values[i]
+        if posts is not None:
+            post = posts[i]
+        else:
+            post = ''
+
+        if nncurves is not None:
+            nncurve = nncurves[i]
+        else:
+            nncurve = False
+
+        if contins is not None:
+            contin = contins[i]
+        else:
+            contin = False
+
+        ax.axhline(assembled_value, linestyle='--', color=cmap(i))
+
         inp_filebase = f'{input_dir}/{system}-{vari}{post}'
         all_aves, all_stds = plot.read_expectations(inp_filebase)
         temps = all_aves['temp']
@@ -59,19 +80,20 @@ def plot_figure(f, ax, args):
             interpolated_temp = interpolate.interp1d(means, temps, kind='linear')
             halfway_temp = interpolated_temp(assembled_value/2)
             occ_temps = np.linspace(halfway_temp - 10, halfway_temp + 10, 50)
-            ax.plot(occ_temps, fracs*assembled_value)
+            ax.plot(occ_temps, fracs*assembled_value, color=cmap(i))
 
         if contin:
             ax.fill_between(temps, means + stds, means - stds, label=vari,
                             color='0.8')
-            ax.plot(temps, means, marker='None', label=vari)
+            ax.plot(temps, means, marker='None', label=vari, color=cmap(i))
         else:
-            ax.errorbar(temps, means, yerr=stds, marker='o', label=vari)
+            ax.errorbar(temps, means, yerr=stds, marker='o', label=vari,
+                        color=cmap(i))
 
 
-def setup_axis(ax):
+def setup_axis(ax, ylabel):
     ax.set_xlabel(r'$T / K$')
-    ax.set_ylabel('Order parameter')
+    ax.set_ylabel(ylabel)
 
 
 def set_labels(ax):
@@ -103,9 +125,10 @@ def parse_args():
         type=str,
         help='OP tag')
     parser.add_argument(
-        'assembled_value',
+        '--assembled_values',
+        nargs='+',
         type=int,
-        help='Value of OP in assembled state')
+        help='Values of OP in assembled state')
     parser.add_argument(
         '--systems',
         nargs='+',
@@ -117,13 +140,13 @@ def parse_args():
         type=str,
         help='Simulation variants')
     parser.add_argument(
-        '--post',
-        default='',
+        '--posts',
+        nargs='+',
         type=str,
         help='Extra part of mean name (e.g. _temps for MWUS extrapolation')
     parser.add_argument(
-        '--nncurve',
-        default='',
+        '--nncurves',
+        nargs='+',
         type=bool,
         help='Include shifted NN curve')
     parser.add_argument(
@@ -148,7 +171,7 @@ def parse_args():
         help='Stacking energy')
     parser.add_argument(
         '--continuous',
-        default=False,
+        nargs='+',
         type=bool,
         help='Plot curves as continuous')
 
