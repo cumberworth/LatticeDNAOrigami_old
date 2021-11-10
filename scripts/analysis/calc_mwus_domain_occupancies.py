@@ -23,7 +23,7 @@ def main():
     args = parse_args()
     system_file = files.JSONStructInpFile(args.system_filename)
     staple_lengths = utility.calc_staple_lengths(system_file)
-    inp_filebase = f'{args.input_dir}/{args.filebase}'
+    inp_filebase = f'{args.outs_dir}/{args.filebase}'
     fileformatter = construct_fileformatter()
     reps_all_conditions = conditions.construct_mwus_conditions(
         args.windows_filename, args.bias_functions_filename, args.reps,
@@ -48,7 +48,8 @@ def main():
                 else:
                     ops.add_column(tag, states[:, i])
 
-            ops.to_file(sim_collection.filebase)
+            out_filebase = sim_collection.filebase + '_mod'
+            ops.to_file(out_filebase)
 
 
 def construct_fileformatter():
@@ -79,9 +80,9 @@ def parse_args():
         type=str,
         help='Base name for files')
     parser.add_argument(
-        'input_dir',
+        'outs_dir',
         type=str,
-        help='Directory of inputs')
+        help='outs directory')
     parser.add_argument(
         'windows_filename',
         type=str,

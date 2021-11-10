@@ -22,7 +22,7 @@ def main():
     args = parse_args()
     system_file = files.JSONStructInpFile(args.system_filename)
     staple_lengths = utility.calc_staple_lengths(system_file)
-    inp_filebase = f'{args.input_dir}/{args.filebase}'
+    inp_filebase = f'{args.outs_dir}/{args.filebase}'
     fileformatter = construct_fileformatter()
     all_conditions = conditions.construct_remc_conditions(
         args.temps, args.staple_m, fileformatter, staple_lengths)
@@ -49,6 +49,7 @@ def main():
                     else:
                         ops.add_column(tag, states[:, i])
 
+                out_filebase = run_filebase + '_mod'
                 ops.to_file(run_filebase)
 
 
@@ -78,9 +79,9 @@ def parse_args():
         type=str,
         help='Base name for files')
     parser.add_argument(
-        'input_dir',
+        'outs_dir',
         type=str,
-        help='Directory of inputs')
+        help='outs directory')
     parser.add_argument(
         'staple_m',
         type=float,

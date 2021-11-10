@@ -25,7 +25,7 @@ def main():
     staple_lengths = utility.calc_staple_lengths(system_file)
     staple_types = utility.calc_num_staple_types(system_file)
     num_scaffold_domains = utility.calc_num_scaffold_domains(system_file)
-    inp_filebase = f'{args.input_dir}/{args.filebase}'
+    inp_filebase = f'{args.outs_dir}/{args.filebase}'
     fileformatter = construct_fileformatter()
     all_conditions = conditions.construct_remc_conditions(
         args.temps, args.staple_m, fileformatter, staple_lengths)
@@ -50,7 +50,7 @@ def main():
     else:
         se_tags = args.tags
 
-    out_filebase = f'{args.output_dir}/{args.filebase}'
+    out_filebase = f'{args.analysis_dir}/{args.filebase}'
     mbarw.calc_all_expectations(out_filebase, all_se_tags, all_conditions)
     lfes_filebase = f'{out_filebase}_lfes'
     mbarw.calc_all_1d_lfes(lfes_filebase, se_tags, all_conditions)
@@ -221,13 +221,9 @@ def parse_args():
         type=str,
         help='Base name for files')
     parser.add_argument(
-        'input_dir',
+        'analysis_dir',
         type=str,
-        help='Directory of inputs')
-    parser.add_argument(
-        'output_dir',
-        type=str,
-        help='Directory to output to')
+        help='analysis directory')
     parser.add_argument(
         'staple_m',
         type=float,

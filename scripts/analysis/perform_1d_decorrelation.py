@@ -20,22 +20,21 @@ def main():
     args = parse_args()
     system_file = files.JSONStructInpFile(args.system_filename)
     staple_lengths = utility.calc_staple_lengths(system_file)
-    inp_filebase = f'{args.input_dir}/{args.filebase}'
+    filebase = f'{args.outs_dir}/{args.filebase}'
     fileformatter = construct_fileformatter()
     all_conditions = conditions.construct_remc_conditions(
         args.temps, args.staple_m, fileformatter, staple_lengths)
     sim_collections = []
     for rep in range(args.reps):
         rep_sim_collections = outputs.create_sim_collections(
-            inp_filebase, all_conditions, rep)
+            filebase, all_conditions, rep)
         sim_collections.append(rep_sim_collections)
 
     decor_outs = decorrelate.DecorrelatedOutputs(
         sim_collections, rep_conditions_equal=True)
     decor_outs.perform_decorrelation(args.skip)
-    out_filebase = '{}/{}'.format(args.output_dir, args.filebase)
-    decor_outs.apply_masks(out_filebase)
-    decor_outs.write_decors_to_files(out_filebase)
+    decor_outs.apply_masks(filebase)
+    decor_outs.write_decors_to_files(filebase)
 
 
 def construct_fileformatter():
@@ -56,13 +55,9 @@ def parse_args():
         type=str,
         help='Base name for files')
     parser.add_argument(
-        'input_dir',
+        'outs_dir',
         type=str,
-        help='Directory of inputs')
-    parser.add_argument(
-        'output_dir',
-        type=str,
-        help='Directory to output to')
+        help='outs directory')
     parser.add_argument(
         'staple_m',
         type=float,

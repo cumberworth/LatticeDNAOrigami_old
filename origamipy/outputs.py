@@ -52,11 +52,13 @@ class EnumCollection:
             lfes_file.write(header, data)
 
 
-def create_sim_collections(filebase, all_conditions, rep, start_run=0, end_run=-1):
+def create_sim_collections(
+    filebase, all_conditions, rep, start_run=0, end_run=-1, use_mod_ops=False):
+
     sim_collections = []
     for conditions in all_conditions:
         sim_collection = SimCollection(
-            filebase, conditions, rep, start_run, end_run)
+            filebase, conditions, rep, start_run, end_run, use_mod_ops)
         sim_collections.append(sim_collection)
 
     return sim_collections
@@ -68,7 +70,8 @@ class SimCollection:
     filebase_template = '{}_run-{}_rep-{}{}'
     decor_filebase_template = '{}_run-{}-{}_rep-{}{}_decor'
 
-    def __init__(self, filebase, conditions, rep, start_run=0, end_run=-1):
+    def __init__(self, filebase, conditions, rep, start_run=0, end_run=-1,
+                 use_mod_ops=False):
         self.conditions = conditions
         self.filebase = filebase
         self._datatype = {}
@@ -76,6 +79,7 @@ class SimCollection:
         self._rep = rep
         self._start_run = start_run
         self._end_run = end_run
+        self._use_mod_ops = use_mod_ops
 
     def get_data(self, dt_tag, concatenate=True):
         """Return datatype series.
@@ -124,6 +128,8 @@ class SimCollection:
         while runs_remain and (self._end_run == -1 or run <= self._end_run):
             filebase = self.filebase_template.format(
                 self.filebase, run, self._rep, self.conditions.fileformat)
+            if self._use_mod_ops and dt_tag == 'ops':
+                filebase += '_mod'
             try:
                 all_series.append(self._load_data_from_file(filebase, dt_tag))
             except IOError:

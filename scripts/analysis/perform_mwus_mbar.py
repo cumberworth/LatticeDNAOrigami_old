@@ -24,7 +24,7 @@ def main():
     args = parse_args()
     system_file = files.JSONStructInpFile(args.system_filename)
     staple_lengths = utility.calc_staple_lengths(system_file)
-    inp_filebase = f'{args.input_dir}/{args.filebase}'
+    inp_filebase = f'{args.outs_dir}/{args.filebase}'
     fileformatter = construct_fileformatter()
     reps_all_conditions = conditions.construct_mwus_conditions(
         args.windows_filename, args.bias_functions_filename, args.reps,
@@ -54,7 +54,7 @@ def main():
 
     # Calc LFEs and expectations with simulation temp
     out_filebase = '{}/{}_run-{}-{}_iter-{}'.format(
-        args.output_dir,
+        args.analysis_dir,
         args.filebase,
         args.start_run,
         args.end_run,
@@ -116,13 +116,8 @@ def main():
             fileformatter, staple_lengths)
         temp_conds.append(conds)
 
-    out_filebase = '{}/{}_run-{}-{}_iter-{}_temps'.format(
-        args.output_dir,
-        args.filebase,
-        args.start_run,
-        args.end_run,
-        args.itr)
-    mbarw.calc_all_expectations(out_filebase, se_tags, temp_conds)
+    exps_filebase = f'{out_filebase}_temps'
+    mbarw.calc_all_expectations(exps_filebase, se_tags, temp_conds)
 
     # Expecations along OP slices
     mbarws = []
@@ -171,12 +166,6 @@ def main():
         fileformatter, staple_lengths)
     aves, stds = calc_reduced_expectations(
         conds, mbarws, all_decor_outs, se_tags)
-    out_filebase = '{}/{}_run-{}-{}_iter-{}'.format(
-        args.output_dir,
-        args.filebase,
-        args.start_run,
-        args.end_run,
-        args.itr)
 
     aves = np.concatenate([[sampled_ops], np.array(aves).T])
     aves_file = files.TagOutFile(f'{out_filebase}-{args.tag}.aves')
@@ -256,13 +245,13 @@ def parse_args():
         type=str,
         help='Base name for files')
     parser.add_argument(
-        'input_dir',
+        'outs_dir',
         type=str,
-        help='Directory of inputs')
+        help='outs directory')
     parser.add_argument(
-        'output_dir',
+        'analysis_dir',
         type=str,
-        help='Directory to output to')
+        help='analysis directory')
     parser.add_argument(
         'windows_filename',
         type=str,
