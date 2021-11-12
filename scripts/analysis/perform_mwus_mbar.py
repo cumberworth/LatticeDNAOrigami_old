@@ -155,9 +155,9 @@ def main():
         se_tags.append(f'staples{i}')
         se_tags.append(f'staplestates{i}')
 
-    num_scaffold_domains = utility.calc_num_scaffold_domains(system_file)
-    for i in range(num_scaffold_domains):
-        se_tags.append(f'domainstate{i}')
+    #num_scaffold_domains = utility.calc_num_scaffold_domains(system_file)
+    #for i in range(num_scaffold_domains):
+    #    se_tags.append(f'domainstate{i}')
 
     conds = conditions.SimConditions(
         {'temp': melting_temp,
