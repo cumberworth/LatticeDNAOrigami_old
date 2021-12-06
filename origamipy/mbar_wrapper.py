@@ -198,10 +198,9 @@ class MBARWrapper:
         return melting_temp
 
     def estimate_melting_temp_endpoints(self, conds, guess_temp):
-        """Estimate the melting temperature assuming barrier exists.
+        """Estimate the melting temperature with the endpoints.
 
-        Find the global maximum that is not at the edge of the domain and then
-        find minima on either side and minimize difference between them.
+        Minimize the difference between the LFEs at the edges of the range.
         """
         series = self._decor_outs.get_concatenated_series(
             'numfullyboundstaples')

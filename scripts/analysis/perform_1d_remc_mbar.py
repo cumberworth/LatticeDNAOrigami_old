@@ -150,10 +150,10 @@ def est_melting_temp_and_barrier(
         mbarw, fileformatter, staple_lengths, conds, bias, guess_temp,
         staple_m):
 
-    try:
-        melting_temp = mbarw.estimate_melting_temp(conds, guess_temp)
-    except:
-        melting_temp = mbarw.estimate_melting_temp_endpoints(conds, guess_temp)
+#    try:
+#        melting_temp = mbarw.estimate_melting_temp(conds, guess_temp)
+#    except:
+    melting_temp = mbarw.estimate_melting_temp_endpoints(conds, guess_temp)
 
     conds = conditions.SimConditions(
         {'temp': melting_temp,
@@ -220,6 +220,10 @@ def parse_args():
         'filebase',
         type=str,
         help='Base name for files')
+    parser.add_argument(
+        'outs_dir',
+        type=str,
+        help='outs directory')
     parser.add_argument(
         'analysis_dir',
         type=str,

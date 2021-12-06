@@ -177,12 +177,17 @@ def main():
 
 
 def est_melting_temp_and_barrier(
-        mbarw, fileformatter, staple_lengths, conds, bias, args):
+        mbarw,
+        fileformatter,
+        staple_lengths,
+        conds,
+        bias,
+        args):
 
-    try:
-        melting_temp = mbarw.estimate_melting_temp(conds, args.temp)
-    except:
-        melting_temp = mbarw.estimate_melting_temp_endpoints(conds, args.temp)
+#    try:
+#        melting_temp = mbarw.estimate_melting_temp(conds, args.temp)
+#    except:
+    melting_temp = mbarw.estimate_melting_temp_endpoints(conds, args.temp)
 
     conds = conditions.SimConditions(
         {'temp': melting_temp,
