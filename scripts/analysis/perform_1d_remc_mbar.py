@@ -114,8 +114,8 @@ def main():
         all_tags.append(f'staples{i}')
         all_tags.append(f'staplestates{i}')
 
-    for i in range(num_scaffold_domains):
-        all_tags.append(f'domainstate{i}')
+#    for i in range(num_scaffold_domains):
+#        all_tags.append(f'domainstate{i}')
 
     aves, stds = calc_reduced_expectations(
         conds, mbarws, all_decor_outs, all_tags)

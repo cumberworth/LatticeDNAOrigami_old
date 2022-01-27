@@ -27,12 +27,16 @@ def main():
     sim_collections = []
     for rep in range(args.reps):
         rep_sim_collections = outputs.create_sim_collections(
-            filebase, all_conditions, rep)
+            filebase,
+            all_conditions,
+            rep,
+            use_mod_ops=True)
         sim_collections.append(rep_sim_collections)
 
     decor_outs = decorrelate.DecorrelatedOutputs(
         sim_collections, rep_conditions_equal=True)
-    decor_outs.perform_decorrelation(args.skip)
+    decor_outs.perform_decorrelation(
+            args.skip, detect_equil=args.detect_equil, g=args.sample)
     decor_outs.apply_masks(filebase)
     decor_outs.write_decors_to_files(filebase)
 
@@ -69,11 +73,21 @@ def parse_args():
     parser.add_argument(
         'skip',
         type=int,
-        help='Number of steps to skip')
+        help='Number of steps to skip on read')
     parser.add_argument(
         'reps',
         type=int,
         help='Number of reps')
+    parser.add_argument(
+        '--detect_equil',
+        type=bool,
+        default=False,
+        help='Detect and truncate equilibration period')
+    parser.add_argument(
+        '--sample',
+        type=int,
+        default=None,
+        help='Statistical inefficiency')
     parser.add_argument(
         '--temps',
         nargs='+',
