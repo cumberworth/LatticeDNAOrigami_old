@@ -9,10 +9,8 @@ domains, and number of stacked pairs.
 import argparse
 import sys
 
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+import matplotlib.pyplot as plt
 import numpy as np
 
 import origamipy.plot as plot
@@ -23,7 +21,7 @@ def main():
     args = parse_args()
     skip = 1
     out_filebase = '{}/{}-{}_run-{}_iter-{}_timeseries'.format(
-            args.output_dir, args.system, args.vari, args.run, args.itr)
+        args.output_dir, args.system, args.vari, args.run, args.itr)
     tags = ['numstaples', 'numfulldomains', 'nummisdomains', 'numstackedpairs']
     labels = [
         'Bound staples',
@@ -54,9 +52,10 @@ def main():
             postfix += '-'
             for win_max in window[1]:
                 postfix += '-' + str(win_max)
-        
-            filebase = '{}/{}-{}_run-{}_rep-{}{}_iter-{}'.format(args.input_dir,
-                    args.system, args.vari, args.run, rep, postfix, args.itr)
+
+            filebase = '{}/{}-{}_run-{}_rep-{}{}_iter-{}'.format(
+                args.input_dir, args.system, args.vari, args.run, rep, postfix,
+                args.itr)
             ops_filename = '{}.ops'.format(filebase)
             ops = read_ops_from_file(ops_filename, tags, skip)
             times_filename = '{}.times'.format(filebase)
@@ -76,13 +75,14 @@ def main():
             # Plot expected value
             for i, tag in enumerate(tags):
                 if args.assembled_values[i] != 0:
-                    ax.axhline(args.assembled_values[i], linestyle='--', color='C{}'.format(i))
+                    ax.axhline(
+                        args.assembled_values[i], linestyle='--', color=f'C{i}')
 
     # Plot legend
     ax = axes[0]
     handles, labels = ax.get_legend_handles_labels()
     lgd = ax.legend(handles, labels, frameon=False, loc='center',
-            bbox_to_anchor=(0.7, 0.25))
+                    bbox_to_anchor=(0.7, 0.25))
 
     plt.tight_layout(pad=0.5, h_pad=0, w_pad=0)
     f.savefig('{}.pdf'.format(out_filebase), transparent=True)
@@ -101,7 +101,7 @@ def read_ops_from_file(filename, tags, skip):
     ops = {}
     for i, tag in enumerate(header):
         if tag in tags:
-            ops[tag] = all_ops[:, i]
+            ops[tag] = all_ops[:, i + 1]
 
     return ops
 
@@ -111,29 +111,29 @@ def parse_args():
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
-            'input_dir',
-            type=str,
-            help='Directory of inputs')
+        'input_dir',
+        type=str,
+        help='Directory of inputs')
     parser.add_argument(
-            'output_dir',
-            type=str,
-            help='Output directory')
+        'output_dir',
+        type=str,
+        help='Output directory')
     parser.add_argument(
         'windows_filename',
         type=str,
         help='Windows filename')
     parser.add_argument(
-            'system',
-            type=str,
-            help='System')
+        'system',
+        type=str,
+        help='System')
     parser.add_argument(
-            'vari',
-            type=str,
-            help='Simulation variant')
+        'vari',
+        type=str,
+        help='Simulation variant')
     parser.add_argument(
-            'reps',
-            type=int,
-            help='Number of reps')
+        'reps',
+        type=int,
+        help='Number of reps')
     parser.add_argument(
         'run',
         type=int,
@@ -143,11 +143,11 @@ def parse_args():
         type=int,
         help='US iteration')
     parser.add_argument(
-            '--assembled_values',
-            nargs='+',
-            type=int,
-            help='Bound staples bound domains misbound domains '
-                    'fully stacked pairs')
+        '--assembled_values',
+        nargs='+',
+        type=int,
+        help='Bound staples bound domains misbound domains '
+        'fully stacked pairs')
 
     return parser.parse_args()
 

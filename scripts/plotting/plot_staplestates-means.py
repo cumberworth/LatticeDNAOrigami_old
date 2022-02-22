@@ -10,6 +10,7 @@ from matplotlib import gridspec
 import numpy as np
 
 from matplotlibstyles import styles
+from matplotlibstyles import plotutils
 from origamipy import plot
 from origamipy import utility
 
@@ -29,7 +30,7 @@ def main():
 
 def setup_figure():
     styles.set_thin_style()
-    figsize = (styles.cm_to_inches(14), styles.cm_to_inches(10))
+    figsize = (plotutils.cm_to_inches(14), plotutils.cm_to_inches(10))
 
     return plt.figure(figsize=figsize, dpi=300, constrained_layout=True)
 
@@ -52,7 +53,7 @@ def plot_figure(f, ax, args):
     min_t = np.min(melting_points)
     max_t = np.max(melting_points)
     cmap = cm.get_cmap('viridis')
-    mappable = styles.create_linear_mappable(cmap, min_t, max_t)
+    mappable = plotutils.create_linear_mappable(cmap, min_t, max_t)
     if rtag:
         aves = aves[aves[args.rtag] == rvalue]
         stds = stds[stds[args.rtag] == rvalue]
@@ -60,7 +61,7 @@ def plot_figure(f, ax, args):
     for i, tag in enumerate(tags):
         xvars = aves[xtag]
         color = mappable.to_rgba(melting_points[i])
-        darkcolor = styles.darken_color(color[:3], 0.4)
+        darkcolor = plotutils.darken_color(color[:3], 0.4)
         if contin:
             ax.fill_between(
                 xvars, aves[tag] + stds[tag], aves[tag] - stds[tag],

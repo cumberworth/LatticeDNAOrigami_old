@@ -13,6 +13,7 @@ from matplotlib import gridspec
 
 from origamipy import plot
 from matplotlibstyles import styles
+from matplotlibstyles import plotutils
 
 
 def main():
@@ -32,7 +33,7 @@ def main():
 
 def setup_figure():
     styles.set_thin_style()
-    figsize = (styles.cm_to_inches(14), styles.cm_to_inches(11))
+    figsize = (plotutils.cm_to_inches(14), plotutils.cm_to_inches(11))
 
     return plt.figure(figsize=figsize, dpi=300, constrained_layout=True)
 

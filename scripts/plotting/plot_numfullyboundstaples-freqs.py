@@ -10,6 +10,7 @@ from matplotlib import gridspec
 import numpy as np
 
 from matplotlibstyles import styles
+from matplotlibstyles import plotutils
 from origamipy import plot
 from origamipy import utility
 
@@ -32,7 +33,7 @@ def main():
 
 def setup_figure():
     styles.set_thin_style()
-    figsize = (styles.cm_to_inches(5), styles.cm_to_inches(20))
+    figsize = (plotutils.cm_to_inches(5), plotutils.cm_to_inches(20))
 
     return plt.figure(figsize=figsize, dpi=300, constrained_layout=True)
 
@@ -67,15 +68,18 @@ def plot_figure(f, axes, args):
         ax.imshow(freq_array, vmin=0, vmax=1, cmap=cmap)
 
 
-def setup_axes(axes):
-    for ax in axes:
+def setup_axes(axes, titles=None):
+    for i, ax in enumerate(axes):
         ax.axis('off')
+        if titles is not None:
+            ax.set_title(titles[i])
 
 
 def set_labels(f, axes):
     cmap = cm.get_cmap('viridis')
-    mappable = styles.create_linear_mappable(cmap, 0, 1)
-    f.colorbar(mappable, ax=axes, orientation='horizontal')
+    mappable = plotutils.create_linear_mappable(cmap, 0, 1)
+    cbar = f.colorbar(mappable, ax=axes, orientation='horizontal')
+    cbar.set_label('Fraction with fully bound staple')
 
 
 def save_figure(f, plot_filebase):

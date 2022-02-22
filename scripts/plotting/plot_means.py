@@ -11,6 +11,7 @@ import numpy as np
 from scipy import interpolate
 
 from matplotlibstyles import styles
+from matplotlibstyles import plotutils
 import origamipy.nearest_neighbour as nn
 from origamipy import plot
 
@@ -28,12 +29,12 @@ def main():
 
 def setup_figure():
     styles.set_thin_style()
-    figsize = (styles.cm_to_inches(14), styles.cm_to_inches(11))
+    figsize = (plotutils.cm_to_inches(14), plotutils.cm_to_inches(11))
 
     return plt.figure(figsize=figsize, dpi=300, constrained_layout=True)
 
 
-def plot_figure(f, ax, args):
+def plot_figure(f, ax, args, labels=None):
     systems = args['systems']
     varis = args['varis']
     input_dir = args['input_dir']
@@ -49,9 +50,15 @@ def plot_figure(f, ax, args):
 
     cmap = cm.get_cmap('tab10')
 
+    lines = []
+
+    if labels is None:
+        labels = varis
+
     for i in range(len(systems)):
         system = systems[i]
         vari = varis[i]
+        label = labels[i]
         assembled_value = assembled_values[i]
         if posts is not None:
             post = posts[i]
@@ -80,15 +87,35 @@ def plot_figure(f, ax, args):
             interpolated_temp = interpolate.interp1d(means, temps, kind='linear')
             halfway_temp = interpolated_temp(assembled_value/2)
             occ_temps = np.linspace(halfway_temp - 10, halfway_temp + 10, 50)
-            ax.plot(occ_temps, fracs*assembled_value, color=cmap(i))
+            ax.plot(occ_temps, fracs*assembled_value, color='0.4')
 
         if contin:
-            ax.fill_between(temps, means + stds, means - stds, label=vari,
-                            color='0.8')
-            ax.plot(temps, means, marker='None', label=vari, color=cmap(i))
+            ax.fill_between(temps, means + stds, means - stds, color='0.8')
+            lines.append(ax.plot(temps, means, marker='None', label=label, color=cmap(i))[0])
+
+            # Plot the actual simulation temperature as a point
+            inp_filebase = f'{input_dir}/{system}-{vari}'
+            all_aves, all_stds = plot.read_expectations(inp_filebase)
+            mean = all_aves[tag]
+            std = all_stds[tag]
+            temp = all_aves['temp']
+            ax.errorbar(
+                temp,
+                mean,
+                yerr=std,
+                marker='o',
+                label=label,
+                color=cmap(i))
         else:
-            ax.errorbar(temps, means, yerr=stds, marker='o', label=vari,
-                        color=cmap(i))
+            lines.append(ax.errorbar(
+                temps,
+                means,
+                yerr=stds,
+                marker='o',
+                label=label,
+                color=cmap(i))[1][1])
+
+    return lines
 
 
 def setup_axis(ax, ylabel):
