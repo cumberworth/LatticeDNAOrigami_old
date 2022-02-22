@@ -104,7 +104,7 @@ def parse_args():
     parser.add_argument(
         'run',
         type=int,
-        help='Number of reps')
+        help='Run')
     parser.add_argument(
         'itr',
         type=int,
